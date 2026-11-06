@@ -241,11 +241,122 @@ class FieldDataTest(unittest.TestCase):
         self.assertTrue(any("変形 ×1" in t for t in o["notes"]))
         self.assertTrue({"speed", "wall", "wall friction", "beam break", "mass", "mesh"} <= {r["label"] for r in o["inputs"]})
         for k in ("t", "decel", "crush"):
-            self.assertEqual(len(common.unpack_f32(o["series"][k])), len(rec["series"][0]["t_s"]))
+            self.assertEqual(len(common.unpack_f32(o["series"][k])), len(common.series(rec, "deceleration")["t_s"]))
         # --tool picks the kind; a run with only A falls back to A
         with self.assertRaises(LookupError):
             make("crash", "crash_b", tool="crash")
         self.assertEqual(make("crash", "crash", tool=None)["model"], "A")
+
+    def test_crash_b_record_results(self):
+        # K2 182f148f: the stop (a piece broke off the seats' side), member axial force and end hinges at the
+        # node_motion frames, hot spots
+        o = make("crash", "crash_b")
+        rec = common.find_analysis(FX / "crash_b", "crash_beam")[1]
+        nm = rec["fields"][0]
+        nF, ne = len(nm["frames"]["t_s"]), len(nm["members"])
+        st = o["stop"]
+        split = common.result(rec, "frame_split_time")
+        self.assertAlmostEqual(st["t_s"], split)
+        self.assertEqual(st["member"], next(r["where"] for r in rec["results"] if r["quantity"] == "frame_split_time"))
+        self.assertEqual((st["piece_pct"], st["limit_pct"]), (4.6, 3.0))
+        self.assertTrue(any("計算の停止" in t and st["member"] in t for t in o["notes"]))
+        C = o["colour"]
+        stress, hinge = common.unpack_f32(C["stress"]), common.unpack_f32(C["hinge"])
+        self.assertEqual((len(stress), len(hinge)), (nF * ne, nF * ne))
+        # one member by hand at the last frame: stress = its axial force / the section's area; hinge = larger end
+        e = o["frame"]["member_ids"].index("rail_L_AS1")
+        d = common.read_json(FX / "crash_b" / "v001" / "design.json")
+        sec = d["sections"][next(m for m in d["members"] if m["id"] == "rail_L_AS1")["section"]]
+        A = nvh.section_props(sec)["A"]
+        self.assertAlmostEqual(C["area_mm2"]["rail_L_AS1"], A)
+        F = common.series(rec, "member_axial_force.rail_L_AS1")["values"][-1]
+        self.assertAlmostEqual(stress[(nF - 1) * ne + e], F / A, delta=abs(F / A) * 1e-5 + 1e-4)
+        ends = [common.series(rec, f"member_hinge.rail_L_AS1.{n}")["values"][-1] for n in ("LAp2", "LS1")]
+        self.assertAlmostEqual(hinge[(nF - 1) * ne + e], max(ends), places=4)
+        self.assertEqual(sorted(C["hinge_ends"]["rail_L_AS1"]), ["LAp2", "LS1"])
+        self.assertEqual(len(common.unpack_f32(C["force"]["rail_L_AS1"])), nF)
+        # hot spots: least room first, OK / NG against the limit
+        hs = o["hot_spots"]
+        self.assertEqual(len(hs), len(rec["hot_spots"]))
+        self.assertEqual([h["value"] for h in hs], sorted(h["value"] for h in hs))
+        self.assertEqual(o["summary"]["least_room"], hs[0])
+        self.assertEqual(hs[0]["ok"], hs[0]["value"] >= hs[0]["limit"])
+        dv = common.series(rec, "deceleration")["values"]
+        self.assertAlmostEqual(o["summary"]["peak_decel"], common.result(rec, "peak_decel"))
+        self.assertAlmostEqual(o["summary"]["mean_decel"], sum(dv) / len(dv))
+        self.assertAlmostEqual(o["summary"]["crush_end"], common.result(rec, "crush_at_split"))
+        # the wall at the front-most part box, as the record's scene gives it
+        self.assertEqual(o["wall_x_mm"], 415.0)
+
+    def test_rigid_fit(self):
+        # one node: its translation, no rotation
+        c, t, w = common.rigid_fit([[10, 20, 30]], [[1, -2, 3]])
+        self.assertEqual((c, t, w), ([10, 20, 30], [1, -2, 3], [0.0, 0.0, 0.0]))
+        # several nodes moved by a known small rigid motion: recovered
+        pts = [[0, 0, 0], [1000, 0, 0], [0, 500, 0], [200, 300, 400]]
+        c0 = [sum(p[k] for p in pts) / 4 for k in range(3)]
+        t0, w0 = [1.0, -0.5, 2.0], [1e-4, -2e-4, 3e-4]
+        disp = []
+        for p in pts:
+            r = [p[k] - c0[k] for k in range(3)]
+            disp.append([t0[0] + w0[1] * r[2] - w0[2] * r[1], t0[1] + w0[2] * r[0] - w0[0] * r[2], t0[2] + w0[0] * r[1] - w0[1] * r[0]])
+        c, t, w = common.rigid_fit(pts, disp)
+        for k in range(3):
+            self.assertAlmostEqual(c[k], c0[k])
+            self.assertAlmostEqual(t[k], t0[k])
+            self.assertAlmostEqual(w[k], w0[k], delta=1e-9)
+        # two nodes on the x axis: the turn about x is not seen and comes back 0
+        c, t, w = common.rigid_fit([[0, 0, 0], [100, 0, 0]], [[0, 0, -1], [0, 0, 1]])
+        self.assertAlmostEqual(w[0], 0.0)
+        self.assertAlmostEqual(w[1], -0.02)
+
+    def test_nvh_part_motion(self):
+        # by hand: a part on one node moves exactly with it; a part on three nodes by their rigid motion; a part
+        # without carried_by with its support's frame node when the record has no wheel centre node
+        d = {"nodes": [{"id": "a", "xyz_mm": [0, 0, 0]}, {"id": "b", "xyz_mm": [1000, 0, 0]}, {"id": "c", "xyz_mm": [0, 600, 0]}],
+             "members": [{"id": "m1", "node_a": "a", "node_b": "b", "section": "s", "material": "st"},
+                         {"id": "m2", "node_a": "a", "node_b": "c", "section": "s", "material": "st"}],
+             "sections": {"s": {"shape": "rect_tube", "dims_mm": {"b": 40, "h": 80, "t": 2}}},
+             "materials": {"st": {"E_MPa": 200000.0, "nu": 0.3, "density_kg_m3": 7850.0, "yield_MPa": 300.0}},
+             "supports": [{"id": "S", "kind": "wheel", "position_mm": [0, 60, 0], "radius_mm": 300, "frame_node": "a",
+                           "suspension": {"type": "spring", "stiffness_N_per_mm": 20.0}}],
+             "parts": [{"id": "one", "kind": "battery", "box": {"center_mm": [1000, 0, 100], "size_mm": [50, 50, 50]}, "mass_kg": 5.0, "carried_by": ["b"]},
+                       {"id": "three", "kind": "battery", "box": {"center_mm": [300, 200, 100], "size_mm": [50, 50, 50]}, "mass_kg": 5.0, "carried_by": ["a", "b", "c"]},
+                       {"id": "wheel", "kind": "wheel", "box": {"center_mm": [0, 60, 0], "size_mm": [50, 50, 50]}, "mass_kg": 5.0}]}
+        parts = common.parts_of(d)
+        L = common.parts_ledger("modal", d, {"params": {"loading": "empty"}}, {}, parts)
+        self.assertEqual(L["parts"][2]["nodes"][0][0], "wc:S")
+        w0 = [0.0, 0.0, 1e-3]   # a turn about z plus a lift
+        shape = {"a": [0.0, 0.0, 2.0], "b": [0.0, 1.0, 2.0], "c": [-0.6, 0.0, 2.0]}
+        pm = nvh.part_motion(parts, L, d, shape)
+        self.assertEqual(pm["nodes"], [["b"], ["a", "b", "c"], ["a"]])
+        self.assertEqual(pm["t"][0], shape["b"])
+        self.assertEqual(pm["w"][0], [0.0, 0.0, 0.0])
+        for k in range(3):
+            self.assertAlmostEqual(pm["w"][1][k], w0[k], delta=1e-10)   # rigid_fit's 1e-9 relative regularisation
+        self.assertEqual(pm["t"][2], shape["a"])
+        self.assertTrue(all(0.0 <= r <= 1.0 for r in pm["rel"]) and max(pm["rel"]) == 1.0)
+        # the tyre and its spring as K1 has it: from the wheel node down to a fixed ground point
+        wh = nvh.wheels_of(d, shape)
+        self.assertEqual((wh[0]["node"], wh[0]["ground"], wh[0]["spring"]), ("a", [0.0, 60.0, -300.0], True))
+        self.assertEqual(nvh.wheels_of(d, {**shape, "wc:S": [0, 0, 1]})[0]["node"], "wc:S")
+
+    def test_nvh_part_data(self):
+        o = self.obj["nvh"]
+        rec = common.find_analysis(FX / "nvh", "modal")[1]
+        npart = len(o["parts"])
+        self.assertTrue(any("自分の自由度を持たない" in t for t in o["notes"]))
+        self.assertEqual(len(o["wheels"]), 4)
+        for m, f in zip(o["modes"], rec["fields"]):
+            for k in ("t", "w", "c"):
+                self.assertEqual(len(common.unpack_f32(m["parts"][k])), 3 * npart)
+            self.assertEqual(len(m["parts"]["rel"]), npart)
+            self.assertEqual(len(m["wheels"]), 4)
+            # wheel_FL (no carried_by, support FL): with frame node LA's motion (the record has no wc:FL)
+            j = [p["id"] for p in o["parts"]].index("wheel_FL")
+            t = common.unpack_f32(m["parts"]["t"])[3 * j:3 * j + 3]
+            for a in range(3):
+                self.assertAlmostEqual(t[a], f["per_node"]["LA"][a], places=5)
 
     def test_nvh_strain_by_hand(self):
         d = {"nodes": [{"id": "a", "xyz_mm": [0, 0, 0]}, {"id": "b", "xyz_mm": [1000, 0, 0]}, {"id": "c", "xyz_mm": [2000, 0, 0]}],
@@ -386,8 +497,20 @@ class PageTest(unittest.TestCase):
     def test_crash_b_page(self):
         out = self._check(self.dir_b, "crash")
         self.assertIn("B: 梁", out["title"])
-        self.assertIn("壁面の先のフレーム節点", out["hud"])
-        self.assertIn("変形 ×1", out["hud"])
+        self.assertIn("停止", out["hud"])
+        self.assertIn("tower_post_RA2", out["hud"])
+        self.assertTrue(out["speed_shown"])
+        self.assertEqual(out["layout_overlap"], [])
+        self.assertIn("軸応力", out["panel"])
+        self.assertIn("ホットスポット", out["inputs"] + out["page_text"])
+        self.assertGreater(out["boxes_moved"], 0)
+
+    def test_nvh_parts_move_with_the_frame(self):
+        out = self._check(self.dir, "nvh")
+        self.assertFalse(out["speed_shown"])
+        self.assertEqual(out["layout_overlap"], [])
+        self.assertGreater(out["boxes_moved"], 0)         # the part boxes follow the mode (phase 90 deg)
+        self.assertGreater(out["tyres"], 0)
 
     def test_crash_a_page_says_no_shape(self):
         out = self._check(self.dir, "crash")

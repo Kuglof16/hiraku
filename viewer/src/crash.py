@@ -19,6 +19,15 @@ model "B" (tool crash_beam: co-rotational beams with plastic hinges, its node_mo
     wall_x_mm; beyond {nodes [per frame count], depth [per frame, mm], parts [...], part_depth [...],
                        nodes_any, node_depth_max, parts_any, part_depth_max, tol_mm}
     series {t, decel, crush} (packed) and units
+    from the record's own results when it has them (crash_beam from K2 182f148f):
+    colour.stress / colour.hinge (packed nF x ne): the member's axial force (series member_axial_force.<m>) / its
+        section's area A from the design (MPa, + tension), and the larger of its end hinge rotations (series
+        member_hinge.<m>.<end>, deg); colour.force {member: packed nF, N}, area_mm2, hinge_ends, stress_absmax, hinge_max
+    stop {t_s, member, piece_pct, limit_pct, text}: the run stops when a piece breaks off the seats' side
+        (result frame_split_time and its assumption)
+    hot_spots [{where, quantity, value, unit, limit, ok}] least first
+    summary {t_end_s, peak_decel, mean_decel (the deceleration series' mean: speed lost / time), crush_end,
+             crush_max, least_room (the first hot spot)}
 Every number here is computed from the record by this script; nothing is added that the run did not give.
 """
 
@@ -153,6 +162,73 @@ def _angle(p, nd, i, j):
     return math.degrees(math.acos(max(-1.0, min(1.0, c))))
 
 
+def _at_frames(s: dict, t_frames: list[float]) -> list[float]:
+    """A series' values at the frame times: the same samples when the times agree (crash_beam writes them at
+    the node_motion frames), else the nearest sample (no interpolation)."""
+    t, v = s.get("t_s") or [], s["values"]
+    if len(t) == len(t_frames) and all(abs(a - b) <= 1e-9 for a, b in zip(t, t_frames)):
+        return [float(x) for x in v]
+    out = []
+    for tf in t_frames:
+        j = min(range(len(t)), key=lambda i: abs(t[i] - tf))
+        out.append(float(v[j]))
+    return out
+
+
+def member_results(rec: dict, t_frames: list[float], members: list[str], design: dict) -> dict | None:
+    """Per member at the frames: axial force (N, + tension, series member_axial_force.<m>), axial stress =
+    force / A (MPa; A of the member's section in the design, viewer.src.nvh.section_props), and the larger of
+    its end hinge rotations (deg, series member_hinge.<m>.<end node>). None when the record has neither."""
+    from viewer.src.nvh import section_props
+    ser = {s["channel"]: s for s in rec.get("series", []) or []}
+    if not any(c.startswith(("member_axial_force.", "member_hinge.")) for c in ser):
+        return None
+    dmem = {m["id"]: m for m in design.get("members", [])}
+    secs = design.get("sections", {})
+    nF = len(t_frames)
+    out = {"force": {}, "stress": {}, "hinge": {}, "area": {}, "ends": {}}
+    for m in members:
+        s = ser.get(f"member_axial_force.{m}")
+        f = _at_frames(s, t_frames) if s else [0.0] * nF
+        sp = section_props(secs.get(dmem.get(m, {}).get("section")))
+        A = sp["A"] if sp else None
+        out["area"][m] = A
+        if s:
+            out["force"][m] = f
+        out["stress"][m] = [x / A for x in f] if A else [0.0] * nF
+        ends = [c for c in ser if c.startswith(f"member_hinge.{m}.")]
+        out["ends"][m] = [c.rsplit(".", 1)[1] for c in ends]
+        hs = [_at_frames(ser[c], t_frames) for c in ends]
+        out["hinge"][m] = [max((h[k] for h in hs), default=0.0) for k in range(nF)]
+    return out
+
+
+def stop_of(rec: dict) -> dict | None:
+    """Why the run stopped, from the record: frame_split_time (its where = the member that broke) and the
+    assumption 'the frame split at ... a piece with X % of the whole mass ...'."""
+    t = next((r for r in rec.get("results", []) if r["quantity"] == "frame_split_time"), None)
+    a = _assumption(rec, r"^the frame split at")
+    if t is None and a is None:
+        return None
+    pct = re.search(r"a piece with ([\d.]+) % of the whole mass", a or "")
+    lim = re.search(r"stops at a piece of ([\d.]+) %", a or "")
+    member = (t or {}).get("where") or (re.search(r"when (\S+) broke", a or "") or [None, None])[1]
+    return {"t_s": float(t["value"]) if t else None, "member": member,
+            "piece_pct": float(pct.group(1)) if pct else None, "limit_pct": float(lim.group(1)) if lim else None,
+            "text": a or ""}
+
+
+def hot_spots_of(rec: dict) -> list[dict]:
+    out = []
+    for h in rec.get("hot_spots", []) or []:
+        v, lim = h.get("value"), h.get("limit")
+        out.append({"where": h.get("where", ""), "quantity": h.get("quantity", ""),
+                    "value": float(v["value"]) if isinstance(v, dict) else v, "unit": v.get("unit", "") if isinstance(v, dict) else "",
+                    "limit": float(lim["value"]) if isinstance(lim, dict) else lim,
+                    "ok": (float(v["value"]) >= float(lim["value"])) if isinstance(v, dict) and isinstance(lim, dict) else None})
+    return sorted(out, key=lambda h: h["value"] if isinstance(h["value"], (int, float)) else 0.0)
+
+
 def build_b(args, vdir, rec, design) -> dict:
     obj = common.base_object("crash", "衝突: 壁への正面衝突 (B: 梁が降伏して折れる)", args.run, vdir, rec, design)
     obj["model"] = "B"
@@ -194,6 +270,18 @@ def build_b(args, vdir, rec, design) -> dict:
     obj["colour"] = {"strain": common.pack_f32(strain, [nF, ne]), "fold": common.pack_f32(fold, [nF, ne]),
                      "strain_absmax": max((abs(strain[i]) for i in whole), default=0.0),
                      "fold_max": max((fold[i] for i in whole), default=0.0)}
+    # the record's own member results at the node_motion frames: axial force (-> stress = N / A of the design's
+    # section) and the plastic hinge rotation at each member end (the larger end per member)
+    mem = member_results(rec, frames["t_s"], sorted(set(emem)), design)
+    if mem is not None:
+        stress = [mem["stress"][emem[e]][k] for k in range(nF) for e in range(ne)]
+        hinge = [mem["hinge"][emem[e]][k] for k in range(nF) for e in range(ne)]
+        obj["colour"].update({
+            "stress": common.pack_f32(stress, [nF, ne]), "hinge": common.pack_f32(hinge, [nF, ne]),
+            "stress_absmax": max((abs(stress[i]) for i in whole), default=0.0),
+            "hinge_max": max((hinge[i] for i in whole), default=0.0),
+            "force": {m: common.pack_f32(v) for m, v in mem["force"].items()},
+            "area_mm2": mem["area"], "hinge_ends": mem["ends"]})
     # part boxes moved by the mean motion of the nodes the tool puts their mass on (translation only): the
     # carried_by nodes, or for a part without carried_by its support's frame node (common.parts_ledger); a part
     # the loading leaves off stays where it is
@@ -240,7 +328,19 @@ def build_b(args, vdir, rec, design) -> dict:
     obj["series"] = {"t": common.pack_f32(dec["t_s"]), "decel": common.pack_f32(dec["values"]),
                      "crush": common.pack_f32(cr["values"])}
     obj["units"] = {"deceleration": dec.get("unit", "g"), "crush": cr.get("unit", "mm")}
-    lc = common.load_case_of(vdir, rec["load_case_id"])
+    obj["stop"] = stop_of(rec)
+    obj["hot_spots"] = hot_spots_of(rec)
+    dv = dec["values"]
+    least = next((h for h in obj["hot_spots"] if isinstance(h["value"], (int, float))), None)
+    obj["summary"] = {
+        "t_end_s": float(frames["t_s"][-1]),
+        "peak_decel": common.result(rec, "peak_decel") if common.result(rec, "peak_decel") is not None else max(dv, default=0.0),
+        # the series is the wall's impulse per 1 ms / (mass x 1 ms) at even steps: its mean is the speed lost / time
+        "mean_decel": sum(dv) / len(dv) if dv else None,
+        "crush_end": common.result(rec, "crush_at_split") if common.result(rec, "crush_at_split") is not None else (cr["values"][-1] if cr["values"] else None),
+        "crush_max": max(cr["values"], default=None),
+        "least_room": least,
+    }
     mass = _assumption(rec, r"^mass [\d.]+ kg")
     obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
         _wall_row(wall),
@@ -262,6 +362,16 @@ def build_b(args, vdir, rec, design) -> dict:
            f"{' ほか' if len(b['parts_any']) > 6 else ''}、最大 {b['part_depth_max']:.1f} mm (t = 0 で既に {b['parts'][0]} 個)。"
            if b["parts_any"] else ""),
     ] + ([f"箱を動かす節点がない部品 (その場に置く): {len(dropped)} 個"] if dropped else [])
+    obj["notes"].append("部品の箱は壁面で切って描く (箱は壁に当たらない扱いなので、壁の先は描かない)。")
+    st = obj["stop"]
+    if st:
+        obj["notes"].append(f"計算の停止: {st['t_s'] * 1000:.1f} ms、{st['member']} が折れて、座席側から質量の "
+                            f"{st['piece_pct']:g} % の塊が離れた (K2 は塊どうしの接触がないため、{st['limit_pct']:g} % 以上で止める)。"
+                            if st["t_s"] is not None and st["piece_pct"] is not None and st["limit_pct"] is not None
+                            else "計算の停止: " + st["text"][:200])
+    if "stress" in obj["colour"]:
+        obj["notes"].append("軸応力 = 記録の部材の軸力 / 設計の断面積 (引張 +)。ヒンジ回転 = 記録の部材の両端の塑性ヒンジ回転の大きい方。"
+                            "どちらも部材ごとの値で、部材の要素は同じ色。")
     return obj
 
 

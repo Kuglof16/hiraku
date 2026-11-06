@@ -5,7 +5,7 @@
 <title>HIRAKU result viewer</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; font: 12px/1.35 system-ui, "Segoe UI", sans-serif; background: #f4f4f2; color: #222; }
-  #view { position: absolute; left: 0; top: 98px; right: 330px; bottom: 230px; }
+  #view { position: absolute; left: 0; top: 66px; right: 330px; bottom: 230px; }
   #view canvas { display: block; }
   #panel { position: absolute; top: 0; right: 0; width: 330px; bottom: 0; overflow-y: auto; background: #fff; border-left: 1px solid #ccc; box-sizing: border-box; padding: 6px 8px 40px; }
   #panel h3 { margin: 10px 0 3px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #555; border-bottom: 1px solid #ddd; }
@@ -17,11 +17,12 @@
   button.on { background: #2a6; color: #fff; }
   #switch button { margin: 1px; }
   /* nothing is drawn over the 3D view: the header sits above it, the rest in the side panel and the bottom pane */
-  #hud { position: absolute; left: 0; top: 0; right: 330px; height: 98px; overflow: hidden; padding: 3px 8px; box-sizing: border-box; background: #fff; border-bottom: 1px solid #ccc; }
-  #title { font-size: 14px; font-weight: 600; }
-  #source { font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #tline { font-size: 13px; font-weight: 600; color: #a40; }
-  #hudlines div { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hud { position: absolute; left: 0; top: 0; right: 330px; height: 66px; overflow: hidden; padding: 2px 8px; box-sizing: border-box; background: #fff; border-bottom: 1px solid #ccc; }
+  #head1 { display: flex; gap: 10px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+  #title { font-size: 13px; font-weight: 600; flex: none; }
+  #source { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; }
+  #tline { font-size: 12px; font-weight: 600; color: #a40; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hudlines div { font-size: 11.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #legend { display: block; margin: 4px 0; }
   #notes { font-size: 11.5px; color: #444; }
   #info { background: #fffbe8; border: 1px solid #ccb; padding: 4px 6px; display: none; font-size: 12px; }
@@ -31,9 +32,15 @@
   table.mt td, table.mt th { border-bottom: 1px solid #eee; padding: 1px 3px; text-align: left; }
   table.mt tr.tot td { font-weight: 600; border-top: 1px solid #999; }
   .ok { color: #0a6b2a; font-weight: 600; } .ng { color: #b00; font-weight: 600; }
-  #bottom { position: absolute; left: 0; right: 330px; bottom: 0; height: 230px; border-top: 1px solid #ccc; background: #fff; display: flex; }
-  #plot { flex: 1; min-width: 0; height: 100%; display: block; cursor: crosshair; }
-  #inputs { width: 420px; border-left: 1px solid #ddd; padding: 4px 8px; box-sizing: border-box; overflow-y: auto; font-size: 11.5px; }
+  /* the bottom pane: plots and inputs side by side, each in its own box (the canvas sized by its box, so its
+     drawing size never pushes the inputs or the 3D view) */
+  #bottom { position: absolute; left: 0; right: 330px; bottom: 0; height: 230px; border-top: 1px solid #ccc; background: #fff; display: flex; overflow: hidden; }
+  #plotwrap { flex: 1 1 0; min-width: 0; position: relative; overflow: hidden; }
+  #plot { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #inputs { flex: 0 0 380px; border-left: 1px solid #ddd; padding: 4px 8px; box-sizing: border-box; overflow: auto; font-size: 11.5px; }
+  #inputs td { overflow-wrap: anywhere; }
+  #inputs td:first-child { white-space: nowrap; overflow-wrap: normal; }
+  #speedrow select { font: inherit; }
   #inputs .h { font-weight: 600; text-transform: uppercase; font-size: 11px; color: #555; letter-spacing: .04em; }
   #inputs table { border-collapse: collapse; width: 100%; }
   #inputs td { vertical-align: top; padding: 1px 4px 1px 0; border-bottom: 1px solid #f0f0f0; }
@@ -62,12 +69,11 @@
 <div id="loading">読み込み中…</div>
 <div id="view"></div>
 <div id="hud">
-  <div id="title"></div>
-  <div id="source"></div>
+  <div id="head1"><span id="title"></span><span id="source"></span></div>
   <div id="tline"></div>
   <div id="hudlines"></div>
 </div>
-<div id="bottom"><canvas id="plot"></canvas><div id="inputs"></div></div>
+<div id="bottom"><div id="plotwrap"><canvas id="plot"></canvas></div><div id="inputs"></div></div>
 
 <div id="panel">
   <h3>分野</h3>
@@ -97,6 +103,9 @@
   <h3>時間</h3>
   <div class="row"><button id="play">▶ 再生</button><button id="prev">◀</button><button id="next">▶</button></div>
   <div class="row"><input type="range" id="time" min="0" max="0" step="1" value="0"></div>
+  <div class="row" id="speedrow"><label>再生の速さ (実時間の)
+    <select id="speed"><option value="0.005">0.005 倍</option><option value="0.01" selected>0.01 倍</option><option value="0.02">0.02 倍</option>
+      <option value="0.05">0.05 倍</option><option value="0.1">0.1 倍</option><option value="0.25">0.25 倍</option><option value="0.5">0.5 倍</option><option value="1">1 倍</option></select></label></div>
   <div class="muted" id="timeNote"></div>
 
   <h3>表示</h3>

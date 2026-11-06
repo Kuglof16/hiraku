@@ -40,7 +40,18 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
             for (const id of ['hud', 'info', 'legend', 'notes', 'panel', 'bottom']) { const e = document.getElementById(id); if (!e) continue;
               const r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0 || getComputedStyle(e).display === 'none') continue;
               if (r.left < v.right - 1 && r.right > v.left + 1 && r.top < v.bottom - 1 && r.bottom > v.top + 1) bad.push(id); } return bad; }""")
-        out["inputs"] = page.text_content("#inputs")[:600]
+        # the header, the plots, the inputs and the 3D view do not overlap each other
+        out["layout_overlap"] = page.evaluate("""() => { const ids = ['hud', 'view', 'plotwrap', 'inputs', 'panel'], R = {}, bad = [];
+            for (const id of ids) { const e = document.getElementById(id); if (e) R[id] = e.getBoundingClientRect(); }
+            for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) { const a = R[ids[i]], b = R[ids[j]]; if (!a || !b) continue;
+              if (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) bad.push(ids[i] + '/' + ids[j]); }
+            const c = document.getElementById('plot').getBoundingClientRect(), w = R.plotwrap;
+            if (w && (c.right > w.right + 1 || c.bottom > w.bottom + 1)) bad.push('plot canvas outside its box');
+            return bad; }""")
+        out["speed_shown"] = page.evaluate("getComputedStyle(document.getElementById('speedrow')).display !== 'none'")
+        out["boxes_moved"] = page.evaluate("(() => { const b = HV.state.ctx && HV.state.ctx.boxes; return b ? b.off.filter(o => Math.hypot(o[0], o[1], o[2]) > 1e-3).length : 0; })()")
+        out["tyres"] = page.evaluate("(() => { let n = 0; HV.state.ctx.root.traverse(o => { if (o.geometry && o.geometry.type === 'CylinderGeometry') n++; }); return n; })()")
+        out["inputs"] = page.text_content("#inputs")[:2000]
         out["legend_shown"] = page.evaluate("getComputedStyle(document.getElementById('legend')).display !== 'none'")
         # coloured pixels in the 3D view (not the background)
         out["drawn_px"] = page.evaluate("""() => { HV.view.draw(); const c = HV.view.renderer.domElement; const g = document.createElement('canvas');

@@ -51,11 +51,26 @@ window.HV = window.HV || {};
     $('time').oninput = e => { setTime(+e.target.value); };
     $('prev').onclick = () => setTime(st.t - 1);
     $('next').onclick = () => setTime(st.t + 1);
+    // a field with real times (ctl.times, s) plays at a chosen fraction of real time; others step frames
     $('play').onclick = () => {
       st.playing = !st.playing; $('play').textContent = st.playing ? '❚❚ 停止' : '▶ 再生';
-      clearInterval(st.timer);
-      if (st.playing && st.ctl) st.timer = setInterval(() => setTime((st.t + 1) % st.ctl.nT), st.ctl.playMs || 40);
+      stopPlay();
+      if (!st.playing || !st.ctl) return;
+      const tt = st.ctl.times;
+      if (!tt) { st.timer = setInterval(() => setTime((st.t + 1) % st.ctl.nT), st.ctl.playMs || 40); return; }
+      let sim = st.t >= st.ctl.nT - 1 ? tt[0] : tt[st.t], last = performance.now();
+      const step = now => {
+        if (!st.playing || st.ctl.times !== tt) return;
+        sim += (now - last) / 1000 * (+$('speed').value || 0.01); last = now;
+        if (sim > tt[tt.length - 1]) sim = tt[0];
+        let i = st.t; if (tt[i] > sim) i = 0;
+        while (i + 1 < tt.length && tt[i + 1] <= sim) i++;
+        if (i !== st.t) setTime(i);
+        st.raf = requestAnimationFrame(step);
+      };
+      st.raf = requestAnimationFrame(step);
     };
+    function stopPlay() { clearInterval(st.timer); cancelAnimationFrame(st.raf); }
     const setScale = v => {
       const s = st.ctl.scale; v = Math.max(s.min, Math.min(s.max, +v || s.min));
       s.value = v; $('scale').value = v; $('scaleNum').value = v; st.ctl.setScale(v); refresh();
@@ -110,7 +125,7 @@ window.HV = window.HV || {};
     window.addEventListener('resize', () => { plot.draw(); });
 
     async function open(field) {
-      clearInterval(st.timer); st.playing = false; $('play').textContent = '▶ 再生';
+      stopPlay(); st.playing = false; $('play').textContent = '▶ 再生';
       document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.id === 'sw_' + field));
       if (st.ctx) view.scene.remove(st.ctx.root);
       view.materials.length = 0; showInfo(null);
@@ -143,7 +158,8 @@ window.HV = window.HV || {};
       // header: short; the run by its name only (never a path)
       $('title').textContent = D.title;
       const s = D.source;
-      $('source').textContent = `v${s.design_version ?? '?'} | ${s.run} ${s.version} ${s.analysis_id} | ${s.tool} ${s.load_case_id}`;
+      $('source').textContent = `v${s.design_version ?? '?'}  ${s.run}  ${s.analysis_id}  ${s.load_case_id}`;
+      $('source').title = `${s.run} ${s.version} ${s.analysis_id} | ${s.tool} ${s.load_case_id}`;
       // inputs; the longer explanations in closed panels
       const rows = (D.inputs || []).map(r => `<tr><td><b>${HV.esc(r.label)}</b></td><td>${HV.esc(r.value)}</td><td class="muted">${HV.esc(r.source || '')}</td></tr>`).join('');
       const res = (D.results || []).map(r => `<tr><td>${HV.esc(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where || '')}</td></tr>`).join('');
@@ -158,6 +174,7 @@ window.HV = window.HV || {};
       $('scaleLabel').textContent = ctl.scale.label; $('scaleNote').textContent = ctl.scale.note || '';
       for (const id of ['scale', 'scaleNum']) { $(id).min = ctl.scale.min; $(id).max = ctl.scale.max; $(id).step = ctl.scale.step; $(id).value = ctl.scale.value; }
       $('timeNote').textContent = ctl.timeNote || '';
+      $('speedrow').style.display = ctl.times ? '' : 'none';
       $('logc').checked = !!(ctl.contour() || {}).log; $('logrow').style.display = ctl.setLog ? '' : 'none';
       ['x', 'y', 'z'].forEach((k, a) => {
         const lo = Math.floor(ctx.lo[a] - 20), hi = Math.ceil(ctx.hi[a] + 20), c = view.clipState[k];

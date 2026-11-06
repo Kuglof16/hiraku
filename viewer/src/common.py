@@ -521,6 +521,63 @@ def parts_ledger(tool: str, design: Record, load_case: Record | None, record: Re
     return out
 
 
+# ---------------------------------------------------------------- parts moving with their nodes
+# A part has no degrees of freedom of its own in these records: it moves with the nodes it sits on.
+
+def rigid_fit(points: list[list[float]], disp: list[list[float]]) -> tuple[list[float], list[float], list[float]]:
+    """The rigid motion that best fits the displacements `disp` of `points` (least squares, small rotation):
+    u_i ~ t + w x (p_i - c). Returns (c, t, w): c the points' centroid, t the mean displacement, w the rotation
+    vector (rad per unit of disp; mm-free). One point, or points on one line (rotation about that line is not
+    seen): the unseen part of w is 0."""
+    n = len(points)
+    c = [sum(p[k] for p in points) / n for k in range(3)]
+    t = [sum(u[k] for u in disp) / n for k in range(3)]
+    J = [[0.0] * 3 for _ in range(3)]
+    b = [0.0, 0.0, 0.0]
+    for p, u in zip(points, disp):
+        r = [p[k] - c[k] for k in range(3)]
+        rr = r[0] * r[0] + r[1] * r[1] + r[2] * r[2]
+        for i in range(3):
+            for j in range(3):
+                J[i][j] += (rr if i == j else 0.0) - r[i] * r[j]
+        v = [u[k] - t[k] for k in range(3)]
+        b[0] += r[1] * v[2] - r[2] * v[1]
+        b[1] += r[2] * v[0] - r[0] * v[2]
+        b[2] += r[0] * v[1] - r[1] * v[0]
+    tr = J[0][0] + J[1][1] + J[2][2]
+    if tr <= 1e-12:
+        return c, t, [0.0, 0.0, 0.0]
+    eps = 1e-9 * tr   # a line of points: J is singular along it, and b has no part along it
+    A = [[J[i][j] + (eps if i == j else 0.0) for j in range(3)] for i in range(3)]
+    return c, t, _solve3(A, b)
+
+
+def _solve3(A, b):
+    det = (A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0])
+           + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]))
+    out = []
+    for k in range(3):
+        M = [[b[i] if j == k else A[i][j] for j in range(3)] for i in range(3)]
+        out.append((M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0])
+                    + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0])) / det)
+    return out
+
+
+def motion_nodes(ledger_entry: Record, design: Record, has_node: Callable[[str], bool]) -> list[str]:
+    """The nodes a part moves with: the nodes the tool puts its mass on (ledger), where a wheel centre node
+    wc:<support> the record does not hold is replaced by that support's frame node. Empty: the part stays."""
+    if ledger_entry["cat"] in ("not_in", "body"):
+        return []
+    sup = {s["id"]: s for s in design.get("supports", [])}
+    out = []
+    for n, _kg in ledger_entry["nodes"]:
+        if not has_node(n) and n.startswith("wc:"):
+            n = sup.get(n[3:], {}).get("frame_node", n)
+        if has_node(n) and n not in out:
+            out.append(n)
+    return out
+
+
 def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Callable[[argparse.ArgumentParser], None] | None = None,
          argv: list[str] | None = None) -> Path:
     ap = argparse.ArgumentParser(prog=f"python -m viewer.src.{field}",

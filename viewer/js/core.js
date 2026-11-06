@@ -113,7 +113,12 @@ window.HV = window.HV || {};
       this.afterRender = [];
       window.addEventListener('resize', () => this.resize());
     }
-    material(m) { m.clippingPlanes = this.clip; this.materials.push(m); return m; }
+    // extra: planes of this material only (e.g. the wall face for part boxes), on top of the section planes
+    material(m, extra) {
+      m.userData.extra = extra || null;
+      m.clippingPlanes = extra && extra.length ? this.clip.concat(extra) : this.clip;
+      this.materials.push(m); return m;
+    }
     updateClip() {
       const T = window.THREE;
       this.clip.length = 0;
@@ -123,7 +128,7 @@ window.HV = window.HV || {};
         this.planes[k].set(n, c.flip ? -c.v : c.v);   // not flipped: keep k <= v; flipped: keep k >= v
         this.clip.push(this.planes[k]);
       });
-      for (const m of this.materials) m.needsUpdate = true;
+      for (const m of this.materials) { if (m.userData.extra && m.userData.extra.length) m.clippingPlanes = this.clip.concat(m.userData.extra); m.needsUpdate = true; }
       this.render();
     }
     visible(p) { for (const pl of this.clip) if (pl.distanceToPoint(p) < 0) return false; return true; }
@@ -218,38 +223,82 @@ window.HV = window.HV || {};
 
   // ---------------------------------------------------------------- boxes
   // Part boxes: one instanced mesh (instance colour) plus their edges; a box is posed by its
-  // centre offset (dx) and hidden with show[i] = false.
+  // centre offset (off[i]) and an extra rotation (rot[i], a quaternion applied after its own rpy, or null),
+  // and hidden with show[i] = false. opts.clip: planes cutting the boxes only (the wall face).
   HV.Boxes = class {
     constructor(view, parts, opts = {}) {
       const T = window.THREE;
       this.view = view; this.parts = parts; this.n = parts.length;
-      this.mat = view.material(new T.MeshLambertMaterial({ transparent: true, opacity: opts.opacity ?? 0.5, depthWrite: false, side: T.DoubleSide }));
+      this.mat = view.material(new T.MeshLambertMaterial({ transparent: true, opacity: opts.opacity ?? 0.5, depthWrite: false, side: T.DoubleSide }), opts.clip);
       this.mesh = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), this.mat, Math.max(1, this.n));
       this.mesh.count = this.n; this.mesh.userData.kind = 'box';
       this.mesh.instanceColor = new T.InstancedBufferAttribute(new Float32Array(Math.max(1, this.n) * 3).fill(0.7), 3);
       this.quat = parts.map(p => new T.Quaternion().setFromEuler(new T.Euler(p.r[0] * Math.PI / 180, p.r[1] * Math.PI / 180, p.r[2] * Math.PI / 180, 'ZYX')));
-      this.off = parts.map(() => [0, 0, 0]); this.show = parts.map(() => true);
+      this.off = parts.map(() => [0, 0, 0]); this.show = parts.map(() => true); this.rot = parts.map(() => null);
       this.epos = new Float32Array(this.n * 24 * 3);
       const eg = new T.BufferGeometry(); this.eattr = new T.BufferAttribute(this.epos, 3); eg.setAttribute('position', this.eattr);
-      this.edges = new T.LineSegments(eg, view.material(new T.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.45 })));
+      this.edges = new T.LineSegments(eg, view.material(new T.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.45 }), opts.clip));
       this.group = new T.Group(); this.group.add(this.mesh, this.edges);
       this.update();
     }
     colour(i, c) { this.mesh.instanceColor.setXYZ(i, c[0], c[1], c[2]); }
     update() {
-      const T = window.THREE, M = new T.Matrix4(), S = new T.Vector3(), P = new T.Vector3(), v = new T.Vector3();
+      const T = window.THREE, M = new T.Matrix4(), S = new T.Vector3(), P = new T.Vector3(), v = new T.Vector3(), Q = new T.Quaternion();
       const E = [[0, 1], [1, 3], [3, 2], [2, 0], [4, 5], [5, 7], [7, 6], [6, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
       this.parts.forEach((p, i) => {
         const on = this.show[i], o = this.off[i];
         P.set(p.c[0] + o[0], p.c[1] + o[1], p.c[2] + o[2]);
         S.set(on ? Math.max(p.s[0], 1) : 1e-6, on ? Math.max(p.s[1], 1) : 1e-6, on ? Math.max(p.s[2], 1) : 1e-6);
-        M.compose(P, this.quat[i], S); this.mesh.setMatrixAt(i, M);
+        if (this.rot[i]) Q.multiplyQuaternions(this.rot[i], this.quat[i]); else Q.copy(this.quat[i]);
+        M.compose(P, Q, S); this.mesh.setMatrixAt(i, M);
         const cs = [];
         for (let k = 0; k < 8; k++) { v.set((k & 1 ? 0.5 : -0.5), (k & 2 ? 0.5 : -0.5), (k & 4 ? 0.5 : -0.5)).applyMatrix4(M); cs.push([v.x, v.y, v.z]); }
         E.forEach(([a, b], e) => { const j = (i * 24 + 2 * e) * 3; this.epos.set(cs[a], j); this.epos.set(cs[b], j + 3); });
       });
       this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true; this.eattr.needsUpdate = true;
       this.mesh.computeBoundingSphere(); this.edges.geometry.computeBoundingSphere();
+    }
+  };
+
+  // A part moved by a fitted rigid motion (viewer/src/common.py rigid_fit): fit centre c, translation t and
+  // rotation vector w per unit of the shape, times k. Returns the box centre offset and the rotation (a proper
+  // rotation by the angle |k w|, so a large display scale turns the box without stretching it).
+  HV.rigidPose = function (pc, c, t, w, k) {
+    const T = window.THREE, ang = k * Math.hypot(w[0], w[1], w[2]);
+    const q = new T.Quaternion();
+    if (ang > 1e-12) q.setFromAxisAngle(new T.Vector3(w[0], w[1], w[2]).normalize(), ang);
+    const r = new T.Vector3(pc[0] - c[0], pc[1] - c[1], pc[2] - c[2]).applyQuaternion(q);
+    return { off: [c[0] + k * t[0] + r.x - pc[0], c[1] + k * t[1] + r.y - pc[1], c[2] + k * t[2] + r.z - pc[2]], q: ang > 1e-12 ? q : null };
+  };
+
+  // Tyres (a ring of the support's radius and width) and their springs (a coil from the wheel node to a fixed
+  // ground point, as K1 has it). set(i, u): the wheel moved by u (mm).
+  HV.Wheels = class {
+    constructor(view, wheels) {
+      const T = window.THREE;
+      this.view = view; this.w = wheels; this.group = new T.Group(); this.tyres = []; this.coils = [];
+      const tm = view.material(new T.MeshLambertMaterial({ color: 0x303030, transparent: true, opacity: 0.55, side: T.DoubleSide, depthWrite: false }));
+      const cm = view.material(new T.LineBasicMaterial({ color: 0x0b6e4f }));
+      for (const w of wheels) {
+        const g = new T.CylinderGeometry(w.r, w.r, Math.max(w.width, 20), 40, 1, true);   // axis along y (the axle)
+        const m = new T.Mesh(g, tm); m.position.set(...w.c); this.group.add(m); this.tyres.push(m);
+        const N = 120, lg = new T.BufferGeometry(); lg.setAttribute('position', new T.BufferAttribute(new Float32Array(N * 3), 3));
+        const l = new T.Line(lg, cm); l.visible = !!w.spring; this.group.add(l); this.coils.push(l);
+        this.set(this.tyres.length - 1, [0, 0, 0]);
+      }
+    }
+    set(i, u) {
+      const w = this.w[i], m = this.tyres[i], l = this.coils[i];
+      m.position.set(w.c[0] + u[0], w.c[1] + u[1], w.c[2] + u[2]);
+      if (!w.spring) return;
+      // coil from the ground point (fixed) to the wheel centre (moved), offset outboard of the tyre so it shows
+      const a = w.ground, b = [w.c[0] + u[0], w.c[1] + u[1], w.c[2] + u[2]], side = Math.sign(w.c[1]) || 1, dy = side * (w.width / 2 + 60);
+      const p = l.geometry.attributes.position, N = p.count, turns = 8, R = 35;
+      for (let j = 0; j < N; j++) {
+        const s = j / (N - 1), th = 2 * Math.PI * turns * s, ends = s < 0.06 || s > 0.94 ? 0 : 1;
+        p.setXYZ(j, a[0] + (b[0] - a[0]) * s + ends * R * Math.cos(th), a[1] + dy + (b[1] - a[1]) * s + ends * R * Math.sin(th),a[2] + (b[2] - a[2]) * s);
+      }
+      p.needsUpdate = true; l.geometry.computeBoundingSphere();
     }
   };
 

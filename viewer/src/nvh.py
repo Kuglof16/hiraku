@@ -136,14 +136,73 @@ def member_strain(design: dict, frame: dict, shape: dict[str, list[float]]) -> d
     return {"axial": axial, "bending": bend, "total": total, "energy": energy, "energy_axial": en_axial}
 
 
+PART_MOTION_NOTE = "部品はモード形に自分の自由度を持たない。載っている節点と一緒に動かしている (1 節点はその並進、複数は平均の並進 + 当てはめた剛体回転)。"
+
+
+def node_xyz_of(design: dict) -> dict[str, list[float]]:
+    """Design nodes and the wheel centre nodes wc:<support> (K1's wheel_node, at the support's position)."""
+    out = {n["id"]: [float(c) for c in n["xyz_mm"]] for n in design.get("nodes", [])}
+    for s in design.get("supports", []):
+        out.setdefault(f"wc:{s['id']}", [float(c) for c in s.get("position_mm", [0.0, 0.0, 0.0])])
+    return out
+
+
+def part_motion(parts: list[dict], ledger: dict, design: dict, per_node: dict[str, list[float]]) -> dict:
+    """Each part's rigid motion in one mode shape (common.rigid_fit on the nodes it moves with,
+    common.motion_nodes): c (fit centre, mm), t (translation), w (rotation vector) per unit of the shape, and
+    rel = |motion at the box centre| / the largest of the parts (0 for parts that stay)."""
+    xyz = node_xyz_of(design)
+    has = lambda n: n in per_node and n in xyz
+    out = {"nodes": [], "c": [], "t": [], "w": [], "rel": []}
+    mags = []
+    for p, e in zip(parts, ledger["parts"]):
+        ns = common.motion_nodes(e, design, has)
+        if ns:
+            c, t, w = common.rigid_fit([xyz[n] for n in ns], [[float(v) for v in per_node[n]] for n in ns])
+        else:
+            c, t, w = list(p["c"]), [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+        r = [p["c"][k] - c[k] for k in range(3)]
+        u = [t[0] + w[1] * r[2] - w[2] * r[1], t[1] + w[2] * r[0] - w[0] * r[2], t[2] + w[0] * r[1] - w[1] * r[0]]
+        mags.append(math.sqrt(sum(x * x for x in u)))
+        out["nodes"].append(ns)
+        out["c"].append(c)
+        out["t"].append(t)
+        out["w"].append(w)
+    mx = max(mags, default=0.0)
+    out["rel"] = [m / mx if mx > 0 else 0.0 for m in mags]
+    return out
+
+
+def wheels_of(design: dict, per_node: dict[str, list[float]] | None = None) -> list[dict]:
+    """The supports drawn as tyres with their spring as K1 has it (hiraku.solvers.k1_frame.model
+    restrain_on_wheels: a spring from the wheel node to a fixed ground point at the support's position less its
+    radius in z). node: the node whose motion the tyre takes (wc:<id> when the record holds it, else the
+    support's frame node)."""
+    out = []
+    for s in design.get("supports", []):
+        pos = [float(c) for c in s.get("position_mm", [0.0, 0.0, 0.0])]
+        r = float(s.get("radius_mm", 0.0) or 0.0)
+        susp = s.get("suspension", {}) or {}
+        k = susp.get("stiffness_N_per_mm")
+        wc = f"wc:{s['id']}"
+        node = wc if per_node is not None and wc in per_node else s.get("frame_node")
+        out.append({"id": s["id"], "c": pos, "r": r, "width": float(s.get("width_mm", 0.0) or 0.0), "node": node,
+                    "spring": bool(susp.get("type") in ("spring", "kc_table") and k), "k_N_per_mm": k,
+                    "ground": [pos[0], pos[1], pos[2] - (r or 100.0)]})
+    return out
+
+
 def build(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "modal", version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
     obj = common.base_object("nvh", "NVH: フレームの固有振動と周波数応答", args.run, vdir, rec, design)
     ids = obj["frame"]["node_ids"]
+    lc = common.load_case_of(vdir, rec["load_case_id"])
+    obj["ledger"] = common.parts_ledger("modal", design, lc, rec, obj["parts"])
     effects = {e["name"]: e.get("value") for e in rec.get("effects", [])}
     modes = []
     missing = set()
+    wheels = None
     for i, f in enumerate(x for x in rec.get("fields", []) if x.get("kind") == "mode_shape"):
         pn = f.get("per_node", {})
         flat, amp = [], 0.0
@@ -170,9 +229,19 @@ def build(args) -> dict:
                       "energy": {"share": share, "known": len(en), "top": [
                           {"member": mids[j], "share": share[j],
                            "axial_part": ms["energy_axial"][j] / ms["energy"][j] if ms["energy"][j] else 0.0} for j in top]}})
+        pm = part_motion(obj["parts"], obj["ledger"], design, pn)
+        modes[-1]["parts"] = {"t": common.pack_f32([c for v in pm["t"] for c in v], [len(pm["t"]), 3]),
+                              "w": common.pack_f32([c for v in pm["w"] for c in v], [len(pm["w"]), 3]),
+                              "c": common.pack_f32([c for v in pm["c"] for c in v], [len(pm["c"]), 3]), "rel": pm["rel"]}
+        if wheels is None:
+            wheels = wheels_of(design, pn)
+            obj["part_nodes"] = pm["nodes"]
+        modes[-1]["wheels"] = [[float(c) for c in pn.get(w["node"], [0.0, 0.0, 0.0])] if w["node"] else [0.0, 0.0, 0.0]
+                               for w in wheels]
     if not modes:
         raise LookupError(f"{rec['_path']}: no mode_shape fields")
     obj["modes"] = modes
+    obj["wheels"] = wheels or []
     obj["strain_method"] = STRAIN_METHOD
     frf = next((s for s in rec.get("series", []) or [] if s.get("channel", "").startswith("frequency_response")), None)
     if frf is not None:
@@ -187,7 +256,6 @@ def build(args) -> dict:
         if v is not None:
             lines.append({"label": lab, "f_Hz": v})
     obj["lines"] = lines
-    lc = common.load_case_of(vdir, rec["load_case_id"])
     obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
         {"label": "excitation", "value": ", ".join(f"{l['label']} {l['f_Hz']:.2f} Hz" for l in lines) or "none in the record",
          "source": "the record's results (wheel_rotation_frequency, motor_rotation_frequency) at the case's speed"},
@@ -200,7 +268,10 @@ def build(args) -> dict:
         obj["notes"].append(f"{len(missing)} frame nodes have no mode vector in the record (drawn still): {', '.join(sorted(missing))}")
     obj["notes"].append("Motion: x(t) = node + scale x shape / |shape|max x sin(phase); colour = member strain / the mode's "
                         "largest (or, switched, |shape| / |shape|max at each node).")
-    obj["ledger"] = common.parts_ledger("modal", design, lc, rec, obj["parts"])
+    obj["notes"].append(PART_MOTION_NOTE)
+    if obj["wheels"]:
+        obj["notes"].append("タイヤはばね下の節点 (記録に車輪中心の節点 wc があればそれ、なければ支持点のフレーム節点) と一緒に動く。"
+                            "ばねは K1 と同じく、その節点から地面の固定点 (支持点の位置 − 半径) まで。")
     return obj
 
 

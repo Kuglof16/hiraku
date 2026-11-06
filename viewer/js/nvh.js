@@ -9,9 +9,26 @@ HV.fields.nvh = {
     const beams = await ctx.addBeams();
     const nodes0 = beams.nodes0, n = nodes0.length / 3;
     const shapes = await Promise.all(D.modes.map(m => HV.unpack(m.shape)));
+    // each part's rigid motion per mode (src/nvh.py part_motion): fit centre, translation, rotation per unit shape
+    const pmot = await Promise.all(D.modes.map(async m => m.parts ? { c: await HV.unpack(m.parts.c), t: await HV.unpack(m.parts.t), w: await HV.unpack(m.parts.w), rel: m.parts.rel } : null));
+    const boxes = ctx.addParts(D.parts, { opacity: 0.22 });
+    const wheels = (D.wheels || []).length ? new HV.Wheels(ctx.view, D.wheels) : null;
+    if (wheels) ctx.root.add(wheels.group);
     const frf = D.frf ? { x: await HV.unpack(D.frf.x), y: await HV.unpack(D.frf.y) } : null;
     const NT = 48;
     const S = { mode: 0, scale: 150, t: 0, log: false, by: 'strain' };
+    const v3 = (a, j) => [a[3 * j], a[3 * j + 1], a[3 * j + 2]];
+    function moveParts(k) {   // k: mm per unit of the shape now
+      const P = pmot[S.mode];
+      for (let j = 0; j < D.parts.length; j++) {
+        if (!P) { boxes.off[j] = [0, 0, 0]; boxes.rot[j] = null; continue; }
+        const pose = HV.rigidPose(D.parts[j].c, v3(P.c, j), v3(P.t, j), v3(P.w, j), k);
+        boxes.off[j] = pose.off; boxes.rot[j] = pose.q;
+        if (ctx.partMode === 'field') boxes.colour(j, HV.turbo(P.rel[j]));
+      }
+      boxes.update();
+      if (wheels) { const u = D.modes[S.mode].wheels || []; D.wheels.forEach((_, i) => wheels.set(i, (u[i] || [0, 0, 0]).map(c => c * k))); }
+    }
     const cur = new Float32Array(nodes0.length);
     const amp = i => { const s = shapes[S.mode], a = D.modes[S.mode].amp_max || 1; return Math.hypot(s[3 * i], s[3 * i + 1], s[3 * i + 2]) / a; };
     const rel = m => { const st = D.modes[S.mode].strain; return st.max > 0 ? st.total[m] / st.max : 0; };
@@ -22,12 +39,13 @@ HV.fields.nvh = {
       const s = shapes[S.mode], a = D.modes[S.mode].amp_max || 1, f = S.scale / a * Math.sin(2 * Math.PI * S.t / NT);
       for (let i = 0; i < nodes0.length; i++) cur[i] = nodes0[i] + f * s[i];
       beams.setNodes(cur);
+      moveParts(f);
       const c = spec();
       if (S.by === 'strain') beams.colourMembers(m => HV.colour(c, rel(m)));
       else beams.colourNodes(i => HV.colour(c, amp(i)));
     }
     const ctl = {
-      nT: NT, t0: Math.round(NT / 4), playMs: 35,
+      nT: NT, t0: Math.round(NT / 4), playMs: 35, partMode: 'category',
       timeNote: 'モードの位相 (1 周期、時間ではない)',
       scale: { min: 0, max: 600, step: 5, value: S.scale, label: '変形の表示 (最大点の mm)', note: '実寸ではない' },
       setScale(v) { S.scale = v; update(); },
@@ -36,8 +54,9 @@ HV.fields.nvh = {
       timeText(i) { return `モード ${S.mode + 1}: ${D.modes[S.mode].f_Hz.toFixed(2)} Hz   位相 ${Math.round(360 * i / NT)}°`; },
       hud() {
         const m = D.modes[S.mode];
-        return [`変形: 最大点を ${S.scale} mm で表示 (実寸ではない、相対値)`,
+        return [`変形: 最大点を ${S.scale} mm で表示 (実寸ではない、相対値)   部品とタイヤは載っている節点と一緒に動く`,
                 `色: ${S.by === 'strain' ? '部材のひずみ (モード内の最大 = 1)' : '節点の変位 |u|/|u|max'}` +
+                (ctx.partMode === 'field' ? '   部品: 動きの大きさ (部品の最大 = 1)' : '') +
                 (m.share_bending !== null && m.share_bending !== undefined ? `   フレームが曲がる割合 ${(100 * m.share_bending).toFixed(0)} %` : '')];
       },
       contour: spec,
@@ -49,8 +68,15 @@ HV.fields.nvh = {
                   x: Array.from(frf.x), ys: [{ name: '', v: Array.from(frf.y), col: '#1f4e9c' }], marks, cursor: null, logy: true }];
       },
       plotClick(_, x) { let b = 0, bd = Infinity; D.modes.forEach((m, i) => { const d = Math.abs(m.f_Hz - x); if (d < bd) { bd = d; b = i; } }); pick(b); },
-      pickables: () => [beams.mesh],
+      pickables: () => [beams.mesh, boxes.mesh],
       info(hit) {
+        if (hit.object === boxes.mesh) {
+          const j = hit.instanceId, p = D.parts[j], P = pmot[S.mode], ns = (D.part_nodes || [])[j] || [];
+          return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)}<br>` + (ns.length
+            ? `動き: 節点 ${ns.slice(0, 6).map(HV.esc).join(', ')}${ns.length > 6 ? ' ほか' : ''} と一緒 (${ns.length > 1 ? '平均の並進 + 剛体回転' : '並進'})` +
+              (P ? `、大きさ ${P.rel[j].toFixed(2)} (部品の最大 = 1)` : '')
+            : '動かない (計算に質量がない)');
+        }
         const m = beams.memberOf(hit), [a, b] = D.frame.members[m], ids = D.frame.node_ids, md = D.modes[S.mode], st = md.strain, sh = md.energy.share[m];
         return `<b>${HV.esc(D.frame.member_ids[m])}</b> ${HV.esc(D.frame.member_names[m])}<br>節点 ${HV.esc(ids[a])} (|u|/|u|max ${amp(a).toFixed(3)}), ` +
                `${HV.esc(ids[b])} (${amp(b).toFixed(3)})<br>ひずみ (相対) ${rel(m).toFixed(3)} ` +
