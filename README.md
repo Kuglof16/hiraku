@@ -418,6 +418,13 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 | 介護ベッドの寸法 (床・キャスター・板)、質量 (アクチュエーター 2.5 kg・制御器 1.5 kg・ヘッドボード 5 kg・キャスター 0.8 kg)、材料 (STKR400・STKM13A・SS400) | 仮定、出典なし | `hiraku/designgen/care_bed.py` |
 | 介護ベッドの手計算とツールの照らし合わせの許す幅 (S1 2 %、R5 20 %、P5 20 %、T3 10 %、R3 50 %) | HIRAKU の選び | `hiraku/catalog/builders/product_care_bed.py` |
 | ナレッジの規則の値 (ボルトの縁端距離 1.2 d0、すみ肉溶接の長さ 30 mm か 6 倍、中空断面の b/t・h/t ≤ 35、固定の締結具の公差の式、1 人で持てる 23 kg、腰幅と座面の奥行き、指の隙間 25 mm、60 V、電池 55 ℃、角パイプの厚さ 1.6 mm から) | EN 1993-1-8・ASME Y14.5・NIOSH の持ち上げの式 (Waters ほか 1993)・AIST 1991-92・ISO 13854・UN R100・EVE LF50K の仕様書・JIS G 3466。出典のある規則には、読んだ日か「確かめていない」を書いた (試験で確かめる)。確かめたのは、縁端距離 1.2 d0 (EN 1993-1-8 の表 3.3)、溶接の長さ 30 mm か 6 倍 (同 4.5.1(2)、有効長さの規定)、角形の中空断面の ≤ 35 (同 表 7.8)、丸パイプの 10 ≤ d0/t0 ≤ 50 (同 表 7.1)、23 kg (NIOSH Pub. 94-110 に再録の Waters ほか 1993 の 6.2)、指の隙間 25 mm (ISO 13854 の表 1)、電池 55 ℃ (LF50K)、60 V (UN R100 の 2.17。R100 の言葉は "High Voltage" (直流 60 V を超える))、腰幅 391 mm と座面の奥行き 406 mm (AIST 1991-92 の J2・J6 の表、2026-11-03 に読んだ。`human.yaml`)。確かめていないのは、公差の式 (ASME を読めず二次の出典だけ)、厚さ 1.6 mm (JIS の改正案だけ読めた) | `data/knowledge/*.yaml` |
+| 板金の曲げの内側の半径 ≥ 板厚 (SM-01)、穴の中心から縁 ≥ 板厚の 2 倍 (SM-02)、鋼どうしのねじのかみ合い ≥ 呼び径 (FS-02) | 設計の手引きの目安。出典を 1 つに決めて読んでいない (仮定) | `data/knowledge/sheet-metal.yaml`・`fasteners.yaml` |
+| 部品が骨組みに止まっているとみなす距離 500 mm (SY-10) | HIRAKU の選び (仮の値、出典なし) | `data/knowledge/systems.yaml`、`hiraku/intake/systems.py` |
+| K2 の荷重と運転の仮定: 空気抵抗の係数 0.8・横の力の係数 1.0 (荷重条件にも設計にも無いとき)、ブレーキの力の立ち上がり 0.2 s、横風の突風の立ち上がり 0.2 s、運転者の先読み 0.6 s (3 m 以上)・ハンドルを切る速さ 400 deg/s、車体が 60° 傾いたら倒れたとみなす | 0.8・1.0・ブレーキの 0.2 s は仮定 (出典なし)。突風の 0.2 s・先読みと切る速さ・60° は HIRAKU の選び (出典なし) | `hiraku/solvers/k2_vehicle/shelf/base.py`・`crosswind.py`・`braking.py`、`hiraku/solvers/k2_vehicle/drive.py` |
+| サスのアームと部品の大きさ: アームの脚の丸パイプ 外径 25.4 mm・肉厚 2.0 mm、ダンパー (コイルばね) の半径 25 mm、ボールジョイントの箱 40 mm 角・0.2 kg。骨組みとの隙間を探す形では、アームの脚 25 mm の管・ダンパー 50 mm の円柱 | 仮定 (確かめていない) | `hiraku/designgen/kit/arms.py`・`kit/mounts.py`、`hiraku/designgen/space_frame_utv.py` |
+| ツールの雛形の例の鋼 (ヤング率 205,000 MPa・ポアソン比 0.3・密度 7,850 kg/m³・降伏 235 MPa)。設計の材料ではない | 降伏 235 MPa は JIS G 3101 の SS400 の薄い板の最小、ほかは一般的な設計の値として書いた。どれも確かめていない (雛形の答えはこの値から計算するので、値によらず成り立つ) | `hiraku/tools/tool_template.py` |
+| 体格の範囲 (Q31: 若年女性 5 % 〜 若年男性 95 %) | AIST 人体寸法データベース 1991-92 (確かめていない) | `data/requirements/offroad-4w.yaml`、`hiraku/intake/requirement_items.yaml` |
+| ISO 2867:1994 の値: 手すりと柱の間の手の空き 75 mm (表 2 C)、床が 1 m より高いときの 3 点の支え (4.7)、表 2 D | 75 mm と 4.7 は受付部が読んだと書いてあるが、解析部は確かめていない。表 2 D は確かめていない。今の版の ISO 4252:2007 と ISO 2867:2011 も確かめていない | `hiraku/designgen/ladder_4w.py`、`hiraku/catalog/builders/entry.py`、`data/requirements/offroad-4w.yaml` |
 
 外から持ってきた画像の素材 (Poly Haven、CC0。https://polyhaven.com/license を読んで確かめた):
 
@@ -440,6 +447,11 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 | 自社に CAE ツールを導入している技術者の割合: 従業員 100 人以内 16.0 %・1 万人超 67.9 % (動画の N08b) | 株式会社メイテックの発表「CAEツールの導入率は43.4％。1万人超の企業では67.9％が導入済み」(2017-09-26、「fabcross for エンジニア」調べ、製造系エンジニア 500 人のインターネットリサーチ、2017-08-25)。日刊工業新聞の企業リリース https://www.nikkan.co.jp/releases/view/1612 (2026-11-03 に原文で確かめた)。会社の数の割合ではなく、答えた技術者の割合 | `promo/screens/n08b.html` |
 | 静的な安定の基準 T/2h ≥ 1.0 (空車) | 79 FR 68981「The value of Kst for a vehicle at curb weight (without occupants) is required to be no less than 1.0.」。68982 で ROHVA 1-2011・B71.9-2012 の値とし、68968 で SSF = T/2H と定める (https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm、2026-11-03 に本文を確認) | `hiraku/catalog/builders/k2_tests.py` |
 | 横転の保護枠 (R4) の荷重: 横 1.75 M J・後ろ 1.4 M J・上から 20 M N、後ろの力は上の梁の幅の 1/6 の所 (M = 500 kg を入れて 875 J・700 J・10 kN)。トラクターの規格を借りたもので、この車の認証ではない | OECD Code 4 (トラクターの保護枠の静的試験、2026 年 2 月版) の 3.5.2・3.5.3・3.6 (https://www.oecd.org/content/dam/oecd/en/topics/policy-sub-issues/tractors/04-Code4-EN.pdf、2026-11-03 に本文を確認)。M = 500 kg はカタログの値から逆に出した仮定 | `hiraku/catalog/builders/analysis.py` |
+| 乗員と部品に掛かる横 0.70 g・前後 0.90 g (Q75・Q76)、乗員の点 R を外へ押す力 725 N (10 s) と、そのあとの永久の横の変形 25 mm 未満 (Q77・Q78) | CPSC の規則案 79 FR 68964 の § 1422.3(e)・(b)(1)、§ 1422.5(c) (受付部が 2026-11-03 に読んだ) | `data/requirements/offroad-4w.yaml` |
+| 足の操作部の力 500 N (Q68) | UN 規則 13-H 号 付属書 3 の 2.1.1・2.3.4 (50 daN、受付部が 2026-11-03 に読んだ) | `data/requirements/offroad-4w.yaml` |
+| 手の操作部の力 300 N (Q66) | UN 規則 79 号 (1988 年の文) の操舵力の表 (M1、故障時 300 N)。表は読んだ (読んだ日は書いていない)。設計の荷重に使うのは仮定 | `data/requirements/offroad-4w.yaml` |
+| 泥や石を放す踏面の範囲 前 30°・後ろ 50° (Q87・Q88) | 細目告示 (2023-09-22 版) 第 178 条 第 2 項 第 1 号 (読んだ。読んだ日は書いていない)。ほかの交通のための公道の決まりを借りた。乗員に当てるのは仮定 | `data/requirements/offroad-4w.yaml` |
+| 乗り降りの開口・段・手すり (Q93 450・Q94 300・Q96 1250・Q97 550・Q44 300・Q45 150・Q46 150・Q48 1600・Q49 16・Q89 38、どれも mm) | ISO 4252:1983 の図 1・表 1、ISO 2867:1980 の 7.3・7.8・10.1、ISO 2867:1994 の表 1 A・1 C・2 A (受付部が 2026-11-04 に読んだ)。農業トラクターと土工機械の古い版を借りた仮定 | `data/requirements/offroad-4w.yaml`、`hiraku/catalog/builders/entry.py` |
 
 - 動画のナレーション: 作者が自分の声で録った。下書きの段階では AivisSpeech (音声合成モデル「阿井田 茂」、制作 古山キリヲ、Aivis Common Model License (ACML) 1.0) を使ったが、提出の動画には使っていない
 
