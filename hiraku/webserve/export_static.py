@@ -13,7 +13,8 @@ from hiraku.webserve, written beforehand by the server's own functions so the an
     data/assets.json                     GET /api/assets (list_assets)
     data/modules.json                    GET /api/modules (modules_info)
     data/formulas.json                   GET /api/formulas (formula_titles)
-    data/runs/<id>/light.jsonl.gz        the run's events.jsonl (its complete lines), gzipped, with the
+    data/materials.json                  GET /api/materials (materials.material_cards)
+    data/runs/<id>/light.jsonl.gz       the run's events.jsonl (its complete lines), gzipped, with the
                                          heavy parts taken out (split_record): what the first screen and the
                                          run's state need. The page reads it first and unpacks it itself
                                          (DecompressionStream), so no host compression is needed
@@ -74,6 +75,7 @@ from hiraku.webserve.server import (
     modules_info,
     tool_versions,
 )
+from hiraku.webserve.materials import CARDS_DIR, material_cards
 from hiraku.webserve.shelf import Shelf
 
 STATIC_META = '<meta name="hiraku-static" content="1">'
@@ -439,10 +441,11 @@ def export(
     sample: bool = True,
     viewer: bool = True,
     heavy_min_bytes: int = HEAVY_MIN_BYTES,
+    materials_dir: Path | str = CARDS_DIR,
 ) -> dict[str, Any]:
     """Write the static site to `out` (see the module's doc). run_ids: the saved runs to take
     (None: all); viewer: the result viewer's part (viewer_link.export); heavy_min_bytes:
-    split_record's size of a heavy value. Returns {"out", "runs", "files": {relative path: bytes}}."""
+    split_record's size of a heavy value; materials_dir: the material cards' folder. Returns {"out", "runs", "files": {relative path: bytes}}."""
     out, saved_dir, web_dir = Path(out), Path(saved_dir), Path(web_dir)
     _prepare_out(out)
     # the screen's files, its pages marked
@@ -489,6 +492,7 @@ def export(
     _write(data / "assets.json", _json_bytes({"files": list_assets(web_dir) if assets else []}))
     _write(data / "modules.json", _json_bytes(modules_info()))
     _write(data / "formulas.json", _json_bytes(formula_titles()))
+    _write(data / "materials.json", _json_bytes(material_cards(materials_dir)))
     if Path(layout_file).is_file():
         _write(out / "layout.json", _json_bytes(json.loads(Path(layout_file).read_text(encoding="utf-8"))))
     if Path(pets_file).is_file():

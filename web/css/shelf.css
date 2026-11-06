@@ -88,4 +88,26 @@ body.video .sh-checks th:nth-child(8), body.video .sh-checks td.src { display: n
 .sh-checks .sh-more, .sh-fl .sh-more { font-size: 12px; }
 .sh-en { color: var(--muted); }
 
+/* the 材質 view (js/materials.js): the shelf's list and card, the material cards' values.
+   A value not read in its source is orange (attention); red is for NG judgements only. */
+.mt-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mt-host > .sh-body { flex: 1; }
+.mt-head { cursor: default; }
+.mt-row { padding-left: 24px; }
+.mt-tag { font-size: 13px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--line); white-space: nowrap; }
+.mt-tag.ok { color: var(--green); border-color: var(--green); }
+.mt-tag.unread { color: var(--orange); border-color: var(--orange); background: var(--orange-pale); }
+.mt-lead { margin: 12px 0 0; font-size: 16px; font-weight: 600; }
+.mt-lead .mt-ph { display: inline-block; }
+.mt-values td.mt-what { min-width: 10em; }
+.mt-values td.mt-val { font-family: var(--mono); }
+.mt-values td.mt-unit, .mt-values td.mt-kind { white-space: nowrap; }
+.mt-values tr.unread td { background: var(--orange-pale); }
+.mt-more { margin-top: 2px; font-size: 13px; }
+.mt-more > div { margin: 2px 0; overflow-wrap: anywhere; }
+.mt-card-more { margin-top: 10px; font-size: 14px; }
+.mt-term { font-weight: 600; }
+.mt-src { color: var(--ink-2); }
+.mt-url a { color: inherit; }
+
 .sh-code { margin: 0; max-height: 420px; overflow: auto; padding: 12px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 8px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre; }
