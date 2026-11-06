@@ -24,7 +24,7 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -48,6 +48,9 @@ FIRSTTIME = "20261105-200000-firsttime"  # many load cases sharing ids, long log
 HEAT = "20261106-120000-heat"  # heat: the energy's flow on a thermal record cut from a showcase run (tests.web.heat_fixture)
 
 READY = "window.hiraku && window.hiraku.ready"
+# The run list fills #launch after its own fetch of /api/launch, in one go (app.js renderLaunch);
+# with a launcher it always has something in it (the ways to run, the demo rows).
+LAUNCH_FILLED = "document.querySelector('#launch') && document.querySelector('#launch').children.length > 0"
 
 
 @dataclass(frozen=True)
@@ -175,12 +178,13 @@ def start_servers(tmp: Path, repo: Path = REPO_DIR):
 
 def open_screen(browser, bases: dict, screen: Screen, size: tuple[int, int]):
     page = browser.new_page(viewport={"width": size[0], "height": size[1]})
-    page.goto(f"{bases[screen.server]}/{screen.path}")
+    page.goto(f"{bases[screen.server]}/{screen.path}", wait_until="domcontentloaded")
     page.wait_for_function(screen.wait, timeout=60000)
     if screen.wait == READY:  # (the list and A1 never resolve it: they play nothing)
         page.evaluate("window.hiraku.ready")
+    if "list=1" in screen.path:
+        page.wait_for_function(LAUNCH_FILLED, timeout=60000)
     page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
-    page.wait_for_timeout(300)  # the list fills #launch after its own fetch
     return page
 
 

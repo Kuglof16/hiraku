@@ -23,7 +23,7 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -92,7 +92,7 @@ class LaunchWaitBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/?new=1")
+        page.goto(f"{base}/?new=1", wait_until="domcontentloaded")
         page.wait_for_selector("#draftbar")
         page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
         page.click("#view-intake button:has-text('送る')")
