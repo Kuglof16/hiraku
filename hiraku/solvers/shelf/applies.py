@@ -13,22 +13,13 @@ TUBE_SHAPES = ("rect_tube", "round_tube")  # the sections the shell meshers buil
 
 
 def design_kind(design: Record) -> str | None:
-    """The kind of design (hiraku.designgen ARCHETYPES key): design.archetype; None for a design Claude wrote
-    (written_by); else the generator whose signature variables it carries (designgen.generator_of); None when
-    none does."""
-    if design.get("archetype"):
-        return str(design["archetype"])
+    """The kind of design: the design's own archetype field (the generators write it: ladder_4w.py and the
+    others set design["archetype"], a key of designgen.ARCHETYPES); None for a design Claude wrote (written_by)
+    or one without the field. The solvers sit below designgen (tests/contract/test_layers), so the kind is not
+    worked out from the generators here: a design without it is judged on its shape alone."""
     if design.get("written_by"):
         return None
-    try:
-        from hiraku import designgen
-    except ImportError:  # pragma: no cover
-        return None
-    try:
-        gen = designgen.generator_of(design)
-    except ValueError:
-        return None
-    return next((k for k, m in designgen.ARCHETYPES.items() if m is gen), None)
+    return str(design["archetype"]) if design.get("archetype") else None
 
 
 def _names(items: Iterable[str], most: int = 5) -> str:
@@ -103,11 +94,12 @@ def support_kind(design: Record, kind: str, what: str) -> str | None:
     return None
 
 
-def wheels_with_radius(design: Record) -> str | None:
-    """Every support but a leg has radius_mm > 0, and one at least is not a leg."""
+def wheels_with_radius(design: Record, need_rolling: bool = True) -> str | None:
+    """Every support but a leg has radius_mm > 0, and (need_rolling) one at least is not a leg. K2's model takes a
+    leg too (radius 0 read as 10 mm): a design standing on legs only can be tilted or blown on (K2's note)."""
     sup = design.get("supports") or []
     rolling = [s for s in sup if s.get("kind") != "leg"]
-    if not rolling:
+    if not rolling and need_rolling:
         return "転がる支持 (脚でない supports) がありません"
     bad = [s.get("id", "?") for s in rolling if not (isinstance(s.get("radius_mm"), (int, float)) and s["radius_mm"] > 0)]
     return f"支持に radius_mm がありません: {_names(bad)}" if bad else None
@@ -120,7 +112,7 @@ def part_kind(design: Record, kinds: Iterable[str], what: str) -> str | None:
     return None
 
 
-def vehicle(design: Record) -> str | None:
+def vehicle(design: Record, need_rolling: bool = True) -> str | None:
     """What the K2 vehicle model reads of each support (k2_vehicle.model.build_vehicle): kind, radius_mm (but a
     leg), suspension.type, actuation.drive / brake / steer; a kc_table names its table; and a mass."""
     sup = design.get("supports") or []
@@ -137,7 +129,7 @@ def vehicle(design: Record) -> str | None:
         return f"車の動きのモデルが読む支持の欄がありません: {_names(bad)}"
     if not any(p.get("mass_kg") for p in design.get("parts") or []) and not design.get("members"):
         return "質量のある部品も部材もありません"
-    return wheels_with_radius(design)
+    return wheels_with_radius(design, need_rolling)
 
 
 def kc_table(design: Record) -> str | None:
@@ -204,8 +196,10 @@ def _load_path(d: Record) -> str | None:
     return first(f"支持に frame_node がありません: {_names(no_node)}" if no_node else None, frame(d))
 
 
-def _k2(extra=None):
-    return lambda d: first(vehicle(d), extra(d) if extra else None)
+def _k2(extra=None, rolling: bool = True):
+    """A K2 tool's shape: the vehicle model's supports, and (rolling) one support at least that is not a leg (the
+    tools that drive or roll the vehicle); tilt and crosswind balance a design that stands on legs only too."""
+    return lambda d: first(vehicle(d, rolling), extra(d) if extra else None)
 
 
 SHAPES = {
@@ -231,9 +225,10 @@ SHAPES = {
     "actuator_duty": lambda d: first(any_bed_actuator(d), variables(d, ("actuator_speed",), "動かす時間の割合の計算")),
     # K2 (hiraku.solvers.k2_vehicle.shelf): the vehicle model's supports, and what the scenario drives
     "braking": _k2(lambda d: support_with(d, "brake", "ブレーキのある")),
-    "crosswind": _k2(),
+    "crosswind": _k2(rolling=False),
     "offroad_roll": _k2(),
-    "tilt": _k2(),
+    "tilt": _k2(rolling=False),
+    "rollover_tilt": _k2(rolling=False),  # K2's tilt past its limit (claude/k2-rollover): the same shape as tilt
     "turning_circle": _k2(lambda d: support_with(d, "steer", "かじを切る")),
     "lane_change": _k2(lambda d: support_with(d, "steer", "かじを切る")),
     "launch": _k2(lambda d: support_with(d, "drive", "駆動する")),
