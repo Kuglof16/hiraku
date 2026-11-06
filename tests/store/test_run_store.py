@@ -322,6 +322,20 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual([e["seq"] for e in ev], list(range(len(ev))))
         self.assertGreaterEqual(ev[-1]["t"], ev[-2]["t"])
 
+    def test_reopen_reads_the_records_only_for_a_new_id(self):
+        """A reader (the plugin's hook command) reopens without reading every record file; the id counters
+        are counted on the first next_id, so a writer still continues from the highest id on disk."""
+        from unittest import mock
+
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength")
+        with mock.patch.object(RunStore, "records", side_effect=AssertionError("records read on open")):
+            again = RunStore.open(self.store.path)
+        self.assertEqual(again.next_id("prediction"), "pred-0002")
+        self.assertEqual(again.next_id("analysis"), "ana-0001")
+
 
 class ModuleChangeTest(unittest.TestCase):
     """Proposals of module designers (design.change_proposed): run-wide ids chg-NNNN, pending until a version

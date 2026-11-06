@@ -121,6 +121,7 @@ class RunStore:
         self._t0_mono = mono()
         self._t_offset = 0.0  # t of the last event when reopened
         self._counters = {kind: 0 for kind in ID_PREFIX}
+        self._counters_open = False  # True after open(): the counters are counted on the first next_id
         # inside reading(): record files already looked at in this stretch, by path (None outside). Emptied on every
         # event, since every write of this store emits one
         self._read_cache: dict[str, Any] | None = None
@@ -177,13 +178,21 @@ class RunStore:
         if events:
             store._seq = events[-1]["seq"] + 1
             store._t_offset = events[-1]["t"]
-        for kind in layout.ID_PREFIX:
-            ids = [r[f"{kind}_id"] for r in store.records(kind)]
-            store._counters[kind] = max((int(i.rsplit("-", 1)[1]) for i in ids), default=0)
-        chg = [c["change_id"] for _, c in store._proposals(events)]
-        chg += [c["change_id"] for v in store._project.get("design_versions") or [] for c in store.design(v).get("module_changes") or []]
-        store._counters[MODULE_CHANGE] = max((int(i.rsplit("-", 1)[1]) for i in chg), default=0)
+        # the id counters are counted from the records on the first next_id, not here: a reader (the plugin's hook
+        # command, the screen) never reserves an id, and reading every record file took 1.2 s of a hook's 2.3 s on
+        # a long run (1033 records)
+        store._counters_open = True
         return store
+
+    def _count_ids(self) -> None:
+        """The id counters of a reopened run: the highest id of each kind on disk."""
+        for kind in layout.ID_PREFIX:
+            ids = [r[f"{kind}_id"] for r in self.records(kind)]
+            self._counters[kind] = max((int(i.rsplit("-", 1)[1]) for i in ids), default=0)
+        chg = [c["change_id"] for _, c in self._proposals(self.events())]
+        chg += [c["change_id"] for v in self._project.get("design_versions") or [] for c in self.design(v).get("module_changes") or []]
+        self._counters[MODULE_CHANGE] = max((int(i.rsplit("-", 1)[1]) for i in chg), default=0)
+        self._counters_open = False
 
     # ------------------------------------------------------------------ events
 
@@ -409,6 +418,8 @@ class RunStore:
     def next_id(self, kind: str) -> str:
         """Reserve the next run-wide id of a record kind (pred-0001, ana-0001, ...)."""
         with self._lock:
+            if self._counters_open:
+                self._count_ids()
             self._counters[kind] += 1
             return f"{ID_PREFIX[kind]}-{self._counters[kind]:04d}"
 
