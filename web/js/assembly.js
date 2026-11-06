@@ -101,6 +101,9 @@ export function fastenText(step, names, memberNames = {}) {
 }
 
 export const stepOk = (step) => CHECKS.every((c) => step[c.key] === true);
+// The checks whose failing is drawn in red on A7: a part that does not fit. Tool room and hand
+// reach failing are cautions (the caution colour), as on N16.
+export const HARD_CHECKS = ["no_interference"];
 
 // One interference of the record in words: each side by its name in the design ("member x" as a
 // fastening's target, a part by its name, else the id as written), how deep, and when. The
@@ -483,6 +486,8 @@ export class AssemblyPanel {
     this.gl = this.q(".asm-gl");
     this.view = new Workbench3D(this.gl, "zu");
     this.stage = new AssemblyStage(this.view);
+    // red only for a part that does not fit (as N16); tool room and hand reach are cautions, not red
+    this.stage.ngChecks = HARD_CHECKS;
     this.modules = mountAssemblySwitch(this); // modules: the module colours and spaces (modules.js)
     this.jointCtl = assemblyJointControls(this.q(".asm-3d"), this.view); // joints: its own 接合 switch and legend
     this.seek = new AssemblySeek(this.q(".asm-bar"), {
@@ -576,7 +581,7 @@ export class AssemblyPanel {
     this.jointCtl.refresh(); // joints:
     if (!rec) return;
     this.u = rec.steps.length; // opens on the vehicle built, the last step marked
-    this.seek.setSteps(rec.steps);
+    this.seek.setSteps(rec.steps, HARD_CHECKS);
     this.sized = null;
     this.resize();
     this.q(".asm-intf").innerHTML = rec.interferences.length
