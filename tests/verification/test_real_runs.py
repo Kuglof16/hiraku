@@ -460,6 +460,16 @@ else:
             self.skipTest("no tool with needs_mesh yet (analysis dept)")
 
 
+# Showcase runs recorded with older code, and the checks of today's rules they are let off, by name
+# (統括部's decision: say which record skips which check, and run every other check). showcase/README.md
+# lists the same.
+OLD_CODE_SKIPS = {
+    "20261104-011628-care-bed": {
+        "HK4_no_stop_before_judged": "11/4 のコードの記録。今の判定の決まりでは音振は判定なしのまま",
+    },
+}
+
+
 class SavedRuns(unittest.TestCase):
     """The example runs committed under showcase/<run_id>/. runs/ is local and not
     committed, so it is not checked here (python -m qa.check_run --all does that by hand).
@@ -472,5 +482,10 @@ class SavedRuns(unittest.TestCase):
         if not runs:
             self.skipTest(f"no runs under {layout.SHOWCASE_DIR.as_posix()}/ yet")
         for run in runs:
+            skips = OLD_CODE_SKIPS.get(run.name, {})
             with self.subTest(run=run.name):
-                self.assertEqual([e for e in _errors(run) if "files.missing" not in e], [])
+                found = [f for f in cr.check_run(run) if f.level == "error" and f.rule != "files.missing"]
+                self.assertEqual([str(f) for f in found if f.rule not in skips], [])
+                # a named skip must still be needed: a check that no longer fails is taken off the list
+                self.assertEqual(sorted(set(skips) - {f.rule for f in found}), [],
+                                 f"{run.name}: OLD_CODE_SKIPS names checks that pass now")
