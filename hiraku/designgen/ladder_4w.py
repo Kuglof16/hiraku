@@ -220,9 +220,9 @@ VARIABLES: dict[str, Var] = {
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
     "fatigue_slope_after_knee_constant_amplitude": Var("1", 22.0, meaning="assumption"),
-    # 80 N/mm: a round value between the two BKT ATV radials in TYRE_STIFFNESS_BASIS (76.1 and 85.7 N/mm); it
-    # replaces an unsourced 150 N/mm
-    "tyre_stiffness": Var("N/mm", 80.0, meaning="vertical stiffness of one tyre (see basis)"),
+    # 60 N/mm: the centre of 45-90 N/mm read from the three sources in TYRE_STIFFNESS_BASIS (a judgement, not a
+    # value in them); it replaces 80 N/mm (a retailer's page) and before that an unsourced 150 N/mm
+    "tyre_stiffness": Var("N/mm", 60.0, meaning="vertical stiffness of one tyre (see basis)"),
     # tyre and suspension details of the 3D vehicle model (K2), assumptions with no source
     "tyre_damping_ratio": Var("1", 0.05, meaning="assumption: vertical damping ratio of the tyre"),
     "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
@@ -275,12 +275,17 @@ VARIABLES: dict[str, Var] = {
     "rollbar_t": Var("mm", 2.3, 1.6, 4.5, "roll bar tube wall"),
 }
 TYRE_STIFFNESS_BASIS = (
-    "not the maker's value: computed by HIRAKU as the mean stiffness from 0 to the rated load (rated load / (outer "
-    "diameter / 2 - static loaded radius)) from the rated load and static loaded radius of BKT ATV radials 25x10 R12 "
-    "(76.1 N/mm) and 26x12 R12 (85.7 N/mm) on a retailer's product page (secondary; it says the data come from the "
-    "maker), read 2026-11-06; inflation pressure not given; with the maker's +-2 % outer diameter tolerance the range "
-    "is 44 to 113 N/mm; the page's text not checked")
-TYRE_STIFFNESS_RANGE_N_MM = (44.0, 113.0)  # the ends of the range in TYRE_STIFFNESS_BASIS
+    "60 N/mm, range 45 to 90 N/mm: HIRAKU's judgement from three sources on ATV-class tyres (not measurements of "
+    "this vehicle's tyre), read 2026-11-06 via web.archive.org copies: (1) D. R. Krueger, Investigation of Lateral "
+    "Performance of an ATV Tire on Natural, Deformable Surfaces, MS thesis, Auburn University, 2007, Appendix B, "
+    "Fig. 6.4: Dunlop KT 821 22x8-10 measured statically at 0.69 / 1.03 / 1.38 bar, about 57 / 62 / 74 N/mm read "
+    "off the figure; (2) BKT technical data sheets, Sierra Max Pro AT 25x8 R12 and Sierra Max AT 25x10 R12: from "
+    "the rated load and the static loaded radius HIRAKU computes the mean stiffness from 0 to the rated load, "
+    "54.3 and 71.7 N/mm (the sheets give no pressure for the loaded radius; such a secant is below the tangent); "
+    "(3) G. N. Wilson, Towards Speed Selection for High-Speed Operation of Autonomous Ground Vehicles on Rough "
+    "Off-Road Terrains, PhD thesis, University of Calgary, 2018, Appendix B.3.5.1: ATV 16x8-7 at about 0.69 bar, "
+    "36 to 44 N/mm static and 0.1-10 Hz dynamic (dynamic / static about 1.0-1.2)")
+TYRE_STIFFNESS_RANGE_N_MM = (45.0, 90.0)  # the ends of the range in TYRE_STIFFNESS_BASIS
 # Where the outside and assumed values come from (design.variables[...]["basis"]), copied from their meaning and
 # the comments above; the variables the design chooses and the requirements (Q50, Q40, seats, cargo_height) have none.
 _BASIS = {

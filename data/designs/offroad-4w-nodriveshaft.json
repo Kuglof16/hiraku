@@ -226,9 +226,9 @@
       "basis": "assumption"
     },
     "tyre_stiffness": {
-      "value": 80.0,
+      "value": 60.0,
       "unit": "N/mm",
-      "basis": "not the maker's value: computed by HIRAKU as the mean stiffness from 0 to the rated load (rated load / (outer diameter / 2 - static loaded radius)) from the rated load and static loaded radius of BKT ATV radials 25x10 R12 (76.1 N/mm) and 26x12 R12 (85.7 N/mm) on a retailer's product page (secondary; it says the data come from the maker), read 2026-11-06; inflation pressure not given; with the maker's +-2 % outer diameter tolerance the range is 44 to 113 N/mm; the page's text not checked"
+      "basis": "60 N/mm, range 45 to 90 N/mm: HIRAKU's judgement from three sources on ATV-class tyres (not measurements of this vehicle's tyre), read 2026-11-06 via web.archive.org copies: (1) D. R. Krueger, Investigation of Lateral Performance of an ATV Tire on Natural, Deformable Surfaces, MS thesis, Auburn University, 2007, Appendix B, Fig. 6.4: Dunlop KT 821 22x8-10 measured statically at 0.69 / 1.03 / 1.38 bar, about 57 / 62 / 74 N/mm read off the figure; (2) BKT technical data sheets, Sierra Max Pro AT 25x8 R12 and Sierra Max AT 25x10 R12: from the rated load and the static loaded radius HIRAKU computes the mean stiffness from 0 to the rated load, 54.3 and 71.7 N/mm (the sheets give no pressure for the loaded radius; such a secant is below the tangent); (3) G. N. Wilson, Towards Speed Selection for High-Speed Operation of Autonomous Ground Vehicles on Rough Off-Road Terrains, PhD thesis, University of Calgary, 2018, Appendix B.3.5.1: ATV 16x8-7 at about 0.69 bar, 36 to 44 N/mm static and 0.1-10 Hz dynamic (dynamic / static about 1.0-1.2)"
     },
     "rail_b": {
       "value": 40.0,

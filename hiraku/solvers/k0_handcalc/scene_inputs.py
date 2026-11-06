@@ -94,11 +94,12 @@ LAUNCH_OTHER_INPUTS = {
 
 LOADED_RADIUS_ASSUMPTION = ("駆動輪の半径は荷重でたわんだ半径 (自由半径 − 止まっているときの輪の荷重 / タイヤの縦のばね "
                             "tyre_stiffness、駆動輪の平均)")
-# Why the demo designs' tyre_stiffness is 80 N/mm (its source: the basis of design.variables.tyre_stiffness,
+# Why the demo designs' tyre_stiffness is 60 N/mm (its source: the basis of design.variables.tyre_stiffness,
 # hiraku/designgen/ladder_4w.py TYRE_STIFFNESS_BASIS); written into the assumptions of the records whose
 # predictions use tyre_stiffness
-TYRE_STIFFNESS_NOTE = ("タイヤの縦のばね tyre_stiffness 80 N/mm は、出どころの無かった 150 N/mm を置き換えたもの。段差の力が"
-                       "小さくなるので、段差の当たりを判定する所では、その幅の両端 44 と 113 N/mm でも出す")
+TYRE_STIFFNESS_NOTE = ("タイヤの縦のばね tyre_stiffness 60 N/mm は、ATV のタイヤの 3 つの資料から読んだ幅 45〜90 N/mm の"
+                       "中ほど (出どころの無かった 150 N/mm、そのあと 80 N/mm を置き換えたもの)。段差の当たりを判定する所では、"
+                       "幅の両端 45 と 90 N/mm でも出す")
 FREE_RADIUS_ASSUMPTION = ("駆動輪の半径は自由半径 (設計にタイヤの縦のばね tyre_stiffness が無いので、荷重でたわんだ半径を"
                           "出せない。たわみの分だけ F_max を小さめに出す)")
 

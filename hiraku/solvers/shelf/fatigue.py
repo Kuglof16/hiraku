@@ -372,7 +372,7 @@ class Fatigue(BuiltinTool):
                    "per_member": per_member}]
         out = {"results": results, "fields": fields, "series": series, "effects": effects,
                "assumptions": [slope_assumption(m, m2, _var(design, CONSTANT_AMPLITUDE_SLOPE, "1"))]}
-        if ((design.get("variables") or {}).get("tyre_stiffness") or {}).get("basis"):  # the sourced 80 N/mm
+        if ((design.get("variables") or {}).get("tyre_stiffness") or {}).get("basis"):  # the sourced 60 N/mm
             out["assumptions"].append(TYRE_STIFFNESS_NOTE)
         if road is not None:
             out["scene"] = [road]
