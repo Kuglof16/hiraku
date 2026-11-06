@@ -27,8 +27,9 @@ function verdictsOf(s, domain, v) {
 }
 
 // The words judge.py puts in a judgement's summary when tests are left without a verdict or
-// held back (hiraku/tools/judge.py compute_judgement).
-const NOT_ALL_JUDGED = ["判定の無い試験", "まだ合格にできない試験", "まだ判定していない試験"];
+// held back (hiraku/tools/judge.py compute_judgement). まだ OK にできない試験 is judge.py's word from
+// design-ok-ng-words on; まだ合格にできない試験 stays for saved records written before it.
+const NOT_ALL_JUDGED = ["判定の無い試験", "まだ OK にできない試験", "まだ合格にできない試験", "まだ判定していない試験"];
 
 // A domain's tile for version v, read from the record:
 //   state   the judgement's state (green / red / pending, null without one), except when the
