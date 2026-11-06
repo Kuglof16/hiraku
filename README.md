@@ -201,6 +201,19 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 まだのもの: 20 試験ぶんを全部まとめて回すこと、実行の最後の報告 (`write_report`) を読む画面。
 
+## 主張と確かめる場所
+
+`showcase/` の 4 つの実行のうち、Claude が回したのは `20261105-160725-offroad-4w`・`20261105-094333-offroad-4w`・`20261105-091217-offroad-4w` (どれも Claude Code のプラグイン。`project.json` の `driver` が `claude_code_plugin`)。`20261105-150416-offroad-4w-scripted` は台本の運転です (`driver` が `scripted`。Claude を呼ばない)。下の表では実行を名前の真ん中 (160725 など) で書き、seq は `events.jsonl` の event の番号です。
+
+| 主張 | 記録 (`showcase/`) | コード | 試験 |
+|---|---|---|---|
+| 解析の前に、手計算で予測する | 160725 (Claude): R4-rops の予測 pred-0029〜0032 (seq 261〜264) のあとに、解析 ana-0022 (seq 266) | `hiraku/tools/rules.py` の `check_analyze` (HK1)、`hiraku/tools/functions.py` の `_gate` | `tests/tools/test_functions.py` の `test_hk1_analyze_needs_a_prediction_of_this_load_case` |
+| hooks が実行を止める | Claude の 3 つの実行で止めたのは HK3・HK5・HK6 (`hook.denied`) と HK4 (終わりを断る `hook.blocked_stop`)。160725 では HK5 が seq 260・436、HK4 が seq 276・277、HK3 が seq 953。「予測が無い」の HK1 で止めた例は、Claude の実行の記録には無い。台本の 150416 は、わざと予測の前に `analyze` を呼んで HK1 を見せる (seq 50。`data/catalog/scripted.yaml` の `show_hk1`) | `hiraku/tools/rules.py`、`hiraku/agent/hooks.py`、`plugins/hiraku/hooks/hooks.json` | `tests/agent/test_hooks.py` の `test_hk1_denial_is_recorded_and_explained`、`tests/agent/test_plugin_path.py` の `test_hk1_deny_as_the_sdk_hook_and_recorded_by_the_server` |
+| Claude が実行の中でツールを書き、確かめてから使った | 160725: `tools/rops_pushover-1.py` と `tools/rops_pushover-1.check.json`。`tool.checked` (seq 265、cae.strength、使える) のあと、ana-0022 (seq 266) で使った。094333 の `tools/` にも 2 つ | `hiraku/tools/functions.py` の `check_tool`・`make_tool`、HK2 (`rules.py`) | `tests/tools/test_tool_template.py` の `test_the_example_passes_check_tool` |
+| 設計を、解析の結果から v1 → v7 と直した | 160725: `design.created` が 7 つ (v7 は seq 966)。v7 の `module_changes` は、v6 の R1-step100 の NG (ver-0077、シェルの解析 ana-0083) に答えて `rail_t` を 2.3 → 3.2 mm にした。v ごとの NG は [showcase/README.md](showcase/README.md) | `hiraku/tools/functions.py` の `revise_design`・`build_version`、`hiraku/designgen/` | `tests/tools/test_functions.py` の `test_revise_design_builds_the_load_cases_again_for_the_new_version` |
+| CAE の役は、作るものに合わせて決まる | 160725: 選んだ分野は強度信頼性と組み立て (`domains.picked`、seq 1)、CAE 役は `cae.strength` だけ (`project.json` の `agents`)。保存した実行はどれもオフロードの車で、ほかの製品の記録は `showcase/` に無い | `hiraku/intake/domains.py` の `pick_domains`、`hiraku/catalog/project.py` の `agents_for` | `tests/intake/test_domains.py` の `test_which_domains` (ギターは強度信頼性と音振、介護ベッドは 5 分野) |
+| 数はツールが出す | 160725 の `report.json`: 分野ごとの数はコードが記録から入れ、Claude が書いたのは `summary` と `next` だけ | `hiraku/agent/prompts.py` の `COMMON_RULES`、`hiraku/tools/report.py` の `unknown_numbers` (記録に無い数のある報告を断る) | `tests/tools/test_report.py` の `test_numbers_with_units_must_be_recorded` |
+
 ## 中身
 
 - `hiraku/agent/` エージェントのループ・hooks・役 (まとめ役・設計役・パッケージ役・分野ごとの CAE 役)、`plugins/hiraku/` skills
@@ -316,10 +329,8 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### 数がどこから出るか
 
-- 役のプロンプトには「数値は全部、ツールが出す。自分で計算した数を入力にも文にも書かない。単位の換算もしない」とある (`prompts.py` の `COMMON_RULES`)。
 - 予測の値は K0 が計算し、Claude は式と入力を選ぶだけ (`docs/contract.md` の、1 つの数字を信用して判定するまでの節、`mcp.py` の `record_prediction` の説明)。
 - 予測と解析の差を許す幅は荷重条件に入っていて、モデルは決めない。OK と NG はツールの中でだけ作る (`docs/contract.md`)。
-- 報告の数はコードが記録から入れる。Claude が書くのは `summary` と `next` だけ (`docs/contract.md`、`mcp.py` の `write_report` の説明)。
 - Claude が実行の中で作ったツールは、答えの分かっている例に全部通ったときだけ棚に入る (`mcp.py` の `make_tool` の説明、`docs/contract.md`)。
 
 ## どう作ったか
