@@ -7,7 +7,7 @@ HIRAKU: Claude agents predict each result by hand calculation before running the
 
 Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作っています。
 
-## はじめに動かす
+## 動かし方
 
 用意するもの: Windows の PC、git、Python 3.12、インターネット (部品を入れるとき・画面を開くとき)。
 
@@ -124,7 +124,7 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
 
 自分の Claude Code (自分のサインインの枠) で回す道です。API キーは要りません。リポジトリのフォルダで、次のようにします。
 
-1. 「はじめに動かす」の手順 3 まで済ませます (`.venv` が要ります)。
+1. 「動かし方」の手順 3 まで済ませます (`.venv` が要ります)。
 2. 先にキー無しで確かめます (40 秒ほど。Claude を呼ばない台本の運転です)。
 
    ```
