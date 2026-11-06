@@ -20,8 +20,6 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 HERE = Path(__file__).resolve().parent
-KERNELS_CU = HERE / "kernels.cu"
-KERNELS_PTX = HERE / "kernels.ptx"
 STAMP = "// built from kernels.cu sha256 "
 
 CU_CTX_SCHED_BLOCKING_SYNC = 2  # wait without spinning a CPU core
@@ -43,8 +41,8 @@ def _load_driver() -> ct.CDLL:
         raise GpuUnavailable(f"NVIDIA のドライバの CUDA ({name}) がありません: {e}") from None
 
 
-def source_hash() -> str:
-    return hashlib.sha256(KERNELS_CU.read_bytes()).hexdigest()
+def source_hash(name: str = "kernels") -> str:
+    return hashlib.sha256((HERE / f"{name}.cu").read_bytes()).hexdigest()
 
 
 def _nvrtc_candidates() -> Iterable[Path]:
@@ -103,14 +101,15 @@ def build_ptx() -> Path:
     return KERNELS_PTX
 
 
-def kernels_ptx() -> str:
-    """The PTX for the current kernels.cu; rebuilt by NVRTC when the stamp is stale."""
-    if KERNELS_PTX.is_file():
-        text = KERNELS_PTX.read_text(encoding="utf-8")
-        if text.startswith(STAMP + source_hash()):
+def kernels_ptx(name: str = "kernels") -> str:
+    """The PTX for the current <name>.cu; rebuilt by NVRTC when the stamp is stale."""
+    path = HERE / f"{name}.ptx"
+    if path.is_file():
+        text = path.read_text(encoding="utf-8")
+        if text.startswith(STAMP + source_hash(name)):
             return text
-    build_ptx()
-    return KERNELS_PTX.read_text(encoding="utf-8")
+    build_ptx(name)
+    return path.read_text(encoding="utf-8")
 
 
 def gpu_memory_mib() -> dict[str, int] | None:
@@ -212,9 +211,9 @@ class Launch:
 
 
 class Gpu:
-    """One CUDA context on the first device, with the kernels loaded."""
+    """One CUDA context on the first device, with the kernels <kernels>.cu loaded."""
 
-    def __init__(self) -> None:
+    def __init__(self, kernels: str = "kernels") -> None:
         self.lib = _load_driver()
         code = self.lib.cuInit(0)
         if code != 0:
@@ -235,7 +234,7 @@ class Gpu:
         self.cuda_version = version.value
         self.allocated = 0
         self.module = ct.c_void_p()
-        ptx = kernels_ptx().encode()
+        ptx = kernels_ptx(kernels).encode()
         log = ct.create_string_buffer(8192)
         opt = (ct.c_int * 2)(5, 6)  # CU_JIT_ERROR_LOG_BUFFER, CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES
         val = (ct.c_void_p * 2)(ct.cast(log, ct.c_void_p), ct.c_void_p(8192))
@@ -273,13 +272,13 @@ class Gpu:
         self.close()
 
 
-def gpu_or_reason() -> tuple[Gpu | None, str]:
+def gpu_or_reason(kernels: str = "kernels") -> tuple[Gpu | None, str]:
     """A ready Gpu, or None and the reason in Japanese (for the tool and the skipped tests)."""
     try:
-        return Gpu(), ""
+        return Gpu(kernels), ""
     except GpuUnavailable as e:
         return None, str(e)
 
 
 if __name__ == "__main__":
-    print(build_ptx())
+    print(build_ptx(sys.argv[1] if len(sys.argv) > 1 else "kernels"))
