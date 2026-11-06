@@ -11,10 +11,13 @@
 // the camera and its target by how far the vehicle moved since the motion's first time).
 // ?cam=side: the camera stands still beside the step's edge (else the middle of the path),
 // framing the vehicle there from the side.
+// ?cam=wide: the camera stands still from the side, drawn back so the vehicle's whole path
+// (where the motion starts to where it ends, with the step) is in the frame: the vehicle drives
+// across it.
 
 import { VIEWS } from "./workbench3d.js";
 
-export const LOOP_CAMS = ["follow", "side"];
+export const LOOP_CAMS = ["follow", "side", "wide"];
 
 function num(params, key) {
   if (!params.has(key) || params.get(key).trim() === "") return null;
@@ -87,12 +90,13 @@ export class AnimLoop {
   // Before each render: the side camera stands where it was put (anything that framed the view
   // again, e.g. a resize, is undone); follow leaves the camera to Workbench3D.follow.
   aim(bench) {
-    bench.noFollow = this.cam === "side";
-    if (this.cam !== "side" || !bench.design || !bench.motion) return;
+    const still = this.cam === "side" || this.cam === "wide";
+    bench.noFollow = still;
+    if (!still || !bench.design || !bench.motion) return;
     const a = this.sideAim;
     const moved = !a || a.key !== bench.sceneKey || a.w !== bench.renderer?.domElement?.width || bench.controls.target.distanceToSquared(a.target) > 1e-12 || bench.camera.position.distanceToSquared(a.position) > 1e-12;
     if (!moved) return;
-    const pts = sidePoints(bench);
+    const pts = this.cam === "wide" ? widePoints(bench) : sidePoints(bench);
     if (!pts.length) return;
     bench.fitPoints(pts, VIEWS.side, 1.12);
     this.sideAim = { key: bench.sceneKey, w: bench.renderer?.domElement?.width, target: bench.controls.target.clone(), position: bench.camera.position.clone() };
@@ -127,6 +131,31 @@ function sidePoints(bench) {
   for (const p of pts) {
     out.push(p.clone().setX(p.x + dx));
     if (h > 0) out.push(p.clone().setX(p.x + dx).setZ(p.z + h));
+  }
+  return out;
+}
+
+// The vehicle's points (ISO mm) at the start and at the end of its recorded path (x only),
+// standing on the road and on top of the step: the frame holds the whole run.
+function widePoints(bench) {
+  const pts = bench.contentPoints();
+  const path = bench.motion?.path;
+  if (!pts.length || !path || !Number.isFinite(path.minX) || !Number.isFinite(path.maxX)) return sidePoints(bench);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const p of pts) {
+    lo = Math.min(lo, p.x);
+    hi = Math.max(hi, p.x);
+  }
+  const mid = (lo + hi) / 2;
+  const h = stepHeight(bench.sceneDesc);
+  const out = [];
+  for (const x of [path.minX, path.maxX]) {
+    const dx = x - mid;
+    for (const p of pts) {
+      out.push(p.clone().setX(p.x + dx));
+      if (h > 0) out.push(p.clone().setX(p.x + dx).setZ(p.z + h));
+    }
   }
   return out;
 }

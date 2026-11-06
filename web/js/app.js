@@ -128,6 +128,8 @@ const ui = {
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+// ?off=cause: the card of a mismatch's cause is not shown (it has no button of its own)
+const CAUSE_OFF = (params.get("off") ?? "").split(",").includes("cause");
 // modules: ?on=modules,spaces turns those on at load (?on=joints is still read, joints being on at first) (modules and spaces take the contour's place)
 for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
 if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
@@ -1665,7 +1667,8 @@ function renderTransient(s, playhead, chain, resolved) {
     h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
   // the cause of a mismatch Claude wrote, until a verdict of its load case is OK (present.js openCause)
-  const cause = openCause(s);
+  // (?off=cause: not shown, e.g. a shot where the card would cover the vehicle)
+  const cause = CAUSE_OFF ? null : openCause(s);
   const cn = $("causenote");
   cn.hidden = !cause;
   if (cause && cn.dataset.key !== cause.key) {
