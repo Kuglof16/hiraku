@@ -23,7 +23,10 @@ import numpy as np
 Record = dict[str, Any]
 
 ENVELOPE_MARGIN_MM = 25.0  # a module's room round what it has now (HIRAKU's choice, no source)
-OWNER = {"package": "packager"}  # the others: designer.<module>
+# the module's owner: one of the three design roles (structure, mechanism, electric) or the packager
+OWNER = {"package": "packager", "frame": "designer.structure", "body": "designer.structure",
+         "occupant": "designer.structure", "suspension": "designer.mechanism", "steering": "designer.mechanism",
+         "powertrain": "designer.electric"}  # a module not listed: designer.<module>
 SUSPENSION_FRAME_POINTS = {"lca_front": "bushing", "lca_rear": "bushing", "uca_front": "bushing", "uca_rear": "bushing",
                            "damper_upper": "bolt"}
 

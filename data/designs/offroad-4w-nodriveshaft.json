@@ -10169,7 +10169,7 @@
     {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
         {
           "center_mm": [
@@ -12390,7 +12390,7 @@
     {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
         {
           "center_mm": [
@@ -13586,7 +13586,7 @@
     {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
         {
           "center_mm": [
@@ -14009,7 +14009,7 @@
     {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
         {
           "center_mm": [
@@ -14731,7 +14731,7 @@
     {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
         {
           "center_mm": [
@@ -14967,7 +14967,7 @@
     {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
         {
           "center_mm": [
