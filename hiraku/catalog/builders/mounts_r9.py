@@ -144,13 +144,37 @@ def _prediction(qty: str, place: str | None) -> Record:
             "inputs": {k: f"from.{at}.{k}" for k in lb.INPUTS_OF[qty]}, "inputs_from": r9_inputs}
 
 
+# The plate and weld hand formulas against the shell (the brackets meshed as plates): on the demo run
+# 20261106-185605's version 5 regenerated with the lca bracket base across the rail wall, mount_plate_t 9 and
+# mount_weld_leg 6.3, the hand calculation gives plate 0.51 / weld 0.40 at rail_b 40 (0.42 / 0.40 at rail_b 45); the
+# shell on the study set A (v005 + the same bracket values) gives 1.00 / 0.80 at rail_b 40 and 0.81 / 0.63 at
+# rail_b 45 (the analysis department, 2026-11-06). The shell decides (tool_decides): R9 has a criterion.
+_SHELL_MISMATCH = {
+    "source": ("the analysis department, 2026-11-06: the demo scripted run 20261106-185605 version 5 with the lca "
+               "bracket base across the rail wall, mount_plate_t 9, mount_weld_leg 6.3: hand plate 0.51 / weld 0.40 "
+               "(rail_b 40), 0.42 / 0.40 (rail_b 45); frame_shell on the same bracket values: 1.00 / 0.80 (rail_b 40), "
+               "0.81 / 0.63 (rail_b 45)"),
+    "cause": ("手計算は、金具の板を管の壁から出た片持ちの梁、溶接をのど厚の平均の応力とみる。シェルでは、ピンの穴の周りに"
+              "力が集まり、レールの壁も曲がるので、板の根元と溶接の端に応力が集まる。手計算はシェルの約半分に出る"),
+    "fix": ("合否はシェル (frame_shell) の値で出す。手計算は力の道と大きさの目安として残す。直すなら、金具の板を厚く "
+            "(mount_plate_t)、溶接の脚を大きく (mount_weld_leg)、溶接する長さを長く (rail_b)"),
+    "tool_decides": True,
+    "tool_decides_reason": ("ピンの穴の周りの集中と壁の曲がりは、手の式で持てない。手計算は届かないので、力の道を手計算で"
+                            "確かめたうえで、シェルの値で決める"),
+}
+
+
 def _plan(kind: str, sids) -> Record:
     qty, tool = KINDS[kind]
     places = [f"{s}.{m}" for s in sids for m in MOUNTS]
-    return {"tool": tool,
+    plan = {"tool": tool,
             "say": (f"サスペンションの取付点ごとに、K2 の力の最大で、{_WHAT[kind]}の利用率を先に出します "
                     f"(手計算。{tool} の値で判定)"),
             "predictions": [_prediction(qty, p) for p in (None, *places)]}
+    if tool == "frame_shell":  # one entry per compared quantity (the group's worst and each place)
+        plan["expected_mismatch"] = [dict(_SHELL_MISMATCH, quantity=f"{qty}.{p}" if p else qty)
+                                     for p in (None, *places)]
+    return plan
 
 
 R9_PLANS = {f"{TEST_ID}-{kind}-{name}": _plan(kind, sids)
