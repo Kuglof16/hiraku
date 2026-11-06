@@ -114,7 +114,7 @@ class AssemblyReplayBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?run={RUN}&pace=0&{query}")
+        page.goto(f"{self.base}/?run={RUN}&pace=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.wait_for_function("window.hiraku.asm && window.hiraku.asm.rec")
