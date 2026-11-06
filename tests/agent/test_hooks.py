@@ -206,7 +206,7 @@ class HooksTest(RunCase, unittest.TestCase):
             self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
             status, reason, code = end_status(self.ctx)
         self.assertEqual((status, code), ("stopped", "round_limit"))
-        self.assertIn("低い段の赤が残るので判定していない", reason)
+        self.assertIn("低い段の NGが残るので判定していない", reason)
         self.assertIn("H1-steer", reason)
 
     def test_red_with_no_revision_left_may_stop(self):

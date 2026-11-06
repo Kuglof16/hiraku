@@ -317,7 +317,7 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
 
 
 def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
-    """Why a load case without a failing verdict may not count as passed (docs/contract.md, 分野が緑に
+    """Why a load case without a failing verdict may not count as passed (docs/contract.md, 分野が OK に
     なる条件): an unresolved mismatch, or an analysis result beyond the criterion (which also voids an
     earlier safe-side verdict). Empty when nothing holds it back."""
     out = []

@@ -584,7 +584,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             s.emit("agent.said", agent="lead",
                    text=f"台本の次の直し ({names}) は、v{ctx.version} の NG ({'、'.join(reds)}) を直すモジュールのものではないので、使いません")
             raise Stop(f"v{ctx.version} の NG ({'、'.join(reds)}) を直す直しが台本にありません (次の直しは {names} のもの)。"
-                       f"その NG のまま終えます。それより重い段の荷重条件は、低い段の赤が残るので判定していない (HK5)")
+                       f"その NG のまま終えます。それより重い段の荷重条件は、低い段の NGが残るので判定していない (HK5)")
         if skipped:
             s.emit("agent.said", agent="lead", text="台本の直しのうち、この版の NG に関わらないモジュールの分は使いません: "
                    + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped))
@@ -724,7 +724,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                if none_hit() else "台本に設計の直しが残っていません")
         status, code = "stopped", "round_limit" if used_up else "not_judged"
         reason = (f"{names}が NG のまま ({_stage_ja(stage)})、{why} (v{ctx.version})。それより重い段の荷重条件は、"
-                  f"低い段の赤が残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)
+                  f"低い段の NGが残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)
     if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
         nxt, computed = list(rep.get("next") or []), []
