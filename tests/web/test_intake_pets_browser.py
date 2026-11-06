@@ -197,10 +197,11 @@ class IntakePetsTest(unittest.TestCase):
         page.close()
 
     def test_a1_pets_follow_the_cards(self):
-        """A1: each card's place holds its domain's CAE pet (88 x 88). The picked domains answer in turn
+        """A1 in the film layout (video=1, where the intake answers in turn; outside it the cards light
+        together): each card's place holds its domain's CAE pet. The picked domains answer in turn
         (A1_TURN: the record's pick, then REPLY_STEP_S apart): until its turn a card waits (idle), at it
         the pet hops (pass) for PASS_S seconds, then works; thermal is off (idle)."""
-        page, errors = self.open("tab=A1&t=0")
+        page, errors = self.open("tab=A1&t=0&video=1")
         before = self.read(page, PICKED_T - 0.2)
         for p in before["a1"]:  # before the pick the cards are the model's (the sample's project lights some): the pet follows its card
             self.assertEqual(p["state"], "working" if p["card"] == "lit" else "idle", p["domain"])
@@ -217,7 +218,14 @@ class IntakePetsTest(unittest.TestCase):
             self.assertEqual(p["role"], f"cae.{d}")
             self.assertGreater(p["ink"], 0, d)
             self.assertEqual((p["card"], p["state"]), ("off", "idle") if d == "thermal" else ("lit", "working"), d)
-        w, h = page.evaluate(CANVAS_SIZE)  # 88 wide; the place (88 x 104) also holds the name, the flex column may take a few px off
+        self.assertEqual(errors, [])
+        page.close()
+        # outside the film layout: the cards light together and the canvas is 88 wide
+        page, errors = self.open("tab=A1&t=0")
+        got = {p["domain"]: p for p in self.read(page, max(A1_TURN.values()) - 0.05)["a1"]}
+        for d in A1_TURN:
+            self.assertEqual(got[d]["card"], "lit", d)
+        w, h = page.evaluate(CANVAS_SIZE)  # 88 wide; the place also holds the name
         self.assertEqual(w, 88)
         self.assertTrue(80 <= h <= 88, h)
         self.assertEqual(errors, [])
