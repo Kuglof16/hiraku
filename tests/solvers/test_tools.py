@@ -124,17 +124,19 @@ COARSE = {"frame_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_c
 
 
 def other_case_quantities(tool) -> list[str]:
-    """The quantities a tool gives only in a load case of another of its tests: frame_static's R9 pin case
-    (bolt_utilisation) reads K2's mount series from an upstream analysis, here a synthetic one (as test_r9_bracket)."""
-    if tool.name != "frame_static":
+    """The quantities a tool gives only in a load case of another of its tests: R9 reads K2's mount series from an
+    upstream analysis, here a synthetic one (as test_r9_bracket): frame_static's pin case (bolt_utilisation) and
+    frame_shell's plate and weld cases (on the coarse mesh)."""
+    if tool.name not in ("frame_static", "frame_shell"):
         return []
     from tests.solvers.test_r9_bracket import _series
 
     up = {"S4-brake": _series(DESIGN, "RR", "uca_rear", (0.0, 5000.0, 0.0))}
-    lc = load_case("R9-bolt-rear-x", "R9", tool.domain, supports="RL,RR")
-    rec = tool.run(DESIGN, lc, PRED, {"upstream_analyses": up})
+    kind = "bolt" if tool.name == "frame_static" else "plate"
+    lc = load_case(f"R9-{kind}-rear-x", "R9", tool.domain, supports="RL,RR")
+    rec = tool.run(DESIGN, lc, PRED, {"upstream_analyses": up, **COARSE.get(tool.name, {})})
     if rec["status"] != "ok":
-        raise AssertionError(f"frame_static R9: {rec.get('error')}")
+        raise AssertionError(f"{tool.name} R9: {rec.get('error')}")
     return [r["quantity"] for r in rec["results"]]
 
 
