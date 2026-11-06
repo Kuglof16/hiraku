@@ -38,7 +38,7 @@ runs:
   - id: n11-n12
     title: 重心の高さの単位の取り違え
     shows: >-
-      要件の荷の重心の高さを 62 cm のつもりで 62 mm と書いた。hooks が予測の無い解析を止め、照合で
+      要件の荷の重心の高さを 62 cm のつもりで 62 mm と書いた。hooks が予測の無い解析を止め、予測との判定で
       手計算と解析が食い違い、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと合う
     file: offroad-4w-n12.yaml
     # scripted only: in the first Claude run of this file (driver claude_code_plugin, 2026-11-03) the lead
@@ -79,9 +79,9 @@ runs:
   - id: video
     title: 動画の運転 (限界の外を含む)
     shows: >-
-      デモの車の全部の試験と限界の外の 7 つ。赤を設計役が 4 回直し (配置、乗り降りの網、モーター、
-      レールのつなぎ目)、v5 で直せる赤は緑になる。限界の外は、4 つ (電池の温度・330 mm の段差・
-      滑る路面の停止・横の坂) が赤のまま、250 mm の段差の強度と横風は v5 で緑、250 mm の段差の
+      デモの車の全部の試験と限界の外の 7 つ。NG を設計役が 4 回直し (配置、乗り降りの網、モーター、
+      レールのつなぎ目)、v5 で直せる NG は OK になる。限界の外は、4 つ (電池の温度・330 mm の段差・
+      滑る路面の停止・横の坂) が NG のまま、250 mm の段差の強度と横風は v5 で OK、250 mm の段差の
       前輪の力は判定なしで止まる
     file: offroad-4w-video.yaml
     modes: [scripted, claude]
@@ -98,8 +98,8 @@ runs:
   - id: demo
     title: デモの車の 11 の試験
     shows: >-
-      段差・フレームとつなぎ目・振動・組み立て・乗り降り・加速。赤を設計役が 4 回直し (配置、乗り降りの網、
-      モーター、レールのつなぎ目)、v5 で全部緑
+      段差・フレームとつなぎ目・振動・組み立て・乗り降り・加速。NG を設計役が 4 回直し (配置、乗り降りの網、
+      モーター、レールのつなぎ目)、v5 で全部 OK
     file: offroad-4w.yaml
     modes: [scripted, claude]
     # scripted run 20261106-081501-offroad-4w-scripted on main 1a155201: done on version 5, every tile green; 11 tests
