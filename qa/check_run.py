@@ -2147,7 +2147,8 @@ class RunChecker:
                                                               f"does not say this run does not look at it")
                 continue
             if (dom in unjudged or j is None or j.get("state") == "pending") and behind_red:
-                if "低い段の赤" not in str(self.project.get("stop_reason") or ""):
+                said = str(self.project.get("stop_reason") or "")
+                if not any(p in said for p in ("低い段の NG", "低い段の赤")):  # the second: runs recorded before contract 98669325
                     self.warn("HK4_no_stop_before_judged", w, f"round_limit with {dom} not judged behind a red, but the "
                                                               f"stop reason does not say a lower stage's red is left")
             elif dom in unjudged:

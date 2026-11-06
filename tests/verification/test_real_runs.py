@@ -52,7 +52,7 @@ ENDED: dict[str, set[str]] = {}
 # requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
 # the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
 BEHIND_RED: set[str] = set()
-LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
+LOWER_RED = "低い段の NG が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5; contract 98669325)
 # Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
 # has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
 # qa.run_tests' 3600 s per-class timeout.

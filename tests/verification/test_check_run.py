@@ -474,9 +474,12 @@ class CheckRun(unittest.TestCase):
             ev[0]["data"]["stop_reason"] = reason
             by_kind(ev, "run.finished")["data"]["stop_reason"] = reason
             return ev
-        said = stopped("R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない")
-        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
-        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
+        for reason in ("R1 が NG のまま直しの回数を使い切った。R3-qa は低い段の NG が残るので判定していない",
+                       "R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない"):  # before 98669325
+            with self.subTest(reason):
+                said = stopped(reason)
+                self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
+                self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
         silent = stopped("R1 が赤のまま直しの回数を使い切った")
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(silent))
         self.assertIn("HK4_no_stop_before_judged", self.rules(silent, "warn"))
