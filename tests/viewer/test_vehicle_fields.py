@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests.viewer import no_paths
 from types import SimpleNamespace
 
 from tests.viewer.test_viewer import COMMON_KEYS, FX, VIEWER, _system_python_with_playwright
@@ -46,7 +48,7 @@ class VehicleDataTest(unittest.TestCase):
                         self.assertIn(e["cat"], common.CATEGORIES)
                         self.assertAlmostEqual(sum(kg for _, kg in e["nodes"]), e["mass_kg"], places=9)
                 text = json.dumps(o, ensure_ascii=False)
-                self.assertNotRegex(text, r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+                self.assertNotRegex(text, no_paths.IN_JSON)
                 # the inputs' labels are Japanese (the param names translated)
                 for r in o["inputs"]:
                     self.assertFalse(re.fullmatch(r"[a-z_]+", r["label"]), r)
@@ -179,7 +181,7 @@ class RolloverDataTest(unittest.TestCase):
         self.assertEqual(o["source"]["design_version"], 5)
         self.assertEqual(o["motion"]["nT"], len(common.series(self.rec, "body_x")["t_s"]))
         self.assertEqual(o["rollover"]["window"], [17.0, 23.0])
-        self.assertNotRegex(json.dumps(o, ensure_ascii=False), r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+        self.assertNotRegex(json.dumps(o, ensure_ascii=False), no_paths.IN_JSON)
         self.assertTrue(any("K2 の横転の計算 (2026-11-06)" in t for t in o["notes"]))
         used = set(re.findall(r"\bX\.([A-Za-z_]+)", (VIEWER / "js" / "handling.js").read_text(encoding="utf-8")))
         self.assertTrue(used <= set(o["rollover"]), used - set(o["rollover"]))
@@ -246,7 +248,7 @@ class VehiclePageTest(unittest.TestCase):
         self.assertEqual(out["over_view"], [])
         self.assertEqual(out["layout_overlap"], [])
         self.assertFalse(out["notes_open"])
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
         self.assertIn(out["part_pick"].get("cat"), set(common.CATEGORIES), out["part_pick"])
         self.assertIn("判定", out["hud"])
         # the road under the vehicle: drawn, and the tyres on it (K2's road z = 0: each tyre's lowest point at most
@@ -302,7 +304,7 @@ class RolloverPageTest(unittest.TestCase):
         self.assertEqual(out["over_view"], [])
         self.assertEqual(out["layout_overlap"], [])
         self.assertFalse(out["notes_open"])
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
         self.assertIn("横転", out["hud"])
         self.assertIn("一度も床に触れない", out["hud"])
         self.assertIn("乗員の箱と床のいちばん近い距離", out["tline"])

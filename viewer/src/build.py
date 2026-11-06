@@ -9,8 +9,13 @@ build(args)) with the arguments its own command would get for that analysis (com
 viewer/data/<key>.js (after ja.translate, as common.write_data does). It returns
     {"field": <the page's data key: VIEW_DATA[field], data/<field>.js, index.html#<field>>, "data", "title", "source"}
 or, when the record cannot be shown, {"field": None, "reason": "<one plain Japanese line>"}.
-Nothing is solved: rops_pushover (the page re-runs the run's tool) and frame_shell (the page needs the frames a
-step-hit run saved, not in the record) return a reason.
+frame_shell (the page needs the frames a step-hit run saved, not in the record) returns a reason. rops_pushover
+returns a reason in a run with version folders; in a run of events.jsonl only (below) the rops field is built for the
+record's version by viewer/src/rops.py, which re-runs the run's tools/rops_pushover-*.py (seconds).
+
+A run folder with events.jsonl and no version folders (the showcase runs) is laid out from its events first
+(viewer/src/from_events.py materialize, cached in the temp folder by the events file's size and time); the result's
+source.run is still the run's own name.
 
 --json writes that dict as JSON (index.html?data=<url>#<field> reads it); --out writes a ready viewer folder
 (index.html, js/, data/<field>.js).
@@ -19,6 +24,8 @@ step-hit run saved, not in the record) return a reason.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import shutil
 import sys
@@ -189,9 +196,30 @@ BUILD: dict[str, Callable] = {"strength": _strength, "nvh": _nvh, "nvh_shell": _
                               "thermal": _thermal, "assembly": _assembly}
 
 
+def _rops(orig: Path, rec: Record) -> Record | str:
+    """The rops field for the one version of this record: rops.build re-runs the run's tools/rops_pushover-*.py from
+    events.jsonl (seconds for one version)."""
+    from viewer.src import rops
+    if not (orig / "events.jsonl").is_file() or len(list((orig / "tools").glob(f"{rops.TOOL}-*.py"))) != 1:
+        return NOT_HERE["rops_pushover"] + " (run に events.jsonl と tools/rops_pushover-*.py がない)"
+    args = argparse.Namespace(run=orig, versions=str(rec["design_version"]), tool_file=None, out=common.DEFAULT_OUT)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):   # rops.build logs each case's re-run on stdout
+            obj = rops.build(args)
+    except (LookupError, RuntimeError, StopIteration) as e:
+        return f"ROPS の計算をもう一度動かせなかった ({type(e).__name__})"
+    if obj["source"].get("analysis_id") != rec["analysis_id"]:
+        return f"この版の ROPS の画面は別の記録 ({obj['source'].get('analysis_id')}) から作られる"
+    return obj
+
+
 def for_analysis(run_dir, analysis_id: str) -> Record:
-    from viewer.src import ja
-    run = Path(run_dir)
+    """See the module docstring. A run folder with events.jsonl and no version folders (the showcase runs) is first
+    laid out from its events (from_events.materialize, cached in the temp folder); source still names the run."""
+    from viewer.src import from_events, ja
+    orig = run = Path(run_dir)
+    if from_events.needs_materialize(run):
+        run = from_events.materialize(run)
     try:
         got = find_record(run, analysis_id)
     except FileNotFoundError:
@@ -202,15 +230,18 @@ def for_analysis(run_dir, analysis_id: str) -> Record:
     tool = rec.get("tool", "")
     if rec.get("status") != "ok":
         return _reason(f"解析 {analysis_id} は終わっていない (状態 {rec.get('status')})")
-    if tool in NOT_HERE:
+    if tool == "rops_pushover" and run != orig:
+        field = "rops"
+    elif tool in NOT_HERE:
         return _reason(NOT_HERE[tool])
-    field = TOOL_FIELD.get(tool)
-    if field is None or field not in BUILD:
-        return _reason(f"この道具 ({tool}) の記録を見せる画面がない")
+    else:
+        field = TOOL_FIELD.get(tool)
+        if field is None or field not in BUILD:
+            return _reason(f"この道具 ({tool}) の記録を見せる画面がない")
     if not (Path(vdir) / "design.json").is_file():
         return _reason("記録の版のフォルダに設計 (design.json) がない")
     try:
-        obj = BUILD[field](run, vdir, rec)
+        obj = _rops(orig, rec) if field == "rops" else BUILD[field](run, vdir, rec)
     except LookupError:
         return _reason("記録に画面に要るもの (場・時系列・荷重の条件) が足りない")
     if isinstance(obj, str):

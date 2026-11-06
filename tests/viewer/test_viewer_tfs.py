@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests.viewer import no_paths
 from types import SimpleNamespace
 
 import numpy as np
@@ -52,7 +54,7 @@ class TfsDataTest(unittest.TestCase):
                 self.assertTrue(COMMON_KEYS <= set(o), COMMON_KEYS - set(o))
                 self.assertEqual(o["field"], FIELDS[k])
                 self.assertTrue(o["inputs"])
-                self.assertNotRegex(json.dumps(o, ensure_ascii=False), r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+                self.assertNotRegex(json.dumps(o, ensure_ascii=False), no_paths.IN_JSON)
                 L = o["ledger"]
                 self.assertEqual([e["id"] for e in L["parts"]], [p["id"] for p in o["parts"]])
                 for e in L["parts"]:
@@ -290,7 +292,7 @@ class TfsPageTest(unittest.TestCase):
         self.assertEqual(out["over_view"], [])
         self.assertEqual(out["layout_overlap"], [])
         self.assertFalse(out["notes_open"])
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
         self.assertIn("部品と計算での扱い", out["panel"])
         # the ground is drawn and the tyres stand on it (their lowest point within 2 mm of it)
         self.assertIsNotNone(out["ground"])
