@@ -761,6 +761,18 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .chain-more[open] { flex: 1 1 auto; }
 .chain-more > .card { margin-top: 10px; }
 .chain-more > .foot { margin-top: 10px; }
+/* ?video=1: the right column and the tabs as before the first lines (1cffb5e3): no いま / 判定 / 次,
+   the cards always shown (app.js keeps #chain-more open), no fold bands on the other tabs (app.js
+   keeps them open), the prediction without its bars and assumptions, so 2. 解析 and 3. 比べる's
+   numbers stay in the column */
+body.video .chain-head, body.video .tab-head, body.video .chain-more > summary { display: none !important; }
+body.video .chain-more > .card:first-of-type { margin-top: 0; }
+body.video #card-pred .terms-cap, body.video #card-pred .terms, body.video #card-pred .asm { display: none; }
+/* (the cards in the column's flex as before, so the prediction gives way: #card-pred flex 0 1 auto;
+   the analysis card without the viewer's button and its assumptions' くわしく, which came after) */
+body.video .chain-more[open] { display: flex; flex-direction: column; overflow: hidden; }
+body.video .chain-more::details-content { display: contents; }
+body.video #card-ana [data-role="viewer-link"], body.video #card-ana details[data-keep="ana-asm"] { display: none; }
 /* 4. 判定: the verdict's own step under 3. 比べる, in the same card */
 #card-cmp .step4 { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
 .chain .foot { margin-top: auto; font-size: 16px; color: var(--muted); padding: 0 4px; }

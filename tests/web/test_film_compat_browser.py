@@ -91,6 +91,35 @@ class FilmCompatBrowserTest(unittest.TestCase):
         self.assertTrue(page.evaluate("document.querySelectorAll('#tests.board .tb-group').length > 0"))
         self.assertEqual(errors, [])
 
+    def test_video_right_column_and_tabs_as_before(self):
+        seen = "(el) => !!el && el.checkVisibility() && el.getBoundingClientRect().height > 0"
+        page, errors = self.film(f"run={CLAUDE}&tab=bench&present=0&t=3872.5{FILM}", 3872.5)
+        got = page.evaluate(f"""() => {{ const seen = {seen}; const col = document.getElementById('chain-more').getBoundingClientRect();
+          const inCol = (el) => {{ const r = el.getBoundingClientRect(); return seen(el) && r.top >= col.top - 1 && r.bottom <= col.bottom + 1; }};
+          const nums = (id) => [...document.querySelectorAll('#' + id + ' .kv span, #' + id + ' .kv b, #' + id + ' td, #' + id + ' .vrow, #' + id + ' div, #' + id + ' span')]
+            .filter((e) => e.children.length === 0 && /\\d/.test(e.textContent)).map((e) => [e.textContent.trim(), inCol(e)]);
+          return {{ head: seen(document.getElementById('chain-head')), summary: seen(document.querySelector('#chain-more > summary')),
+            bars: [...document.querySelectorAll('#card-pred .terms, #card-pred .terms-cap, #card-pred .asm')].some(seen),
+            ana: inCol(document.getElementById('card-ana').querySelector('h3')), cmp: inCol(document.getElementById('card-cmp').querySelector('h3')),
+            text: document.getElementById('card-ana').textContent + '|' + document.getElementById('card-cmp').textContent,
+            cmpNums: nums('card-cmp') }}; }}""")
+        self.assertFalse(got["head"])  # no いま / 判定 / 次
+        self.assertFalse(got["summary"])  # the cards shown, as before the fold
+        self.assertFalse(got["bars"])  # no bars nor assumptions under the prediction
+        self.assertTrue(got["ana"] and got["cmp"])  # 2. 解析 and 3. 比べる in the column
+        for n in ("151.4", "114.9", "+31.8"):
+            self.assertIn(n, got["text"])
+            self.assertTrue(any(n in t and ok for t, ok in got["cmpNums"]), (n, got["cmpNums"]))
+        # ② with video=1: no fold band, the table whole
+        page, errors2 = self.film(f"run={CLAUDE}&tab=A2&t=60&present=1{FILM}", 60)
+        tab = page.evaluate(f"""() => ({{ head: [...document.querySelectorAll('.tab-head')].some({seen}),
+          folded: document.getElementById('view-intake').classList.contains('folded') }})""")
+        self.assertEqual(tab, {"head": False, "folded": False})
+        # without video=1 the first lines are there, as now
+        page, errors3 = self.film(f"run={CLAUDE}&tab=bench&present=0&t=3872.5&pace=0", 3872.5)
+        self.assertTrue(page.evaluate(f"({seen})(document.getElementById('chain-head'))"))
+        self.assertEqual(errors + errors2 + errors3, [])
+
     def test_more_opens_the_outer_kuwashiku_only(self):
         page, errors = self.film(f"run={CLAUDE}&tab=bench&present=0&t=3872.5{FILM}", 3872.5)
         got = page.evaluate("""() => ({ outer: document.getElementById('chain-more').open,
