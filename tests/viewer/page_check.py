@@ -53,6 +53,7 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
             const c = document.getElementById('plot').getBoundingClientRect(), w = R.plotwrap;
             if (w && (c.right > w.right + 1 || c.bottom > w.bottom + 1)) bad.push('plot canvas outside its box');
             return bad; }""")
+        out["speed"] = page.evaluate("document.getElementById('speed').value")
         out["speed_shown"] = page.evaluate("getComputedStyle(document.getElementById('speedrow')).display !== 'none'")
         out["boxes_moved"] = page.evaluate("(() => { const b = HV.state.ctx && HV.state.ctx.boxes; return b ? b.off.filter(o => Math.hypot(o[0], o[1], o[2]) > 1e-3).length : 0; })()")
         out["tyres"] = page.evaluate("(() => { let n = 0; HV.state.ctx.root.traverse(o => { if (o.geometry && o.geometry.type === 'CylinderGeometry') n++; }); return n; })()")

@@ -337,6 +337,7 @@ def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, d
 TYRE_TOOLS = {"crash_beam": "K2 の壁との接触 (タイヤの半径の向き)", "tilt": "K2 の車両モデル", "braking": "K2 の車両モデル",
               "lane_change": "K2 の車両モデル", "offroad_roll": "K2 の車両モデル", "launch": "K2 の車両モデル",
               "step_climb_dynamic": "K2 の車両モデル", "crosswind": "K2 の車両モデル", "turning": "K2 の車両モデル",
+              "rollover_tilt": "K2 の車両モデル",
               "fatigue": "疲労の 1/4 車 (路面からの輪の力)", "frame_shell": "取付の力を出した K2 の段差の計算"}
 NUM_JA = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
 
@@ -419,7 +420,7 @@ FN_ASSEMBLY = "hiraku.solvers.k4_geometry.model.bodies, assembly.steps"
 FN_SHAFT = "hiraku.solvers.k1_frame.shaft.driveshaft_modes"
 FN_K2 = "hiraku.solvers.k2_vehicle.model.build_vehicle (_unsprung: UNSPRUNG_KINDS / HALF_UNSPRUNG_KINDS)"
 FN_K3 = "hiraku.solvers.k3_power_thermal.from_design (one mass)"
-K2_TOOLS = ("tilt", "braking", "lane_change", "offroad_roll", "crosswind", "launch", "step_climb_dynamic")
+K2_TOOLS = ("tilt", "braking", "lane_change", "offroad_roll", "crosswind", "launch", "step_climb_dynamic", "rollover_tilt")
 
 
 def _stated_b(record: Record) -> Record | None:

@@ -157,6 +157,67 @@ class VehicleDataTest(unittest.TestCase):
         self.assertTrue(used <= set(self.obj["handling"]), used - set(self.obj["handling"]))
 
 
+ROLL = FX / "rollover"
+
+
+def make_rollover():
+    return handling.rollover_case(ROLL / "rollover_tilt_v5_S1.json", ROLL)
+
+
+class RolloverDataTest(unittest.TestCase):
+    """K2's rollover record (fixtures/rollover: S1 on the demo run's v005, the table 1 deg past the tip angle)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rec = common.read_json(ROLL / "rollover_tilt_v5_S1.json")
+        cls.o = make_rollover()
+
+    def test_loads_as_a_handling_case(self):
+        o = self.o
+        self.assertTrue(COMMON_KEYS <= set(o), COMMON_KEYS - set(o))
+        self.assertEqual(o["field"], "handling")
+        self.assertEqual(o["source"]["design_version"], 5)
+        self.assertEqual(o["motion"]["nT"], len(common.series(self.rec, "body_x")["t_s"]))
+        self.assertEqual(o["rollover"]["window"], [17.0, 23.0])
+        self.assertNotRegex(json.dumps(o, ensure_ascii=False), r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+        self.assertTrue(any("K2 の横転の計算 (2026-11-06)" in t for t in o["notes"]))
+        used = set(re.findall(r"\bX\.([A-Za-z_]+)", (VIEWER / "js" / "handling.js").read_text(encoding="utf-8")))
+        self.assertTrue(used <= set(o["rollover"]), used - set(o["rollover"]))
+        # the floor from the scene: level in the world, hinged at the table's low edge
+        F = o["rollover"]["floor"]
+        self.assertLess(F["z_spread"], 1e-6)
+        self.assertAlmostEqual(o["rollover"]["hinge_mm"][0], -1210.0, delta=0.5)
+        self.assertAlmostEqual(o["rollover"]["hold_deg"], common.result(self.rec, "hold_angle"), places=3)
+
+    def test_on_its_side_at_the_end(self):
+        o, rec = self.o, self.rec
+        k = o["motion"]["nT"] - 1
+        t = common.unpack_f32(o["motion"]["t"])
+        self.assertAlmostEqual(t[k], 22.964, places=3)
+        pose = common.unpack_f32(o["motion"]["pose"])
+        self.assertAlmostEqual(pose[6 * k + 3], series(rec, "roll")[k], places=3)   # the record's roll (to the table)
+        roll_w = common.unpack_f32(o["rollover"]["roll_world"])[k]
+        tilt_w = common.unpack_f32(o["rollover"]["tilt_world"])[k]
+        self.assertLess(abs(roll_w - 90.0), 15.0)   # on its side
+        self.assertAlmostEqual(roll_w, common.result(rec, "rest_roll_world"), delta=0.1)
+        self.assertAlmostEqual(tilt_w, common.result(rec, "rest_tilt"), delta=0.1)
+
+    def test_contact_peak_and_occupant_gap(self):
+        o, rec = self.o, self.rec
+        X = o["rollover"]
+        self.assertEqual(X["peak"]["N"], common.result(rec, "body_contact_force_peak"))
+        self.assertEqual(X["peak"]["rollbar_N"], common.result(rec, "rollbar_contact_force_peak"))
+        self.assertAlmostEqual(X["peak"]["t"], 20.158)
+        mags = [math.hypot(*v["f"]) for v in X["peak"]["vectors"]]
+        self.assertAlmostEqual(max(mags), X["peak"]["N"], delta=X["peak"]["N"] * 1e-4)
+        for c in X["contacts"]:
+            F = [series(rec, f"ground_force_{a}.{c['id']}") for a in "xyz"]
+            self.assertAlmostEqual(c["series_peak_N"], max(math.hypot(*v) for v in zip(*F)), places=3)
+        # occupant boxes never in the floor (as K2's own contact check says)
+        self.assertGreater(X["occupant_gap_min"], 0.0)
+        self.assertEqual(X["k2_people_touch"], 0.0)
+
+
 class VehiclePageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -217,6 +278,37 @@ class VehiclePageTest(unittest.TestCase):
     def test_powertrain(self):
         out = self.check("powertrain")
         self.assertIn("輪のトルク", out["tline"])
+
+
+class RolloverPageTest(unittest.TestCase):
+    """The rollover case alone in the handling field's data, the page at its last instant (on its side)."""
+
+    def test_rollover_page(self):
+        py = _system_python_with_playwright()
+        if not py:
+            self.skipTest("playwright is not available for the system Python (py)")
+        o = make_rollover()
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / "viewer"
+            shutil.copytree(VIEWER, d, ignore=shutil.ignore_patterns("data", "src", "__pycache__", "*.py"))
+            common.write_data("handling", {**o, "cases": [o]}, d / "data")
+            r = subprocess.run([py, str(Path(__file__).with_name("page_check.py")), str(d), "handling", "", "1000"],
+                               capture_output=True, text=True, encoding="utf-8", timeout=300)
+        self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+        out = json.loads(r.stdout)
+        self.assertEqual(out["errors"], [])
+        self.assertEqual(out["shown_field"], "handling")
+        self.assertGreater(out["drawn_px"], 1000)
+        self.assertEqual(out["over_view"], [])
+        self.assertEqual(out["layout_overlap"], [])
+        self.assertFalse(out["notes_open"])
+        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertIn("横転", out["hud"])
+        self.assertIn("一度も床に触れない", out["hud"])
+        self.assertIn("乗員の箱と床のいちばん近い距離", out["tline"])
+        self.assertIn("t = 22.964 s", out["tline"])   # the slider clamped to the window's last instant
+        self.assertEqual(out["speed"], "0.5")
+        self.assertIn("K2 の横転の計算 (2026-11-06)", out["inputs"])
 
 
 if __name__ == "__main__":

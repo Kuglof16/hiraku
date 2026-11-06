@@ -19,7 +19,7 @@ window.HV = window.HV || {};
     const h = document.createElement('h3'); h.textContent = '試験'; div.appendChild(h);
     D.cases.forEach((c, i) => {
       const b = document.createElement('button'); b.id = `case_${name}_${i}`;
-      b.textContent = c.source.load_case_id.split('-')[0] + ' ' + (HV.K2.TOOL_JA[c.tool] || c.tool);
+      b.textContent = c.rollover ? `横転 (v${c.source.design_version})` : c.source.load_case_id.split('-')[0] + ' ' + (HV.K2.TOOL_JA[c.tool] || c.tool);
       b.className = i === HV.fields[name].sel ? 'on' : ''; b.style.margin = '1px';
       b.onclick = () => { HV.fields[name].sel = i; HV.open(name); };
       div.appendChild(b);
@@ -99,6 +99,7 @@ window.HV = window.HV || {};
         if (s.kind === 'gate') g.add(HV.Look.gate(s));
         else if (s.kind === 'cone') g.add(HV.Look.cone(s));
         else if (s.kind === 'road_profile' && s.profile) { this.profile(g, s.profile); profile = true; }
+        else if (s.kind === 'ground' && D.rollover && s.rpy[0]) continue;   // K2's rollover floor: the world ground below
         else if (s.kind === 'ground') {
           // the road strip of the record (its friction): concrete laid on the ground, its top at the item's z
           const m = new T.Mesh(new T.PlaneGeometry(Math.max(s.s[0], 1), Math.max(s.s[1], 1)), HV.Look.concreteMaterial([s.s[0], s.s[1]]));
@@ -117,7 +118,11 @@ window.HV = window.HV || {};
       for (let k = 0; k < this.nT; k++) for (let a = 0; a < 2; a++) { lo[a] = Math.min(lo[a], P[6 * k + a]); hi[a] = Math.max(hi[a], P[6 * k + a]); }
       for (const s of D.scene || []) for (let a = 0; a < 2; a++) { lo[a] = Math.min(lo[a], s.c[a] - (s.s ? s.s[a] / 2 : 0)); hi[a] = Math.max(hi[a], s.c[a] + (s.s ? s.s[a] / 2 : 0)); }
       const x = [Math.floor((lo[0] - 6000) / 1000) * 1000, Math.ceil((hi[0] + 6000) / 1000) * 1000], y = [Math.floor((lo[1] - 5000) / 1000) * 1000, Math.ceil((hi[1] + 5000) / 1000) * 1000];
-      if (this.turn) {
+      if (this.turn && D.rollover) {
+        const F = D.rollover.floor;   // the record's floor (its scene item turned back to the world, handling.py rollover_floor)
+        this.groundSpec = { z: F.z, x: F.x, y: F.y, fixed: true, from: '記録の scene の水平な床 (台を止めた角度で台の座標で書かれたもの) を、台の低い縁のちょうつがいのまわりに台の角度だけ回して世界に戻した。台の下には床を描かない' };
+        this.surround.push(['傾斜台のちょうつがい', `台の低い縁 (台の座標で y = ${HV.fmt(D.rollover.hinge_mm[0])} mm、z = ${HV.fmt(D.rollover.hinge_mm[1])} mm)`, '床の縁と台の低い縁から計算 (記録の scene)、角度は記録の ' + this.turn.angle_channel]);
+      } else if (this.turn) {
         const s = this.turn;   // a fixed level floor under the turned table, so the angle reads
         this.groundSpec = { z: s.c[2] - Math.max(s.s[2], 10) / 2 - 2, from: '傾斜台の下の床 (台の大きさと高さは記録の scene、床は台の下面の 2 mm 下に置いた)', fixed: true,
                             x: [s.c[0] - s.s[0] / 2 - 3000, s.c[0] + s.s[0] / 2 + 3000], y: [s.c[1] - s.s[1] / 2 - 4000, s.c[1] + s.s[1] / 2 + 4000] };
@@ -148,7 +153,8 @@ window.HV = window.HV || {};
       const T = window.THREE, s = this.turn, root = this.ctx.root;
       if (!s) return 0;
       const a = this.seriesAt(s.angle_channel, k) || 0, rad = a * Math.PI / 180;
-      const hy = s.c[1] - Math.sign(a || 1) * s.s[1] / 2, hz = s.c[2] - Math.max(s.s[2], 10) / 2;
+      const H = this.D.rollover && this.D.rollover.hinge_mm;   // K2's rollover: the hinge of the record's floor
+      const hy = H ? H[0] : s.c[1] - Math.sign(a || 1) * s.s[1] / 2, hz = H ? H[1] : s.c[2] - Math.max(s.s[2], 10) / 2;
       root.quaternion.setFromAxisAngle(new T.Vector3(1, 0, 0), rad);
       const h = new T.Vector3(0, hy, hz), hr = h.clone().applyQuaternion(root.quaternion);
       root.position.set(0, h.y - hr.y, h.z - hr.z); root.updateMatrixWorld(true);
@@ -198,6 +204,7 @@ window.HV = window.HV || {};
         view.controls.target.add(d); view.camera.position.add(d); view.controls.update();
       }
       this.last = w;
+      if (this.fixedSun) return;   // the camera box already holds the whole motion (the rollover)
       // the sun's shadow box follows the vehicle (the parts' box at the first pose, moved by the origin)
       const o0 = this.origin(0), dv = [0, 1, 2].map(a => o[a] - o0[a]);
       HV.Look.aimSun(view, this.ctx.lo.map((v, a) => v + dv[a]), this.ctx.hi.map((v, a) => v + dv[a]));
