@@ -256,6 +256,10 @@ offroad-4w:
       tool: step_climb_dynamic
       stage: 3
       say: 段差を K2 で走らせて、前輪が段の角から浮く瞬間の押す力と前輪の荷重を、偶力を入れた式と比べます
+      # the record (series, vectors, scene) of the drive over the step at 10 km/h, run 2 of the tool, for the
+      # screen's 3D at 1x; the numbers judged are run 1's (the push from standstill), the same with or without
+      # (K2: on showcase 150416 v5, climbed 1, peak 5934 N, climb_time 1.815 s either way). 60 Hz: smooth at 1x
+      params: {record_run: speed, record_hz: 60}
       predictions: *p1_pushed
     # Past the limit (requirements `beyond`): the same steps at the 250 mm step. On the demo vehicle the
     # lever rule is off by -51 % there and the couple formula matches, as at 100 mm; the beam formula is
