@@ -127,7 +127,8 @@ class ForAnalysisTest(unittest.TestCase):
         d = self._edit("strength_beam", "ana-0083", lambda r: r.update(tool="rops_pushover"))
         got = build.for_analysis(d, "ana-0083")
         self.assertReason(got)
-        self.assertEqual(got["reason"], build.NOT_HERE["rops_pushover"])
+        # a rops_pushover record in a run that keeps neither the tool nor events.jsonl: the reason says so
+        self.assertEqual(got["reason"], build.ROPS_NOT_HERE)
         # a frame_shell record without the shell's element field (the beam's fields only): a reason
         got = build.for_analysis(self._edit("strength_beam", "ana-0083", lambda r: r.update(tool="frame_shell")), "ana-0083")
         self.assertReason(got)
