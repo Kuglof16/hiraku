@@ -495,6 +495,33 @@ class IntakeTest(unittest.TestCase):
         self.assertEqual(contract.errors("tool_input.find_tradeoffs", {"design_version": 2, "variables": ["tower_t"]}), [])
         self.assertIn("find_tradeoffs", contract.MCP_TOOLS_LATER)
 
+    def test_claude_may_write_the_design_and_load_case(self):
+        self.assertEqual(contract.errors("tool_input.write_design", {"design": {"nodes": []}, "reason": "no archetype fits"}), [])
+        self.assertNotEqual(contract.errors("tool_input.write_design", {"design": {}}), [])
+        edit = {"reason": "brace", "edits": [{"op": "add_node", "id": "n1", "xyz_mm": [0, 0, 100]},
+                                             {"op": "assign_section", "members": ["m1"], "section": "sq25"}]}
+        self.assertEqual(contract.errors("tool_input.edit_design", edit), [])
+        self.assertNotEqual(contract.errors("tool_input.edit_design", {"reason": "x", "edits": [{"op": "paint"}]}), [])
+        self.assertEqual(contract.errors("tool_input.check_design", {}), [])
+        case = {"test_id": "R1", "domain": "strength", "title": "shelf load", "params": {}, "basis": "assumed",
+                "criterion": {"quantity": "max_stress", "op": "<=", "limit_from": {"expr": "yield_MPa / Q61", "unit": "MPa"}}}
+        self.assertEqual(contract.errors("tool_input.write_load_case", case), [])
+        case["criterion"]["limit"] = {"value": 100.0, "unit": "MPa"}
+        self.assertNotEqual(contract.errors("tool_input.write_load_case", case), [])  # the code computes the limit
+        for name in ("write_design", "edit_design", "check_design", "write_load_case"):
+            self.assertIn(name, contract.MCP_TOOLS_LATER)
+        d = load("design.json")
+        d.update(written_by="claude", based_on="care_bed")
+        self.assertEqual(contract.errors("design", d), [])
+        d["written_by"] = "someone"
+        self.assertNotEqual(contract.errors("design", d), [])
+
+    def test_claude_may_add_tests_to_the_choice(self):
+        self.assertIn("add_tests", contract.MCP_TOOLS_LATER)
+        self.assertEqual(contract.errors("tool_input.add_tests", {"tests": [{"test_id": "R1", "reason": "the shelf carries a load"}]}), [])
+        self.assertEqual(contract.errors("tool_input.add_tests", {"no_addition_reason": "the choice covers the use"}), [])
+        self.assertNotEqual(contract.errors("tool_input.add_tests", {"tests": [{"test_id": "R1"}]}), [])
+
     def test_rule_questions_in_the_hearing(self):
         q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}
         self.assertEqual(contract.errors("hearing_asked", {"rule_questions": [q]}), [])

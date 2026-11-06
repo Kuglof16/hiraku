@@ -136,6 +136,19 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 
 MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更 `changes`、generator の選択 `choices` (例 `part_mounts: brackets`、選べる値は `get_context` の `design_choices`)、少なくとも一方と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
 
+## Claude が書く設計 (2026-11-06)
+
+作るものを型で限定しない。設計は 2 つの道から作れる。
+
+- 型から作る: `propose_design` と `revise_design`。型 (`design.archetype`) があれば、座標はキットが計算する。
+- Claude が書く: `write_design` (設計そのもの。2 回目からは次の版) と `edit_design` (部材の追加など)。型は必須ではなく、下書きに使ったら `based_on` に書く。ツールが `written_by: claude` を付け、`revise_design` はこの設計を断る (変数から組み直すと書いた所が消えるため)。`check_design` が、参照・つながり・桁・干渉・質量をコードで確かめ、通らない設計は版にしない。
+
+どちらの道でも、数値はツールが計算する。解析の前に手計算で予測する決まりも同じ。カタログに builder が無い試験の荷重条件は `write_load_case` で書く。限度はモデルが数を書かず、`limit_from` の式からコードが計算する。
+
+型の判定は `design.archetype` を先に見る。人の部品が 1 つも無い設計は人を載せない (`hiraku/contract/loading.py` の決まり。catalog もこれに合わせる)。型の前提があるツール (ラダーの部材名、ベッドなど) は、当てはまらない設計を「当てはまらない」と言って断り、黙って外したり誤った値を出したりしない。
+
+コードが選んだ分野と試験を Claude が見直し、必要なら `add_tests` で足す。足すだけで外せず、理由を記録する (`domains.picked` の `added_tests`、足さないときは `no_addition_reason`)。荷重条件の作り方が無い試験は `write_load_case` かツールを作る道へ、値が足りなければ `ask_user` へ。
+
 ## モジュールに分けた設計 (2026-11-04 の方針)
 
 設計役は 構造・機構・電気 の 3 つ (`designer.structure`・`designer.mechanism`・`designer.electric`。`contract.MODULE_DESIGNERS`、日本語の名前は `DESIGNER_ROLES_JA`、2026-11-06 から)。何を作るかによらない分け方で、モジュールは設計の型 (designgen) が決める内部の分け方。各モジュールの `owner` が 3 つのどれか (`package` はパッケージ役)。車の型では、枠・車体・乗員まわりが構造、足まわり・操作系が機構、動力が電気。モジュールに分けない型は設計役 `designer` 1 つのまま。モジュールごとの古い役 (`designer.frame` など、`LEGACY_MODULE_DESIGNERS`) は、前に記録した実行を読むためだけに残す。`revise_design` は、`design.modules` で自分が `owner` のモジュールの中だけを変える (HK6)。
