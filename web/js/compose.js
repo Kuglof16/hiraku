@@ -3,8 +3,10 @@
 // here: grids, tile rectangles, the fly-in, the time squeeze and its label are
 // computed from the rules, so the pages follow when the rules change.
 
+import { getUrl } from "./source.js";
+
 export async function loadLayout(url = "/layout.json") {
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(getUrl(url), { cache: "no-store" });
   const body = await res.json();
   if (!res.ok) throw new Error(`layout: ${body.error ?? res.status}`);
   return body;

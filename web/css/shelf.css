@@ -22,6 +22,10 @@
 .sh-node { margin-bottom: 10px; }
 .sh-head { display: flex; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--ink); font-size: 17px; }
 .sh-caret { width: 14px; color: var(--muted); }
+/* a domain's head: the domain's line icon (js/shelf.js, from domain_icons.js) */
+.sh-head:has(.sh-ic) { align-items: center; }
+.sh-head .sh-ic { display: inline-flex; flex: none; margin-right: -4px; }
+.sh-head .sh-ic .dom-ic { width: 1.15em; height: 1.15em; }
 .sh-n, .sh-nok { font-size: 14px; color: var(--muted); }
 .sh-nok { color: var(--green); }
 
@@ -31,7 +35,9 @@
 .sh-tool.is-off { opacity: 0.62; }
 .sh-tool.is-off .sh-name b { text-decoration: line-through; text-decoration-color: var(--red); }
 .sh-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.sh-cols { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px 96px; gap: 12px; align-items: baseline; margin-top: 4px; font-size: 14px; }
+/* (the last column as wide as its mark, 確かめ 25 / 25: a fixed width cut it at the row's edge) */
+.sh-cols { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 150px) max-content; gap: 12px; align-items: baseline; margin-top: 4px; font-size: 14px; }
+.sh-base { min-width: 0; overflow-wrap: anywhere; }
 .sh-tests { display: flex; gap: 4px; flex-wrap: wrap; }
 .sh-tid { border: 1.5px solid var(--ink); border-radius: 4px; padding: 0 6px; font-family: var(--mono); font-size: 13px; }
 .sh-k0 { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

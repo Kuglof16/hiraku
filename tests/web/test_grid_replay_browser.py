@@ -30,7 +30,7 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -46,7 +46,8 @@ STATE = """() => ({
   dom: document.querySelector('#domain-head .dh-dom')?.textContent ?? null,
   tests: [...document.querySelectorAll('#tests button.test')].map((b) => b.dataset.lc),
   testOn: document.querySelector('#tests button.on')?.dataset.lc ?? null,
-  cards: ['card-pred', 'card-ana', 'card-cmp'].map((id) => document.getElementById(id).innerText),
+  // (textContent: the cards are folded under ③'s くわしく, so innerText is empty)
+  cards: ['card-pred', 'card-ana', 'card-cmp'].map((id) => document.getElementById(id).textContent),
   time: document.getElementById('pb-time').textContent,
   playhead: window.hiraku.player.playhead, playing: window.hiraku.player.playing,
   url: location.search,
@@ -74,7 +75,7 @@ class GridReplayBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1440, "height": 900})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run=sample&pace=0&pets=0&{query}")
+        page.goto(f"{self.base}/?run=sample&pace=0&pets=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
@@ -166,17 +167,25 @@ class GridReplayBrowserTest(unittest.TestCase):
         page, errors = self.open("tab=grid&t=0")
         read = """async (evs) => { await window.hiraku.load(evs, 1e6);
             await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-            return Object.fromEntries([...document.querySelectorAll('.tile')].map((t) => [t.dataset.domain, t.querySelector('.sum').textContent])); }"""
+            const off = document.querySelector('#tiles .offline');
+            return { tiles: [...document.querySelectorAll('#tiles .tile')].map((t) => t.dataset.domain),
+                     off: off?.querySelector('.offwords').textContent ?? null,
+                     only: off?.querySelector('.only')?.textContent ?? null,
+                     why: Object.fromEntries([...(off?.querySelectorAll('.offwhy li') ?? [])].map((li) => [li.querySelector('b').textContent, li.textContent])) }; }"""
+        # the domains not picked are no tiles: one line names them (tiles.js offLine), why only when opened
         plain = page.evaluate(read, events)
-        self.assertEqual(plain["crash"], "")
+        self.assertEqual(plain["tiles"], ["strength"])
+        self.assertEqual(plain["off"], "今回は選んでいない: 衝突・音振・熱・操安・動力・空力・組み立て")
+        self.assertIsNone(plain["only"])
         for ev in events:
             for p in ev.get("data", {}).get("domain_picks", []) or []:
                 p["reason"] = "要件のファイルが試験 R1 段差 (見本) を選んだ"
         chosen = page.evaluate(read, events)
         line = "この実行は R1 だけを確かめます (要件のファイルが選んだ試験)"
-        for d in ("crash", "nvh", "thermal", "handling", "powertrain", "aero", "assembly"):
-            self.assertEqual(chosen[d], line, d)
-        self.assertNotEqual(chosen["strength"], line)
+        self.assertEqual(chosen["only"], line)
+        self.assertEqual(chosen["tiles"], ["strength"])
+        for d in ("衝突", "音振", "熱", "操安", "動力", "空力", "組み立て"):
+            self.assertIn(line, chosen["why"][d], d)
         self.assertEqual(errors, [])
 
 
@@ -268,7 +277,7 @@ class RunEndBrowserTest(unittest.TestCase):
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.addCleanup(page.close)
         # paced (the default): the replay of a followed run lags its record
-        page.goto(f"{base}/?run={run_id}&pets=0")
+        page.goto(f"{base}/?run={run_id}&pets=0", wait_until="domcontentloaded")
         try:
             page.wait_for_selector("#mode .stop-btn", timeout=9000)  # started here and going: it can be stopped
         except Exception:

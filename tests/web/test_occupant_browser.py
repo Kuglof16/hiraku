@@ -5,7 +5,9 @@ An occupant given in body segments (the analysis department's designs from 9ee90
 hands, thighs, shanks and feet, boxes with rpy_deg) is drawn one shape per segment, turned
 with its box: the head a ball stretched to its box (touching the neck), the segments with a round section a capsule along the box's
 longest side, the others a box with rounded edges; none reaches outside its box, and the
-only ball is the head's. A person's segments board with the person: the seats are counted
+only ball is the head's. That is the diagram look (?look=plain); the real look draws a crash
+test dummy in the same boxes (shapes.js occupantDummyPieces: joints at the limbs' ends, the
+neck and the waist, the torso as chest and pelvis), also inside them. A person's segments board with the person: the seats are counted
 per person, as hiraku/contract/loading.py does. An occupant given as one box (the designs
 before) is still drawn as the capsule with a ball for the head, as it was.
 
@@ -32,7 +34,7 @@ from hiraku.solvers.k0_handcalc.rigid import rpy_matrix
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -68,7 +70,7 @@ OCCUPANTS_OF = """async ([events, loading]) => {
         const [vx, vy, vz] = [p.getX(i), p.getY(i), p.getZ(i)];
         verts.push([m[0] * vx + m[4] * vy + m[8] * vz + m[12], m[1] * vx + m[5] * vy + m[9] * vz + m[13], m[2] * vx + m[6] * vy + m[10] * vz + m[14]]);
       }
-      meshes.push({ type: x.geometry.type, params: x.geometry.parameters ?? null, verts, color: "#" + x.material.color.getHexString(), opacity: x.material.opacity });
+      meshes.push({ type: x.geometry.type, params: x.geometry.parameters ?? null, verts, color: "#" + x.material.color.getHexString(), opacity: x.material.opacity, piece: x.geometry.userData.occupant ?? null });
     });
     out[id] = { seat: o.seat, onBoard: o.onBoard, visible: o.group.visible, meshes };
   }
@@ -126,7 +128,7 @@ class OccupantBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{cls.base}/?run=sample&pace=0&t=0&look={look}")
+        page.goto(f"{cls.base}/?run=sample&pace=0&t=0&look={look}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate(OCCUPANTS_OF, [events_with(design), loading])
@@ -144,8 +146,12 @@ class OccupantBrowserTest(unittest.TestCase):
         self.assertTrue(any("rpy_deg" in p["box"] for p in parts))
 
     def test_each_segment_is_one_shape(self):
+        # the diagram look (?look=plain); the real look draws a crash test dummy instead
+        # (test_real_look_draws_a_dummy)
         for look, drawn in self.drawn.items():
             self.assertEqual(drawn["errors"], [], look)
+            if look == "real":
+                continue
             got = drawn["parts"]
             self.assertEqual(set(got), {p["id"] for p in occupant_parts(self.segmented)}, look)
             for p in occupant_parts(self.segmented):
@@ -167,21 +173,71 @@ class OccupantBrowserTest(unittest.TestCase):
             # the limbs are capsules; the torso, neck, hands and feet rounded boxes
             caps = sorted(i.split(".", 1)[1] for i, o in got.items() if o["meshes"][0]["type"] == "CapsuleGeometry")
             self.assertEqual(caps, sorted([s for s in SEGMENTS if s.split("_")[0] in ("arm", "forearm", "thigh", "shank")] * 2), look)
-            # the occupant's colour of look.js (the same as before), on every segment
-            self.assertEqual(len({m["color"] for o in got.values() for m in o["meshes"]}), 1, look)
+            # the diagram look: the occupant's one colour of look.js on every segment
+            colours = {m["color"] for o in got.values() for m in o["meshes"]}
+            self.assertEqual(len(colours), 1, look)
+
+    def test_real_look_draws_a_dummy(self):
+        """The real look: a crash test dummy (shapes.js occupantDummyPieces) in the segments' boxes.
+        Per person: the head a ball, the neck a joint, the torso the chest, a waist joint and the
+        pelvis, each limb (upper arm, forearm, thigh, shank) a slim cylinder with a joint ball at
+        each end of its box's longest side (shoulder, elbow, wrist, hip, knee, ankle), the hands
+        and feet rounded boxes. Two colours: the joints, the neck, the hands and the feet one dark
+        colour, apart from the heat colour, the caution orange and the verdict's red; the rest the
+        dummy's yellow (the shape's ratios, sizes and colours: test_dummy_browser)."""
+        drawn = self.drawn["real"]
+        self.assertEqual(drawn["errors"], [])
+        got = drawn["parts"]
+        limbs = [s for s in SEGMENTS if s.split("_")[0] in ("arm", "forearm", "thigh", "shank")]
+        joint_colours = set()
+        for person in ("occupant_R", "occupant_L"):
+            pieces = lambda seg: [m["piece"] for m in got[f"{person}.{seg}" if seg else person]["meshes"]]
+            self.assertEqual(pieces("head"), ["ball"])
+            self.assertEqual(pieces("neck"), ["joint"])
+            self.assertEqual(pieces(None), ["rounded_box", "joint", "pelvis"])  # chest, waist, pelvis
+            for seg in limbs:
+                self.assertEqual(sorted(pieces(seg)), ["joint", "joint", "limb"], seg)
+            for seg in ("hand_L", "hand_R", "foot_L", "foot_R"):
+                self.assertEqual(pieces(seg), ["rounded_box"], seg)
+            mine = [m for i, o in got.items() if i == person or i.startswith(person + ".") for m in o["meshes"]]
+            joints = [m for m in mine if m["piece"] == "joint"]
+            self.assertEqual(len(joints), 1 + 1 + 2 * len(limbs))  # neck, waist, both ends of 8 limbs
+            joint_colours |= {m["color"] for m in joints}
+            # the joint balls at the ends of each limb's box, a radius in from them
+            for seg in limbs:
+                p = next(x for x in occupant_parts(self.segmented) if x["id"] == f"{person}.{seg}")
+                size = p["box"]["size_mm"]
+                long = int(np.argmax(size))
+                r = min(s for i, s in enumerate(size) if i != long) / 2  # the section's radius
+                # a ball's centre: the middle of its extent (the vertices' mean leans to the sphere's seam)
+                mid = lambda loc: float((loc[:, long].min() + loc[:, long].max()) / 2)
+                ends = sorted(mid(in_box(p, m["verts"])[0]) for m in got[p["id"]]["meshes"] if m["piece"] == "joint")
+                np.testing.assert_allclose(ends, [-(size[long] / 2 - r), size[long] / 2 - r], atol=0.5, err_msg=seg)
+            # the person's colours: the body's and the joints' (the neck, hands and feet too)
+            self.assertEqual(len({m["color"] for m in mine}), 2, person)
+            dark = {m["color"] for seg in ("neck", "hand_L", "hand_R", "foot_L", "foot_R") for m in got[f"{person}.{seg}"]["meshes"]}
+            self.assertEqual(dark, {m["color"] for m in joints}, person)
+        (joint,) = joint_colours
+        rgb = lambda h: np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float)
+        for other in ("#ff5a1f", "#e9893a", "#c8402a"):  # energy_flow.js HEAT_COLOR, CAUTION_ORANGE, the verdict's red
+            self.assertGreater(float(np.linalg.norm(rgb(joint) - rgb(other))), 150, other)
+        self.assertLess(rgb(joint).sum(), 3 * 64)  # dark
 
     def test_one_ball_per_person_the_head(self):
+        # (the real look's dummy has joint balls too: the head is still its one ball of radius 1
+        # stretched to the box)
         for look, drawn in self.drawn.items():
-            balls = [i for i, o in drawn["parts"].items() for m in o["meshes"] if m["type"] == "SphereGeometry"]
+            balls = [i for i, o in drawn["parts"].items() for m in o["meshes"] if m["type"] == "SphereGeometry" and m["piece"] != "joint"]
             self.assertEqual(sorted(balls), ["occupant_L.head", "occupant_R.head"], look)
 
     def test_shapes_stay_in_their_boxes(self):
         for look, drawn in self.drawn.items():
             for p in occupant_parts(self.segmented):
-                (m,) = drawn["parts"][p["id"]]["meshes"]
-                local, half = in_box(p, m["verts"])
-                over = np.abs(local).max(axis=0) - half
-                self.assertTrue((over <= TOL_MM).all(), (look, p["id"], over.tolist()))
+                # every piece (the dummy's joints and slices too) inside the segment's box
+                for m in drawn["parts"][p["id"]]["meshes"]:
+                    local, half = in_box(p, m["verts"])
+                    over = np.abs(local).max(axis=0) - half
+                    self.assertTrue((over <= TOL_MM).all(), (look, p["id"], m["piece"], over.tolist()))
 
     def test_head_meets_the_neck(self):
         # the head's box sits on the neck's (data); drawn, the head's lowest point is at the neck's top
@@ -202,6 +258,8 @@ class OccupantBrowserTest(unittest.TestCase):
         # the capsule spans that side end to end
         checked = 0
         for look, drawn in self.drawn.items():
+            if look == "real":
+                continue  # the dummy's limbs: a cylinder and two joints (test_real_look_draws_a_dummy)
             for p in occupant_parts(self.segmented):
                 (m,) = drawn["parts"][p["id"]]["meshes"]
                 if m["type"] != "CapsuleGeometry":
@@ -216,7 +274,7 @@ class OccupantBrowserTest(unittest.TestCase):
                 local, _ = in_box(p, v)
                 self.assertAlmostEqual(np.ptp(local[:, long]), size[long], delta=TOL_MM, msg=(look, p["id"]))
                 checked += 1
-        self.assertEqual(checked, 2 * 2 * 8)  # 2 looks x 2 persons x 8 capsules
+        self.assertEqual(checked, 2 * 8)  # the diagram look: 2 persons x 8 capsules
         # the rotations are not all trivial: some capsule axis is off every ISO axis
         arm = next(p for p in occupant_parts(self.segmented) if p["id"] == "occupant_L.arm_L")
         self.assertLess(np.abs(rpy_matrix(arm["box"]["rpy_deg"])[:, 0]).max(), 0.95)

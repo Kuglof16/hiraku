@@ -1,0 +1,68 @@
+/* The tyre view's panel (js/grip_panel.js) at the right of the 3D, under the toggles and above the
+   test's bar; its labels on the 3D (js/grip_view.js). Orange (#e9893a, the screen's caution colour)
+   is the friction limit and sliding; red is not used here (a failed verdict only). */
+
+.grip-panel {
+  position: absolute;
+  right: 12px;
+  top: 52px;
+  bottom: 120px;
+  z-index: 5;
+  width: 372px;
+  overflow: hidden;
+  background: rgba(251, 249, 244, 0.95);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+body.video .grip-panel { bottom: 60px; }
+body.video .grip-panel button { display: none; }
+.gp-head { display: flex; align-items: baseline; gap: 8px; font-size: 15px; }
+.gp-head small, .gp-sec small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.gp-key { margin-top: 3px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
+.gp-key .sw { display: inline-block; width: 14px; height: 4px; margin: 0 3px 0 8px; vertical-align: middle; }
+.gp-key .sw:first-child { margin-left: 0; }
+.gp-key .sw.force { background: #8e6bbf; }
+.gp-key .sw.ring { height: 10px; width: 10px; border: 2px solid #e9893a; border-radius: 50%; }
+.gp-key .sw.slide { height: 10px; width: 10px; background: rgba(233, 137, 58, 0.45); border: 2px solid #e9893a; border-radius: 50%; }
+.gp-key .sw.load { width: 5px; height: 12px; background: #2b59c3; }
+.gp-key .sw.mount { background: #1f6f6b; }
+.gp-scale, .gp-foot { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.gp-none { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.gp-sec { font-weight: 600; margin-top: 6px; }
+.gp-roll { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.gp-rv { white-space: nowrap; }
+.gp-rv b { font-variant-numeric: tabular-nums; font-size: 14px; }
+.gp-rv small { color: var(--muted); margin-left: 4px; }
+.grip-panel svg { display: block; overflow: visible; }
+.grip-panel .g { stroke: var(--rule); stroke-width: 1; }
+.grip-panel .ax { stroke: var(--ink); stroke-width: 1.1; }
+.grip-panel .yl { fill: var(--muted); font-size: 10px; text-anchor: end; font-variant-numeric: tabular-nums; }
+.grip-panel .xl { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.grip-panel .gt { fill: var(--ink); font-size: 11px; }
+.grip-panel .roll-n { fill: var(--ink); }
+.gp-chips { display: flex; gap: 4px; margin: 3px 0 2px; }
+.gp-chips button { font-size: 11px; border: 1.5px solid var(--line); border-radius: 999px; padding: 0 8px; color: var(--muted); }
+.gp-chips button.on { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.ty-grid, .kc-grid { display: grid; grid-template-columns: 168px 168px; gap: 2px 12px; }
+.ty-h { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 11px; }
+.ty-slide { color: #b9601d; font-weight: 700; }
+.ty-ln { fill: none; stroke: var(--line); stroke-width: 1.1; }
+.ty-ln.near { stroke: var(--ink-2); stroke-width: 1.6; }
+.ty-peak { fill: var(--ink); }
+.ty-tr { fill: #8e6bbf; }
+.ty-pt { fill: #8e6bbf; stroke: var(--ink); stroke-width: 1; }
+.ty-pt.slide { fill: #e9893a; }
+.ty-pt.out { fill-opacity: 0.45; stroke-dasharray: 2 2; } /* past the graph's range: at its edge, dashed */
+.kc-ln { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+.kc-pt { fill: #8e6bbf; stroke: var(--ink); stroke-width: 1; }
+.kc-pt.ring { fill: var(--panel); }
+.kc-pt.out { stroke-dasharray: 2 2; }
+
+/* on the 3D */
+.grip-tag { font-family: var(--font); font-size: 12px; white-space: nowrap; pointer-events: none; }
+.grip-tag.grip-slide { color: #fbf9f4; background: #e9893a; border-radius: 6px; padding: 0 6px; font-weight: 700; }
+.grip-tag.grip-peak { color: #1f6f6b; background: rgba(251, 249, 244, 0.92); border: 1.5px solid #1f6f6b; border-radius: 6px; padding: 1px 8px; font-weight: 600; }
+.grip-tag.grip-peak small { display: block; font-weight: 400; color: var(--muted); }

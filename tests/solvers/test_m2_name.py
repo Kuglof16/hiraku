@@ -25,7 +25,8 @@ class M2NameTest(unittest.TestCase):
         for p in sorted((ROOT / "data" / "designs").glob("*.json")):
             with self.subTest(design=p.name):
                 v = json.loads(p.read_text(encoding="utf-8"))["variables"]
-                self.assertEqual(v[NEW], {"value": 22.0, "unit": "1"})
+                # the assumed variables carry their basis in the design (aed92d35)
+                self.assertEqual(v[NEW], {"value": 22.0, "unit": "1", "basis": "assumption"})
                 self.assertNotIn("fatigue_slope_after_knee", v)
 
     def test_old_name_nowhere_in_the_code_and_the_demo_events(self):

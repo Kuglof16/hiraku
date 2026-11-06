@@ -393,9 +393,9 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         started = [e["agent"] for e in self.events("agent.started")]
         self.assertEqual(started, ["lead", "packager", "designer", "cae.strength"])
         said = [e["text"] for e in self.events("agent.said")]
-        self.assertIn("設計の版 2 で、段 0 から全部の荷重条件をやり直します", said)
-        self.assertIn("版 1、段 0 (レイアウトと規則)の荷重条件を確かめます: H1-steer30", said)
-        self.assertIn("版 2、段 1 (軽い計算)の荷重条件を確かめます: P1-step100、R1-step100", said)
+        self.assertIn("設計の v2 で、段 0 から全部の荷重条件をやり直します", said)
+        self.assertIn("v1、段 0 (レイアウトと規則)の荷重条件を確かめます: H1-steer30", said)
+        self.assertIn("v2、段 1 (軽い計算)の荷重条件を確かめます: P1-step100、R1-step100", said)
         self.assertNotIn("hook.denied", [e["kind"] for e in self.ctx.store.events()
                                          if (e.get("data") or {}).get("rule") == "HK5_light_first"])
         events = self.ctx.store.events()
@@ -420,7 +420,7 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual((self.ctx.version, self.ctx.store.judgements()[-1]["state"]), (2, "red"))
         finished = self.events("run.finished")[-1]["data"]
         self.assertEqual((finished["status"], finished["stop_code"]), ("stopped", "round_limit"))
-        self.assertIn("組み立てが赤のまま", finished["stop_reason"])
+        self.assertIn("組み立てが NG のまま", finished["stop_reason"])
         events = self.ctx.store.events()
         self.assertEqual(contract.errors("event", events[-1]), [])
 

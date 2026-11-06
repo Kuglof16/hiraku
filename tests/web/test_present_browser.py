@@ -6,8 +6,11 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 import copy
 import json
 import os
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.domains_fixture import domain_events
@@ -16,7 +19,7 @@ from tests.web.shell_fixture import shell_events
 from tests.web.test_assembly_browser import assembly_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -34,7 +37,7 @@ PROBE = """() => {
     present: document.body.classList.contains("present"),
     scene: document.body.dataset.presentScene,
     kinds,
-    shown: Object.fromEntries(["log", "card-cmp", "card-pred", "hooks", "chips", "tabs", "toggles", "tests", "present-card"].map((id) => [id, seen(document.getElementById(id))])),
+    shown: Object.fromEntries(["log", "card-cmp", "card-pred", "hooks", "hooks-more", "chips", "tabs", "toggles", "tests", "present-card"].map((id) => [id, seen(document.getElementById(id))])),
     view: rect(vp),
     legend: seen(document.getElementById("legend")) ? rect(document.getElementById("legend")) : null,
     graph: seen(document.getElementById("graph")) ? rect(document.getElementById("graph")) : null,
@@ -57,7 +60,8 @@ def overlaps(a, b):
 class PresentBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -69,13 +73,14 @@ class PresentBrowserTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, query):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -90,7 +95,7 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertLessEqual(got["kinds"]["legend"], 1, got)
         self.assertLessEqual(got["kinds"]["graph"], 1, got)
         self.assertLessEqual(got["kinds"]["label"], 3, got)
-        for hidden in ("log", "card-cmp", "card-pred", "hooks", "chips", "tabs", "toggles", "tests"):
+        for hidden in ("log", "card-cmp", "card-pred", "hooks", "hooks-more", "chips", "tabs", "toggles", "tests"):
             self.assertFalse(got["shown"][hidden], hidden)
         self.assertTrue(got["shown"]["present-card"])
         # the colour bar and the graph are beside the view, not over it
@@ -116,8 +121,7 @@ class PresentBrowserTest(unittest.TestCase):
         # the reaction on the step (the sample's vector, |F| in kN), the verdict beside its criterion, in one sentence
         self.assertIn("反力 (FL)", got["card"])
         self.assertIn("1.8 kN", got["card"])
-        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → 合格", got["card"])
-        self.assertIn("基準を満たした", got["card"])
+        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → OK", got["card"])
         self.assertIn("実行が終わりました", got["card"])
         page.close()
 
@@ -134,7 +138,8 @@ class PresentBrowserTest(unittest.TestCase):
         page.click("#expand-btn")
         back = self.probe(page)
         self.assertFalse(back["present"])
-        for shown in ("log", "card-cmp", "hooks", "tabs", "toggles"):
+        # (the footer's hooks list is folded under 「くわしく」, test_topbar_browser)
+        for shown in ("log", "card-cmp", "hooks-more", "tabs", "toggles"):
             self.assertTrue(back["shown"][shown], shown)
         self.assertEqual(back["legendIn"], "viewport")
         self.assertNotIn("present=1", page.url)
@@ -167,10 +172,10 @@ class PresentBrowserTest(unittest.TestCase):
     def test_four_scenes(self):
         shell, _, _ = shell_events()
         cases = [
-            ("step", "run=sample&pace=0&t=0&present=1", sample_events(), ["反力", "基準を満たした"]),
+            ("step", "run=sample&pace=0&t=0&present=1", sample_events(), ["反力", "→ OK"]),
             ("shell", "run=sample&pace=0&t=0&present=1", shell, ["の最大", "補強の前 (v1)", "補強の後 (v2)", "ガセット"]),
             ("assembly", "run=sample&pace=0&t=0&present=1", assembly_events(focus_a7=True), ["干渉", "1 か所", "手順 3"]),
-            ("grid", "run=sample&pace=0&t=0&present=1&tab=grid", domain_events(), ["判定が合格の分野", " / "]),
+            ("grid", "run=sample&pace=0&t=0&present=1&tab=grid", domain_events(), ["判定が OK の分野", " / "]),
         ]
         for key, query, events, words in cases:
             with self.subTest(scene=key):
@@ -189,7 +194,9 @@ class PresentBrowserTest(unittest.TestCase):
     def test_only_the_picked_wheel_has_words_on_the_workbench(self):
         events, _ = tilt_events()
         finished_t = next(e["t"] for e in events if e["kind"] == "analysis.finished")
-        page, errors = self.open("run=sample&pace=0&t=0")
+        # words=1: the words where nothing is chosen (the largest wheel), as the present mode has them
+        # (by default an arrow has words only where chosen: test_declutter_browser)
+        page, errors = self.open("run=sample&pace=0&t=0&words=1")
         page.evaluate("async ([ev, t]) => { await window.hiraku.load(ev, t); }", [events, finished_t + 3])
         words = """() => {
           const b = window.hiraku.bench;
@@ -225,7 +232,7 @@ class PresentBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=2.5")
         early = page.evaluate(
             """() => ({ line: document.querySelector('#log li.hook').textContent, done: document.querySelector('#log li.hook').classList.contains('done'),
-                        flash: document.getElementById('hookflash').textContent, row: document.getElementById('hooks').textContent,
+                        flash: document.getElementById('hookline').textContent, row: document.getElementById('hooks').textContent,
                         now: document.getElementById('now').textContent })"""
         )
         self.assertIn("止めました", early["line"])
@@ -233,9 +240,11 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertIn("詳しい記録", early["line"])
         self.assertNotIn("解決済み", early["line"])
         self.assertFalse(early["done"])
-        self.assertIn("次に:", early["flash"])
+        # the stop in one line (what was stopped, what the agent is made to do), without the rule's id
+        self.assertEqual(early["flash"], "!予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertNotIn("解決済み", early["row"])
         self.assertIn("hooks が止めた", early["now"])
+        self.assertNotIn("HK1", early["now"])
         late = page.evaluate(
             """async () => { await window.hiraku.seek(9); return { line: document.querySelector('#log li.hook').textContent,
                   done: document.querySelector('#log li.hook').classList.contains('done'), row: document.getElementById('hooks').textContent,
@@ -244,8 +253,8 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertIn("解決済み", late["line"])  # the prediction came after the stop
         self.assertTrue(late["done"])
         self.assertIn("解決済み", late["row"])
-        self.assertEqual(late["big"], "基準を満たした")
-        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → 合格", late["vline"])
+        self.assertEqual(late["big"], "OK")
+        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → OK", late["vline"])
         running = page.evaluate("async () => { await window.hiraku.seek(5.7); return document.getElementById('now').textContent; }")
         self.assertIn("解析しています", running)
         self.assertEqual(errors, [])

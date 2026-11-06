@@ -60,7 +60,7 @@ button {
 body.video { --band: 170px; }
 body.video .statusrow, body.no-status .statusrow { display: none; }
 body.no-status .stage, body.video .stage { grid-template-rows: 64px 56px minmax(0, 1fr) 0 var(--band); }
-body.video .hint { display: none; }
+body.video .hint, body.video .bench-more { display: none; }
 /* the video has no replay bar (the bench's): ?t= and window.hiraku.seek move the replay without
    it. What stood above it comes down by the bar's height. A7 keeps only its band "手順 n / N"
    (at the bar's left): its track, its ▶ and its switches (接合, モジュール) go, and its list of
@@ -101,6 +101,9 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 .mode { justify-self: end; display: flex; gap: 10px; align-items: center; font-size: 16px; color: var(--muted); }
 .mode .badge { border: 1.5px solid var(--line); border-radius: 999px; padding: 4px 16px; color: var(--ink); background: var(--panel); }
 .mode .badge.live { border-color: var(--red); color: var(--red); }
+/* ?video=1: whether the picture is a scripted run or a Claude run, at a glance (24 px, a coloured ground) */
+body.video .mode .badge[data-driver="scripted"] { font-size: 24px; font-weight: 700; color: #fff; background: #3b3934; border-color: #3b3934; padding: 4px 18px; }
+body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 700; color: #fff; background: #2b59c3; border-color: #2b59c3; padding: 4px 18px; }
 .mode .runid { font-family: var(--mono); font-size: 15px; color: inherit; text-decoration: none; }
 .mode .runid:hover { text-decoration: underline; }
 
@@ -135,6 +138,13 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 /* nothing in this run: faint, still pressable (its screen says what would be there) */
 .tab.empty { opacity: 0.5; }
 .tab.empty:hover, .tab.empty.on { opacity: 0.75; }
+/* a static export: the run list's tab is a link (js/app.js STATIC) */
+
+/* a static export on ① / ②: the record's request and 「この記録を再生する」 */
+.replaybar .rb-want { flex: 1 1 auto; min-width: 0; }
+.replaybar .rb-want b { margin-right: 8px; }
+/* ... and no box to write or send in (① 's request box, ② 's note and answers): nothing is sent there */
+.static-export #view-intake .in-composer { display: none; }
 .tab-arrow { flex: none; width: 14px; height: 14px; color: var(--line); }
 .tabtip {
   position: absolute;
@@ -408,10 +418,21 @@ body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #ecee
   font-size: 15px;
   min-width: 150px;
   max-width: 250px;
+  /* its height kept under the toggles (app.js fitOverlays): the list of fields gives way first and
+     scrolls; the colour bar keeps its height (with even less room, the whole legend scrolls) */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
+.legend > * { flex: none; }
+.legend > .fields { flex: 0 1 auto; min-height: 44px; overflow-y: auto; scrollbar-width: thin; margin-bottom: 6px; }
+.legend > .fields > .kinds:last-child { margin-bottom: 0; }
 .legend[hidden] { display: none; }
 .legend .ttl { font-weight: 600; margin-bottom: 6px; }
-.legend .bar { display: grid; grid-template-columns: 18px auto; column-gap: 8px; }
+/* (the top tick's number stands half its line above the bar: the bar keeps that much below the title) */
+.legend .bar { display: grid; grid-template-columns: 18px auto; column-gap: 8px; margin-top: 10px; }
+body.video .legend .bar { margin-top: 8px; }
 .legend .sw { height: 16px; border-left: 1.5px solid var(--ink); border-right: 1.5px solid var(--ink); }
 .legend .sw:first-child { border-top: 1.5px solid var(--ink); }
 .legend .sw.end { border-bottom: 1.5px solid var(--ink); }
@@ -657,21 +678,38 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
   display: grid;
   place-items: center;
 }
-.pb-track { position: relative; flex: 1; height: 30px; cursor: pointer; }
-.pb-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; background: var(--rule); border-radius: 2px; }
-.pb-fill { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; background: var(--ink); border-radius: 2px; }
-.pb-knob { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--ink); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--ink); }
-.pb-ticks { position: absolute; inset: 0; pointer-events: none; }
-.pb-ticks i { position: absolute; top: 3px; width: 2px; height: 7px; margin-left: -1px; background: var(--line); }
-.pb-ticks i.hook { background: var(--orange); height: 9px; top: 1px; }
-.pb-ticks i.ok { background: var(--green); }
-.pb-time { font-size: 16px; font-variant-numeric: tabular-nums; min-width: 128px; text-align: right; }
+/* the track: its line near the bottom, the event marks above it (one row a kind) */
+.pb-track { position: relative; flex: 1; min-width: 160px; height: 40px; cursor: pointer; }
+.pb-track::before { content: ""; position: absolute; left: 0; right: 0; top: 31px; height: 4px; background: var(--rule); border-radius: 2px; }
+.pb-fill { position: absolute; left: 0; top: 31px; height: 4px; background: var(--ink); border-radius: 2px; }
+.pb-knob { position: absolute; top: 33px; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--ink); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--ink); }
+.pb-ticks, .pb-marks { position: absolute; inset: 0; pointer-events: none; }
+.pb-ticks i { position: absolute; top: 25px; width: 2px; height: 6px; margin-left: -1px; background: var(--orange); }
+.pb-marks i { position: absolute; width: 2px; margin-left: -1px; }
+.pb-marks .m-ana { top: 25px; height: 4px; background: var(--rule); }
+.pb-marks .m-cmp { top: 21px; height: 4px; background: var(--line); }
+.pb-marks .m-ok { top: 17px; height: 4px; background: var(--green); }
+.pb-marks .m-mis { top: 10px; height: 8px; background: #b26b00; }
+.pb-marks .m-ng { top: 10px; height: 8px; background: var(--red); }
+.pb-marks .m-cause { top: 5px; height: 5px; background: #8e6bbf; }
+.pb-marks .m-v { top: 0; height: 29px; width: 1.5px; background: var(--ink); }
+.pb-marks .m-vl { position: absolute; top: 0; font-size: 10px; line-height: 1; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.pb-times { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; min-width: 110px; }
+.pb-time { font-size: 16px; font-variant-numeric: tabular-nums; text-align: right; }
+.pb-rec { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pb-step { width: 24px; height: 24px; margin: 0 -4px; border-radius: 50%; border: 1.5px solid var(--line); font-size: 11px; line-height: 1; display: grid; place-items: center; }
+.pb-jump, .pb-clock { border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 7px; font-size: 12px; white-space: nowrap; margin: 0 -4px; }
+.pb-jump:disabled { opacity: 0.4; cursor: default; }
+.pb-clock { color: var(--muted); }
 .pb-speed { border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 12px; font-size: 15px; min-width: 52px; }
 .pb-live { display: none; border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 12px; font-size: 14px; color: var(--muted); }
 .pb-live.show { display: inline-block; }
 .pb-live.on { border-color: var(--red); color: var(--red); font-weight: 700; }
 
 .hint { margin: 0 4px; font-size: 14px; color: var(--muted); }
+/* the workbench's くわしく (app.js: what the dummy is drawn from) */
+.bench-more { margin: 0 4px; font-size: 14px; color: var(--muted); }
+.bench-more > summary { cursor: pointer; width: max-content; }
 
 /* right: prediction -> analysis -> comparison */
 .col-right { min-height: 0; }
@@ -688,6 +726,66 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 }
 #card-pred { flex: 0 1 auto; }
 #card-ana, #card-cmp { flex: 0 0 auto; }
+/* the first lines: いま / 判定 / 次 (the cards folded under くわしく below) */
+.chain-head { display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 17px; line-height: 1.4; }
+.ch-row small { display: inline-block; min-width: 40px; margin-right: 8px; font-size: 13px; color: var(--muted); }
+.clamp1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-judged { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
+.ch-judged small { align-self: center; }
+/* 境目 (edge_note.js) under the verdict's row: orange like the card's line, kept whole (it wraps) */
+.ch-edge { display: flex; align-items: baseline; color: var(--orange, #b26b00); font-weight: 600; font-size: 14px; line-height: 1.35; margin-top: -4px; }
+.ch-edge small { flex: none; }
+.ch-q { font-weight: 600; }
+.ch-v { font-variant-numeric: tabular-nums; }
+.ch-verdict { margin-left: auto; font-size: 24px; line-height: 1; }
+.ch-verdict.ok { color: var(--green); }
+.ch-verdict.bad { color: var(--red); }
+/* the other tabs' first lines (js/app.js renderTabHead): いま / 大事 / 次 and a くわしく */
+.tab-head { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; margin: 10px 14px 0; padding: 8px 120px 8px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; font-size: 16px; line-height: 1.4; }
+.tab-head:empty { display: none; }
+.tab-head .th-key { font-weight: 600; }
+.tab-head .th-key.ok { color: var(--green); }
+.tab-head .th-key.warn { color: #b26b00; }
+.th-more { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 14px; font-size: 14px; color: var(--muted); background: var(--panel); }
+.shelf-view, .asm-wrap { display: flex; flex-direction: column; }
+.shelf-host { flex: 1 1 auto; min-height: 0; }
+.asm-wrap > .asm-view { flex: 1 1 auto; }
+.asm-wrap > .tab-head { margin: 0; }
+/* folded (the くわしく shut): the rest of each tab out of the way; opened, all of it as before */
+#view-intake.folded[data-tab="A1"] .in-side > .in-block:first-child,
+#view-intake.folded[data-tab="A1"] .in-msgs > .in-note,
+#view-intake.folded[data-tab="A2"] .in-right,
+#view-intake.folded[data-tab="A2"] .in-left > .in-foot,
+#view-intake.folded[data-tab="A5"] .in-drop,
+#view-intake.folded[data-tab="A5"] .in-bar,
+.shelf-view.folded .sh-tests,
+.shelf-view.folded .sh-k0 > .sh-f:nth-child(n + 2),
+.shelf-view.folded .sh-applies,
+.asm-wrap.folded .asm-steps li:not(.cur) > .tx,
+.asm-wrap.folded .asm-steps li > .fz,
+.asm-wrap.folded .asm-head { display: none !important; }
+/* (the tests' column folded: the formula takes its room) */
+.shelf-view.folded .sh-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 150px) max-content; }
+#view-intake.folded[data-tab="A2"] .in-pane.a2 { grid-template-columns: minmax(0, 1fr); }
+.chain-more { min-height: 0; overflow: auto; }
+.chain-more > summary { cursor: pointer; font-size: 15px; color: var(--muted); padding: 2px 4px; }
+.chain-more[open] { flex: 1 1 auto; }
+.chain-more > .card { margin-top: 10px; }
+.chain-more > .foot { margin-top: 10px; }
+/* ?video=1: the right column and the tabs as before the first lines (1cffb5e3): no いま / 判定 / 次,
+   the cards always shown (app.js keeps #chain-more open), no fold bands on the other tabs (app.js
+   keeps them open), the prediction without its bars and assumptions, so 2. 解析 and 3. 比べる's
+   numbers stay in the column */
+body.video .chain-head, body.video .tab-head, body.video .chain-more > summary { display: none !important; }
+body.video .chain-more > .card:first-of-type { margin-top: 0; }
+body.video #card-pred .terms-cap, body.video #card-pred .terms, body.video #card-pred .asm { display: none; }
+/* (the cards in the column's flex as before, so the prediction gives way: #card-pred flex 0 1 auto;
+   the analysis card without the viewer's button and its assumptions' くわしく, which came after) */
+body.video .chain-more[open] { display: flex; flex-direction: column; overflow: hidden; }
+body.video .chain-more::details-content { display: contents; }
+body.video #card-ana [data-role="viewer-link"], body.video #card-ana details[data-keep="ana-asm"] { display: none; }
+/* 4. 判定: the verdict's own step under 3. 比べる, in the same card */
+#card-cmp .step4 { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
 .chain .foot { margin-top: auto; font-size: 16px; color: var(--muted); padding: 0 4px; }
 .card h3 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
 .card h3 small { font-weight: 400; color: var(--muted); font-size: 16px; margin-left: 6px; }
@@ -698,6 +796,19 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .card details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .card details.more .basis { white-space: normal; overflow-wrap: anywhere; }
 .card .big { font-size: 22px; font-weight: 700; margin: 2px 0; }
+/* 「ビューアで見る」 (viewer_link.js): the button, a small note that it opens a new tab, the sample line */
+.vrow { margin-top: 6px; }
+.vlink { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.vlink .vbtn, .vlink button { font: inherit; font-size: 15px; padding: 2px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--card); color: inherit; text-decoration: none; cursor: pointer; }
+.vlink .vbtn:hover { border-color: var(--muted); }
+.vlink button[disabled] { cursor: default; color: var(--muted); }
+.vlink .vnote, .vlink .vwhy, .vlink .vsample { font-size: 13px; color: var(--muted); }
+.vlink.compact .vbtn, .vlink.compact button { font-size: 13px; padding: 1px 8px; }
+.vlist { margin-top: 6px; font-size: 14px; }
+.vlist .vhead { color: var(--muted); }
+.vlist ul { list-style: none; margin: 2px 0 0; padding: 0; }
+.vlist li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 2px 0; border-top: 1px solid var(--rule); }
+.vlist .vwhat { min-width: 0; overflow-wrap: anywhere; }
 .card .kv { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; font-size: 16px; font-family: var(--mono); }
 .card .kv span:nth-child(odd) { color: var(--muted); }
 .card ul.asm { margin: 4px 0 0; padding-left: 18px; font-size: 15px; color: var(--muted); }
@@ -803,10 +914,51 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 /* the design's change in words: a line of its own under the version flow, up to two lines */
 .grid-head:has(.change.long) { flex-wrap: wrap; row-gap: 2px; }
 .grid-head .change.long { order: 10; flex-basis: 100%; white-space: normal; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.tiles { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px; min-height: 0; }
-.tile { border: 2.5px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; min-height: 0; overflow: hidden; }
+/* ④: the domains run as large tiles (tiles.js gridColumns: --cols), the domains not picked one line over them */
+.tiles { flex: 1; display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 14px; min-height: 0; }
+.tiles > .offline { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 15px; color: var(--muted); padding: 0 4px; position: relative; }
+.tiles:has(> .offline) { grid-template-rows: auto; }
+.offline .offchip { border: 1.5px dashed var(--line); border-radius: 999px; padding: 0 10px; font-size: 14px; color: var(--muted); }
+.offline .offchip.can-replay { cursor: pointer; color: var(--ink); border-color: var(--ink); }
+.offline .offchip .replay-tag { font-weight: 700; }
+.offline .offwhy summary { cursor: pointer; font-size: 14px; }
+.offline .offwhy[open] { position: absolute; top: 100%; left: 0; z-index: 5; max-width: 900px; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 14px; color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+.offline .offwhy ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.4; }
+.offline .offwhy .only { margin: 4px 0 0; font-size: 14px; }
+.tile { position: relative; border: 2.5px solid var(--line); border-radius: 14px; background: var(--panel); padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; min-height: 0; overflow: hidden; }
 .tile .th { display: flex; align-items: baseline; justify-content: space-between; }
-.tile h3 { margin: 0; font-size: 21px; }
+.tile h3 { margin: 0; font-size: 22px; }
+/* the large OK / NG of the tile (red only for NG) */
+.tile .mark { font-size: 30px; font-weight: 800; letter-spacing: 0.02em; line-height: 1; color: var(--muted); }
+.tile .mark.green { color: var(--green); }
+.tile .mark.red { color: var(--red); }
+.tile .mark small { font-size: 14px; font-weight: 700; margin-left: 8px; color: #b26b00; letter-spacing: 0; }
+.tile .tbody { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.tile .pic { flex: 1; min-width: 0; min-height: 0; position: relative; }
+.tile canvas.tile3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* (safe: a short tile keeps the number under the tile's head, not over the OK / NG) */
+.tile .side { flex: none; width: 34%; max-width: 240px; display: flex; flex-direction: column; justify-content: safe center; gap: 6px; overflow: hidden; }
+.tile .num .nq { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* five tiles or more (tiles.js: dense): three a row, lower tiles, so smaller words beside the picture */
+.tiles.dense .tile h3 { font-size: 18px; }
+.tiles.dense .tile .mark { font-size: 24px; }
+.tiles.dense .tile .num .nv { font-size: 24px; }
+.tiles.dense .tile .num .nq { font-size: 12px; -webkit-line-clamp: 1; }
+.tiles.dense .tile .num .nl { font-size: 13px; }
+.tiles.dense .tile .side { width: 30%; gap: 2px; }
+.tiles.dense .tile .tilepet { width: 44px; height: 44px; margin: -6px 0 -4px 0; }
+.tile .num { display: flex; flex-direction: column; gap: 2px; }
+.tile .num .nq { font-size: 14px; color: var(--muted); line-height: 1.3; }
+.tile .num .nv { font-size: 30px; line-height: 1.1; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.tile .num .nv.ng { color: var(--red); }
+.tile .num .nl { font-size: 15px; color: var(--muted); }
+.tile .side .tf { margin-top: auto; justify-content: flex-end; }
+/* the words and the small drawings: opened over the tile (くわしく) */
+.tile details.more { flex: none; font-size: 13px; }
+.tile details.more > summary { cursor: pointer; color: var(--muted); width: max-content; }
+.tile details.more[open] { position: absolute; inset: 44px 8px 8px; z-index: 4; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 12px; overflow: auto; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+.tile details.more .draw { flex: none; height: 150px; }
+.tile details.more .sum { display: block; -webkit-line-clamp: unset; }
 .tile.green { border-color: var(--green); }
 .tile.red { border-color: var(--red); }
 .tile.off { border-style: dashed; color: var(--muted); background: transparent; }
@@ -1029,6 +1181,8 @@ body.video .mode .stop-btn { display: none; }
   pointer-events: none;
 }
 .now[hidden] { display: none; }
+/* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
+.now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
 /* app.js loadingNote: while a record is read */
 .loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
   border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }
@@ -1039,6 +1193,27 @@ body.video .mode .stop-btn { display: none; }
 .loading-note.in-view { position: absolute; top: 40%; font-size: 24px; padding: 16px 26px; white-space: nowrap; }
 .loading-note.in-view .ln-sub { font-size: 19px; }
 body.video .loading-note { display: none; }
+
+/* while the record is read (js/app.js boot): no frame, the middle of the page one line and the lead's
+   pet (its circle until pet3d.js is in); failed: the same line says why (no red) */
+html.booting .stage, html.booting .runlist, html.booting .heavy-note { visibility: hidden; }
+.boot { display: none; }
+html.booting .boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px; background: var(--paper); color: var(--ink); }
+.boot-pet { width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; }
+.boot-pet::before { content: ""; width: 72px; height: 72px; border-radius: 50%; background: #ddd6c8; }
+.boot-pet.has-pet::before { display: none; }
+.boot-pet { position: relative; }
+.boot-pet .petbox { position: relative; display: block; width: 120px; height: 120px; }
+.boot-pet .petbox canvas { width: 100%; height: 100%; display: block; }
+.boot-line { margin: 0; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; max-width: 90vw; text-align: center; }
+.boot.failed .boot-pet { opacity: 0.5; }
+.boot-links { margin: 0; font-size: 17px; }
+.boot-links a { margin: 0 10px; font-weight: 600; color: var(--ink); }
+/* a static export's heavy parts asked for (js/heavy.js): one small line, low on the page */
+.heavy-note { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; pointer-events: none;
+  background: rgba(251, 249, 244, 0.96); border: 1.5px solid var(--ink); border-radius: 10px; padding: 6px 14px; font-size: 15px; }
+body.video .heavy-note { display: none; }
 
 /* the verdict in one sentence, then the value beside its criterion */
 .verdict .verdict-big { font-size: 24px; font-weight: 800; margin-bottom: 2px; }
@@ -1089,14 +1264,19 @@ body.present .stage { grid-template-rows: 64px minmax(0, 1fr) var(--band); }
 body.present .tabsrow, body.present .statusrow, body.present .pills { display: none; }
 body.present .main { grid-template-columns: minmax(0, 1fr); padding: 14px 452px 14px 24px; }
 body.present .col-left, body.present .col-right { display: none; }
-body.present .tests, body.present .toggles, body.present .hint, body.present .bubble,
+/* the video's A1 and A2 (the intake screens) are filmed without the rail's card ("いま:"): they use the whole width */
+body.video.present[data-intake-tab="A1"] .present-rail, body.video.present[data-intake-tab="A2"] .present-rail { display: none; }
+body.video.present[data-intake-tab="A1"] .main, body.video.present[data-intake-tab="A2"] .main { padding-right: 24px; }
+/* nor with the tab's first lines (いま / 調べる分野 / 次): with them the domains' last row went under the frame */
+body.video #view-intake[data-tab="A1"] > .tab-head, body.video #view-intake[data-tab="A2"] > .tab-head { display: none; }
+body.present .tests, body.present .toggles, body.present .hint, body.present .bench-more, body.present .bubble,
 body.present .running, body.present .limitnote, body.present .animbar, body.present .now { display: none; }
 /* only the main labels in the 3D (the largest value, the picked wheel's force) */
 body.present .gl-labels .lbl:not(.lbl-key) { display: none; }
 body.present .cmp-view .lbl-key, body.present .cmp-view .gl-leaders { display: none; }
 body.present .cmp-tags span { font-size: 18px; }
 /* the colour bar alone: no field switches, no notes */
-body.present .legend .kinds, body.present .legend .acts, body.present .legend .src, body.present .legend .conv, body.present .legend .cmp { display: none; }
+body.present .legend .fields, body.present .legend .kinds, body.present .legend .acts, body.present .legend .src, body.present .legend .conv, body.present .legend .cmp { display: none; }
 /* the grid: no small chart in the tiles (one graph at most on the screen) */
 body.present .tile svg.spark { display: none; }
 body.present .tile h3 { font-size: 26px; }
@@ -1169,3 +1349,10 @@ body.present.present-detail .col-right {
 body.present.present-detail .col-left { left: 24px; width: 420px; }
 body.present.present-detail .col-right { right: 24px; width: 440px; flex-direction: column; }
 body.present.present-detail .chain { height: 100%; }
+
+/* The crash tool's note on the break angle (edge_note.js): 境目 on the verdict whose quantity turns
+   inside the band, in orange (attention, not a NG: red is for NG only); 参考 for a member near it */
+.card .edge-line, .tile .edge-line { color: var(--orange, #b26b00); font-weight: 600; font-size: 14px; line-height: 1.35; margin-top: 4px; }
+.card .edge-near { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
+.tile .edge-line { font-size: 12px; margin-top: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.tiles.dense .tile .edge-line { font-size: 11px; -webkit-line-clamp: 2; }

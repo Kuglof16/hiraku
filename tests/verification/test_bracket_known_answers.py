@@ -33,6 +33,13 @@ def _normal_pair(rng):
 
 @unittest.skipIf(lb is None, "needs hiraku.solvers.k0_handcalc.library_bracket (analysis 3b06ab93)")
 class BracketKnownAnswersTest(unittest.TestCase):
+    def _bolt_is_the_larger(self, out):
+        """bolt_utilisation (analysis, R9 stage 3), when given, is the larger of the bolt's shear and bearing;
+        it is taken out of `out` so the four utilisations are compared as before."""
+        if "bolt_utilisation" in out:
+            u = out.pop("bolt_utilisation")
+            self.assertEqual(u, max(out["bolt_shear_utilisation"], out["bolt_bearing_utilisation"]))
+
     def test_resistances_are_the_agreed_values(self):
         # f_v = 0.6 f_ub / 1.25; f_b = k1 alpha_b f_u / 1.25 with alpha_b = 1.2 / 3, k1 = 2.8 * 1.2 - 1.7;
         # f_plate = f_y / 1.0; f_vw = f_u / (sqrt 3 * 0.8 * 1.25)
@@ -64,6 +71,7 @@ class BracketKnownAnswersTest(unittest.TestCase):
             r = lb.resistances(f_y, f_u)
             mine = ka.clevis_utilisations(F, u, base, d, n, t, s, b, e, r["f_v"], r["f_b"], r["f_plate"], r["f_vw"])
             theirs = lb.clevis_utilisations(F, u, base, d, n, t, s, b, e, f_y=f_y, f_u=f_u)
+            self._bolt_is_the_larger(theirs)
             self.assertEqual(sorted(theirs), sorted(NAMES))
             for k in NAMES:
                 self.assertAlmostEqual(theirs[k], mine[k], delta=1e-9 * max(1.0, mine[k]), msg=f"case {case} {k}")
@@ -71,6 +79,7 @@ class BracketKnownAnswersTest(unittest.TestCase):
     def test_a_member_end_has_shear_and_bearing_only(self):
         u, base = (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)
         out = lb.clevis_utilisations((3000.0, 0.0, 4000.0), u, base, 12.0, 1, 6.0, None, None, None)
+        self._bolt_is_the_larger(out)
         self.assertEqual(sorted(out), ["bolt_bearing_utilisation", "bolt_shear_utilisation"])
         r = lb.resistances(245.0, 400.0)
         # |F_p| = 5000 N in the plates' plane: tau = 5000 / (2 pi 144 / 4), sigma_b = 5000 / (2 * 12 * 6)

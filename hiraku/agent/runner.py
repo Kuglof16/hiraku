@@ -198,7 +198,7 @@ def end_status(ctx: RunContext, blocks: int = 0) -> tuple[str, str | None, str]:
         return "stopped", f"まとめ役が、判定の付いていない分野を残して止まりました{after}。" + left, "not_judged"
     red = rules.red_left_reason(ctx)
     if red:
-        return "stopped", f"まとめ役が、設計の直しの回数を残したまま、赤の分野を残して止まりました{after}。" + red, "red_left"
+        return "stopped", f"まとめ役が、設計の直しの回数を残したまま、NG の分野を残して止まりました{after}。" + red, "red_left"
     return rules.judged_end(ctx)
 
 
@@ -216,7 +216,7 @@ def new_routing(ctx: RunContext, hooks: Hooks, routed: dict[int, str]) -> str | 
         if routed.get(-1) is None:
             routed[-1] = repr(e)
             ctx.store.emit("agent.said", agent="system",
-                           text=f"赤の振り分けを出せませんでした ({type(e).__name__}: {e})")
+                           text=f"NG の振り分けを出せませんでした ({type(e).__name__}: {e})")
         return None
     if not text or routed.get(ctx.version) == text:
         return None

@@ -25,7 +25,7 @@ from tests.web.firsttime_fixture import RUN_ID, firsttime_events
 from tests.web.test_layout_lint_browser import ENABLED, _write_run
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -36,7 +36,7 @@ class FirstTimeBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         _write_run(cls.tmp / "runs", RUN_ID, firsttime_events())
-        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None)
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.pw = sync_playwright().start()
@@ -55,25 +55,26 @@ class FirstTimeBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("response", lambda r: r.status >= 400 and errors.append(f"{r.status} {r.url}"))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors
 
-    def test_the_chips_scroll_and_shared_ids_are_told_apart(self):
+    def test_every_test_on_the_board_and_shared_ids_are_told_apart(self):
+        # (③'s board, test_board.js: every test in sight, none scrolled out of a row)
         page, errors = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6")
         got = page.evaluate(
             """() => {
               const row = document.getElementById('tests');
               const chip = (lc) => row.querySelector(`button[data-lc="${lc}"] .tid`).textContent;
-              return { many: row.classList.contains('many'), scrolls: row.scrollWidth > row.clientWidth,
+              return { board: row.classList.contains('board'), scrolls: row.scrollWidth > row.clientWidth + 1,
                        r8: ['R8-free', 'R8-stress', 'R8-push'].map(chip), t2: ['T2-motor', 'T2-controller'].map(chip),
                        h3: ['H3-body', 'H3-knee'].map(chip), single: chip('P4-20km') };
             }"""
         )
         self.assertEqual(errors, [])  # no 404 either (the icon is a data: URL)
-        self.assertTrue(got["many"])
-        self.assertTrue(got["scrolls"])
+        self.assertTrue(got["board"])
+        self.assertFalse(got["scrolls"])
         self.assertEqual(got["r8"], ["R8どの部品も", "R8部品と乗員の重さと…", "R8乗員の肩・腰"])
         self.assertEqual(got["t2"], ["T2モーター", "T2制御器"])
         self.assertEqual(len(set(got["h3"])), 2)

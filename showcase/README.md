@@ -1,87 +1,65 @@
-# showcase: runs kept for replay
+# showcase: 再生のために残した実行
 
-Run folders the screen replays without running anything (`python -m hiraku.webserve` from the repository with
-the Python that has `requirements.txt` installed, then `http://127.0.0.1:8765/`; a Python without them shows no
-tool shelf). With no `?run=` in the URL the screen opens the newest run here by id (today run 4, the final
-N13 run), or the run given by `--default-run <run_id>`. Others: `?run=<run_id>`, or the run list `?list=1`.
+画面が何も計算せずに再生する実行のフォルダです。リポジトリのフォルダで、`requirements.txt` を入れた Python から `python -m hiraku.webserve` を起こし、`http://127.0.0.1:8765/` を開きます (部品の入っていない Python では、ツールの棚が出ません)。
 
-Each folder holds what the screen reads: `events.jsonl`, `project.json`, `report.json` and, for a run where
-Claude wrote a tool, `tools/`. The record folders `v00N/` are left out (every record is also in its event).
-Each analysis' time series is thinned to at most 160 samples per channel, keeping the ends and the peaks
-(`prepare.py`); results, predictions, comparisons and verdicts are as recorded. `prepare.py` makes a folder
-from a run folder: `python showcase/prepare.py runs/<run_id>`. Run 4 was made after `prepare.py` started writing
-events without the spaces after `,` and `:` (the same values, about a tenth smaller); runs 1-3 keep the spaces.
+開くと一覧「HIRAKU でできること」が出ます。「まずはこれ」の「見る」は、ここのいちばん新しい実行 (実行の名前の順。今は下の 4) を再生します (`--default-run <実行の名前>` で変えられます)。ほかの実行は、一覧の「記録を見る」か `?run=<実行の名前>` で開きます。下の見出しは、一覧に出る行の題です。
 
-Suggested order: 1, 4, 2, 3.
+フォルダには、画面が読むものだけを入れました: `events.jsonl`、`project.json`、`report.json`、Claude がツールを書いた実行では `tools/`。記録のフォルダ `v00N/` は入れていません (どの記録も event の中にあります)。解析ごとの時間の値は、1 つの量につき 160 点までに間引きました。両端と山は残します (`prepare.py`)。結果・予測・比べた結果・判定は記録のままです。フォルダは `python showcase/prepare.py runs/<実行の名前>` で作ります。4 は、`prepare.py` が `,` と `:` のあとの空白を書かなくなってから作りました (値は同じで、1 割ほど小さい)。1〜3 は空白が残っています。
 
-## 1. `20261105-150416-offroad-4w-scripted`: N15, every tile green (scripted)
+見る順のおすすめ: 1、4、2、3。
 
-The video's N15 requirements (`data/requirements/offroad-4w-n15.yaml`, 23 tests) on the demo vehicle, scripted
-(no Claude, cost 0). The vehicle is split into modules: each round the module designers propose and the
-packager builds the version. HK5 checks light stages first, so each version stops at its first red stage.
+## 1. 「決まった手順で最後まで・v5 で全部合格」 `20261105-150416-offroad-4w-scripted`
 
-| Version | Red | Next version's change |
+動画の N15 の要件 (`data/requirements/offroad-4w-n15.yaml`、23 の試験) を、デモの車で、台本の運転で回したものです (Claude を呼ばない、費用 0)。車はモジュールに分かれていて、直すたびにモジュールの設計役が提案し、パッケージ役が次の v を組みます。HK5 が軽い段から確かめさせるので、どの v も、最初に NG が出た段で止まります。
+
+| v | NG | 次の v で変えたこと |
 |---|---|---|
-| 1 | assembly: H1-motion, H1-steer, H3-body-size, H3-knee-angle, H6-spray, H7-handhold | layout, a hand hold to get in by |
-| 2 | assembly: H7-opening | the side net held by clips that open |
-| 3 | powertrain: P3-accel40 | motor 17 kW |
-| 4 | strength: R1s-step100 (shell hot spot at the rail joints) | rail wall, gussets, cross members |
-| 5 | none: done | |
+| v1 | 組み立て: H1-motion、H1-steer、H3-body-size、H3-knee-angle、H6-spray、H7-handhold | レイアウト、乗り込むときの手すり |
+| v2 | 組み立て: H7-opening | 横のネットを、開く留め具で止める |
+| v3 | 動力: P3-accel40 | モーター 17 kW |
+| v4 | 強度: R1s-step100 (レールの継ぎ目のシェルのホットスポット) | レールの壁、ガセット、横の部材 |
+| v5 | なし: 終わり | |
 
-R7-hand (the steering grip's movement) is judged on the tool's value after the load path is checked by hand
-(`path_checked`): the hand calculation is an upper bound, 9.66 mm against 0.815 mm on versions 3 and 4, 9.10 mm
-against 0.538 mm on version 5 (limit 5 mm). The hooks stop the run once at HK1 and three times at HK3.
+R7-hand (ハンドルの握りの動き) は、力の道を手計算で確かめた (`path_checked`) うえで、ツールの値で判定しています。手計算は上から押さえる値で、v3 と v4 で 9.66 mm に対し 0.815 mm、v5 で 9.10 mm に対し 0.538 mm です (基準 5 mm)。hooks が止めたのは、HK1 が 1 回 (台本がわざと予測の前に `analyze` を 1 回呼ぶ。`data/catalog/scripted.yaml` の `show_hk1`) と HK3 が 3 回です。
 
-## 4. `20261105-160725-offroad-4w`: N13 with Claude, done at version 7 (Claude Code plugin)
+## 4. 「Claude の運転で最後まで・v7 で全部合格」 `20261105-160725-offroad-4w`
 
-The final N13 run: the same request as run 2 (the roll-over wish R4, no R4 tool on the shelf), with the rules
-of run 1 (`path_checked`, green rule (d)). Done after six rounds of revision; every tile green on version 7.
+Claude Code のプラグインで回した、最後の N13 の実行です。依頼は 2 と同じ (横転のときの守り R4 を求め、棚に R4 のツールは無い) で、決まりは 1 と同じ (`path_checked`、OK の決まり (d))。6 回直して、v7 で全部のタイルが OK になって終わりました。
 
-| Version | Red |
+| v | NG |
 |---|---|
-| 1 | assembly: H1-motion, H1-steer, H3-body-size, H3-knee-angle |
-| 2 | strength: R8-push-725N (4 points of the occupants with nothing to push against, `unsupported_load`) |
-| 3-5 | strength: R4-rops, the occupant space reached (clearance -3.55, -3.33, -2.94 mm) |
-| 6 | strength: R1-step100, 151.4 MPa hot spot from the shell tool (limit 143.3 MPa) |
-| 7 | none: done |
+| v1 | 組み立て: H1-motion、H1-steer、H3-body-size、H3-knee-angle |
+| v2 | 強度: R8-push-725N (乗員の 4 点に、押される相手が無い。`unsupported_load`) |
+| v3〜v5 | 強度: R4-rops、乗員の空間に届いた (隙間 −3.55、−3.33、−2.94 mm) |
+| v6 | 強度: R1-step100、シェルのツールのホットスポット 151.4 MPa (基準 143.3 MPa) |
+| v7 | なし: 終わり |
 
-The strength role (cae.strength) writes the R4 tool in the run and checks it before use (`tools/rops_pushover-1.py`);
-on version 7 R4-rops passes at 77.3 mm clearance. Version 7's R1-step100 passes on the beam tool (61.9 MPa, match)
-and on the shell tool (75.1 MPa, `path_checked`); R7-hand passes at 0.727 mm (`path_checked`). The hooks deny two
-calls at HK5 (the shell tool while a lighter stage's test was red on version 2 and not judged yet on version 3)
-and one at HK3 (version 6: hand 114.9 MPa against the shell's 151.4 MPa, before its cause was written).
+強度の役 (cae.strength) が、実行の中で R4 のツールを書き、確かめてから使いました (`tools/rops_pushover-1.py`)。v7 で R4-rops は隙間 77.3 mm で OK です。v7 の R1-step100 は、梁のツール (61.9 MPa、予想通り) とシェルのツール (75.1 MPa、`path_checked`) の両方で OK、R7-hand は 0.727 mm で OK (`path_checked`) です。hooks が止めた呼び出しは、HK5 が 2 回 (v2 で軽い段の試験が NG のまま、v3 でまだ判定の無いうちに、シェルのツールを回そうとした) と HK3 が 1 回 (v6: 手計算 114.9 MPa とシェルの 151.4 MPa が不一致のまま、原因を書く前) です。ほかに、強度の役の終わりを HK4 が 2 回断っています (`hook.blocked_stop`)。
 
-## 2. `20261105-094333-offroad-4w`: N13 with Claude (Claude Code plugin)
+## 2. 「Claude の運転・v4 まで」 `20261105-094333-offroad-4w`
 
-Claude Code runs HIRAKU through its plugin (`plugins/hiraku`), with the roll-over wish (R4) and no R4 tool on
-the shelf: the strength role (cae.strength) writes the tools in the run and R4-rops is judged on them (`tools/rops_pushover_frame-1.py`,
-`tools/rops_pushover_frame_all-1.py`, with their checks).
+Claude Code がプラグイン (`plugins/hiraku`) で HIRAKU を回したもので、横転のときの守り (R4) を求め、棚に R4 のツールはありません。強度の役 (cae.strength) が実行の中でツールを書き、R4-rops はそのツールで判定しています (`tools/rops_pushover_frame-1.py`、`tools/rops_pushover_frame_all-1.py` と、それぞれの確かめ)。
 
-| Version | Red |
+| v | NG |
 |---|---|
-| 1 | assembly: H1-motion, H1-steer, H3-body-size, H3-knee-angle |
-| 2 | strength: R8-push-725N |
-| 3 | strength: R1-step100, 643 MPa from the shell tool |
-| 4 | none red |
+| v1 | 組み立て: H1-motion、H1-steer、H3-body-size、H3-knee-angle |
+| v2 | 強度: R8-push-725N |
+| v3 | 強度: R1-step100、シェルのツールで 643 MPa |
+| v4 | NG なし |
 
-R4-rops passes on `rops_pushover_frame_all` (4.14-4.18 mm on versions 2-4). The hooks deny one call at HK5 and one at
-HK6. The run stops not judged: R7-hand ended without a verdict (the rule before `path_checked`). Version 4's
-R1 passes on step_climb's beam model (67.8 MPa) after version 3's 643 MPa from the shell: the case behind green rule (d)
-(a lighter tool's pass does not clear a heavier tool's exceedance).
+R4-rops は `rops_pushover_frame_all` で OK です (v2〜v4 で 4.14〜4.18 mm)。hooks が止めた呼び出しは HK5 と HK6 が 1 回ずつ、まとめ役の終わりを HK4 が 1 回断っています。実行は判定の付かないまま止まりました。R7-hand が判定なしで終わったためです (`path_checked` ができる前の決まり)。v4 の R1 は、v3 のシェルの 643 MPa のあと、段差越えの梁のモデル (67.8 MPa) で OK になりました。OK の決まり (d) (軽いツールの OK は、重いツールの基準超えを消さない) を足したのは、この実行を見てからです。
 
-## 3. `20261105-091217-offroad-4w`: a run that stopped at version 2 (Claude Code plugin)
+## 3. 「Claude の運転・v2 まで・不合格が残った」 `20261105-091217-offroad-4w`
 
-The same request as 2. Version 1 red at assembly, version 2 red at R8-push-725N; the lead's stop was refused
-three times (HK4) and the run ended at the turn limit. R4-rops and R7-hand ended without a verdict. Kept as the
-record of a way HIRAKU stopped short, which the rules were changed for afterwards.
+2 と同じ依頼です (Claude Code のプラグイン)。v1 は組み立てで NG、v2 は R8-push-725N で NG。まとめ役の終わりを HK4 が 3 回断り、ターンの上限で終わりました。R4-rops と R7-hand は判定なしで終わっています。HIRAKU が途中で止まった形の記録として残しました。このあと決まりを直しています。
 
-## Runs not kept
+## 残さなかった実行
 
-- `20261105-150415-offroad-4w-scripted` (the demo, scripted): the same story as N15 (run 1) with fewer tests
-- `20261104-002518-offroad-4w` (Claude Code plugin): stopped before the first version was designed
-- `20261103-234711-offroad-4w` (Claude Code plugin): R4 alone with one round of revision; run 2 shows R4 more fully
-- `20261104-070258-offroad-4w` (Claude Code plugin): an earlier run of run 2's story
+- `20261105-150415-offroad-4w-scripted` (デモ、台本の運転): N15 (1) と同じ流れで、試験が少ない
+- `20261104-002518-offroad-4w` (Claude Code のプラグイン): 最初の v を作る前に止まった
+- `20261103-234711-offroad-4w` (Claude Code のプラグイン): R4 だけで、直しが 1 回。R4 は 2 の方がくわしい
+- `20261104-070258-offroad-4w` (Claude Code のプラグイン): 2 と同じ流れの、前の実行
 
 ## `n10/`
 
-Claude without tools, asked the questions of the video's N10 cut, with HIRAKU's values (`n10/README.md`).
+ツールを持たない Claude に、動画の N10 の場面の問いを、HIRAKU の値つきで聞いたものです (`n10/README.md`)。

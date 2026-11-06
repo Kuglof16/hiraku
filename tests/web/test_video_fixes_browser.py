@@ -53,7 +53,7 @@ class VideoFixesBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -102,7 +102,7 @@ class VideoFixesBrowserTest(unittest.TestCase):
         t_c1 = t_of[("cause.recorded", "cause-0001")]
         t_c2 = t_of[("cause.recorded", "cause-0002")]
         t_ver = next(e["t"] for e in events if e["kind"] == "verdict.recorded")
-        probe = """() => { const n = document.getElementById('causenote'); const h = document.getElementById('hookflash');
+        probe = """() => { const n = document.getElementById('causenote'); const h = document.getElementById('hookline');
             const st = (el) => el ? getComputedStyle(el) : null;
             const hookLi = document.querySelector('#log li.hook'); const cmp = document.getElementById('card-cmp');
             return { shown: !n.hidden && n.checkVisibility(), text: n.textContent, size: st(n.querySelector('.tx'))?.fontSize,
@@ -126,7 +126,7 @@ class VideoFixesBrowserTest(unittest.TestCase):
                 # the cause written: on its card, and stays while no verdict of the load case is OK
                 g = at(t_c1 + 0.01)
                 self.assertTrue(g["shown"])
-                self.assertIn("食い違いの原因", g["text"])
+                self.assertIn("不一致の原因", g["text"])
                 self.assertIn("one rail only (shape example)", g["text"])
                 self.assertIn("v1", g["text"])
                 self.assertGreaterEqual(float(g["size"].rstrip("px")), 18)

@@ -21,7 +21,7 @@ from tests.web.test_assembly_browser import ENABLED, assembly_events, write_run
 from tests.web.test_layout_lint_browser import ASSEMBLY, WIDTHS, Screen, describe, lint, start_servers
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -114,7 +114,7 @@ class AssemblyReplayBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?run={RUN}&pace=0&{query}")
+        page.goto(f"{self.base}/?run={RUN}&pace=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.wait_for_function("window.hiraku.asm && window.hiraku.asm.rec")
@@ -159,7 +159,8 @@ class AssemblyReplayBrowserTest(unittest.TestCase):
             got = self.at(page, T_A7)
             self.assertEqual(got["u"], u0, arg)
             self.assertEqual(got["label"], f"手順 {u0} / {N}", arg)
-            self.assertEqual(got["visible"], [i < u0 for i in range(N)], arg)
+            # the parts before in place, and the next one already starting on its way in (assembly.js LEAD)
+            self.assertEqual(got["visible"], [i <= u0 for i in range(N)], arg)
             self.assertEqual(got["kinds"], ["part"] * N, arg)
             self.assertEqual(got["pos"][:u0], [[0, 0, 0]] * u0, arg)  # in place from the start
             # the next part on its path, half in

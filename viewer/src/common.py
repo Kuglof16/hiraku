@@ -20,6 +20,7 @@ Every field's object has these keys (the page's shared parts read them):
     inputs [{label, value, source}]             (the case's inputs and where they come from)
     notes [text]                                (the longer explanations; the page keeps them in a closed panel)
     ledger {...}                                (parts_ledger: how each part enters the calculation)
+    tyre {label, value, source} | null          (tyre_row: the design's tyre_stiffness, for the tools that use it)
 plus the field's own keys (see each script).
 
 Packed arrays: {"dtype": "f32", "shape": [...], "b64": base64(gzip(little-endian bytes))}; "i16" (with "scale":
@@ -105,6 +106,16 @@ def load_case_of(vdir: Path, load_case_id: str) -> Record | None:
         lc = read_json(lc_file)
         if lc.get("load_case_id") == load_case_id:
             return lc
+    # v<NNN>/load_cases.json: the set built for that version, else the nearest earlier version's (as
+    # RunStore.version_load_cases reads them; a run's own folder or one laid out from its events)
+    m = re.fullmatch(r"v(\d+)", vdir.name)
+    for n in range(int(m.group(1)) if m else 0, 1, -1):
+        f = vdir.parent / f"v{n:03d}" / "load_cases.json"
+        if f.is_file():
+            for lc in read_json(f).get("load_cases", []):
+                if lc.get("load_case_id") == load_case_id:
+                    return lc
+            break
     proj = vdir.parent / "project.json"
     if proj.is_file():
         for lc in read_json(proj).get("load_cases", []):
@@ -184,6 +195,8 @@ def write_data(field: str, obj: Record, out_dir: Path) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{field}.js"
+    from viewer.src import ja   # the page's texts in Japanese (imported here: ja imports this module)
+    obj = ja.translate(obj)
     path.write_text(data_js(field, obj), encoding="ascii")
     return path
 
@@ -246,6 +259,28 @@ def scene_of(record: Record) -> list[Record]:
     return out
 
 
+def ground_of(design: Record) -> Record | None:
+    """The ground under the tyres at the static ride height, from the design's supports: each support's tyre
+    touches at its wheel centre z less its radius (or its loaded radius, `loaded_radius_mm`, when the design gives
+    one); the ground plane is the lowest of those, and each support's own gap to it is kept (0 when the supports
+    stand level). None without supports."""
+    out = []
+    for s in design.get("supports", []) or []:
+        p, r = s.get("position_mm"), s.get("loaded_radius_mm", s.get("radius_mm"))
+        if not p or r is None:
+            continue
+        out.append({"id": s.get("id", ""), "c": [float(v) for v in p], "r": float(r),
+                    "width": float(s.get("width_mm", 0.0) or 0.0), "contact_z": float(p[2]) - float(r),
+                    "loaded": "loaded_radius_mm" in s})
+    if not out:
+        return None
+    z = min(w["contact_z"] for w in out)
+    for w in out:
+        w["gap_mm"] = w["contact_z"] - z
+    return {"z": z, "wheels": out,
+            "from": "設計の支持点: 車輪の中心の高さ − " + ("負荷時の半径" if any(w["loaded"] for w in out) else "半径")}
+
+
 def vectors_of(record: Record) -> list[Record]:
     return [{"kind": v.get("kind", ""), "at": v.get("at", ""), "o": [float(x) for x in v["origin_mm"]],
              "f": [float(x) for x in v["vector_N"]]} for v in record.get("vectors", []) or []]
@@ -295,28 +330,78 @@ def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, d
         "frame": frame_of(design),
         "parts": parts_of(design),
         "scene": scene_of(record),
+        "ground": ground_of(design),
         "vectors": vectors_of(record),
         "results": results_of(record),
         "assumptions": list(record.get("assumptions", []) or []),
         "inputs": [],
         "notes": [],
+        "tyre": tyre_row(design, record.get("tool", "")),
     }
+
+
+# The tools whose calculation uses design.variables.tyre_stiffness (hiraku/solvers: k2_vehicle.model and its shelf
+# tools, crash_beam's wheel at the wall, shelf.fatigue's quarter cars). frame_shell's step hit uses it through the
+# K2 run that gave its mount forces. K1 modal and frame_static stand on the suspension springs (k1_frame.model
+# restrain_on_wheels), K3 and K4 have no tyre.
+TYRE_TOOLS = {"crash_beam": "K2 の壁との接触 (タイヤの半径の向き)", "tilt": "K2 の車両モデル", "braking": "K2 の車両モデル",
+              "lane_change": "K2 の車両モデル", "offroad_roll": "K2 の車両モデル", "launch": "K2 の車両モデル",
+              "step_climb_dynamic": "K2 の車両モデル", "crosswind": "K2 の車両モデル", "turning": "K2 の車両モデル",
+              "rollover_tilt": "K2 の車両モデル",
+              "fatigue": "疲労の 1/4 車 (路面からの輪の力)", "frame_shell": "取付の力を出した K2 の段差の計算"}
+NUM_JA = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def tyre_basis_ja(basis: str | None) -> str:
+    """The design's basis for tyre_stiffness in short Japanese ('3 つの資料からの判断 45〜90 の中ほど')."""
+    if not basis:
+        return "設計の値 (出典なし)"
+    n = re.search(r"from (\w+) sources", basis)
+    rng = re.search(r"range ([\d.]+) to ([\d.]+) N/mm", basis)
+    k = NUM_JA.get(n.group(1), n.group(1)) if n else None
+    out = (f"{k} つの資料からの判断" if k else "設計の出典 (basis) による")
+    if rng:
+        out += f" {float(rng.group(1)):g}〜{float(rng.group(2)):g} の中ほど"
+    return out if n or rng else "設計の出典 (basis) あり: " + basis[:60]
+
+
+def tyre_row(design: Record, tool: str) -> Record | None:
+    """The input row of the tyre stiffness, read from the record's design, for a tool that uses it; else None."""
+    if tool not in TYRE_TOOLS:
+        return None
+    v = (design.get("variables") or {}).get("tyre_stiffness")
+    if not isinstance(v, dict) or v.get("value") is None:
+        return {"label": "タイヤの剛さ", "value": "設計にない (ツールの既定)", "source": TYRE_TOOLS[tool]}
+    return {"label": "タイヤの剛さ", "value": f"{float(v['value']):g} {v.get('unit', 'N/mm')}",
+            "source": f"設計の tyre_stiffness: {tyre_basis_ja(v.get('basis'))}。{TYRE_TOOLS[tool]}で使う"}
 
 
 def case_inputs(lc: Record | None, load_case_id: str) -> list[Record]:
     """The load case's title and params as input rows."""
     if lc is None:
-        return [{"label": "load case", "value": load_case_id,
-                 "source": "the run does not hold this load case (no project.json entry)"}]
-    rows = [{"label": "load case", "value": f"{lc['load_case_id']}: {lc.get('title', '')}",
-             "source": f"test {lc.get('test_id', '')}, catalog builder"}]
+        return [{"label": "試験条件", "value": load_case_id, "source": "実行の記録にこの条件がない"}]
+    rows = [{"label": "試験条件", "value": f"{lc['load_case_id']}: {lc.get('title', '')}",
+             "source": f"試験 {lc.get('test_id', '')}、カタログで作成"}]
     for k, v in (lc.get("params") or {}).items():
-        rows.append({"label": k, "value": qty(v), "source": "load case params"})
+        rows.append({"label": PARAM_JA.get(k, k), "value": LOADING_VALUE_JA.get(v, qty(v)) if isinstance(v, str) else qty(v),
+                     "source": "試験条件の値"})
     crit = lc.get("criterion")
     if crit:
         rows.append({"label": "判定基準", "value": f"{crit['quantity']} {crit['op']} {qty(crit['limit'])}",
                      "source": crit.get("basis", "")})
     return rows
+
+
+PARAM_JA = {   # load-case param names on screen
+    "speed": "速さ", "loading": "乗員・荷物", "mu": "摩擦係数", "wind_speed": "風速", "wind_from": "風の向き",
+    "drift_time": "流れを見る時間", "target_speed": "目標の速さ", "step_height": "段差の高さ", "side_slope": "横の傾き",
+    "length": "走る長さ", "parking_slope": "止める坂", "grade": "坂", "wall_mu": "壁の摩擦", "distance": "距離",
+    "soc_start": "電池の残り (始め)", "find_limit": "限界を探す", "ramp_time": "傾ける時間", "road_class": "路面の粗さ",
+    "brake_rise_time": "ブレーキの立ち上がり", "cargo_cg_above_deck": "荷の重心の高さ", "hinge_break_angle": "折れる角度",
+    "direction": "傾ける向き", "reaction_time": "反応の時間", "gust_rise": "突風の立ち上がり", "grade_low": "坂 (緩)", "grade_high": "坂 (急)", "speed_low": "速さ (遅)", "speed_high": "速さ (速)",
+}
+LOADING_VALUE_JA = {"empty": "空車", "driver": "運転者だけ", "two": "2 人",   # = hiraku.contract.loading.LOADING_JA
+                    "two_cargo": "2 人 + 荷", "left": "左", "right": "右", "both": "両方"}
 
 
 # ---------------------------------------------------------------- parts in the calculation
@@ -332,6 +417,8 @@ CATEGORIES = {   # key -> the short Japanese label on screen (the English meanin
     "mass_only": "質量だけ (剛性なし)",            # mass only, no stiffness
     "body": "形だけ (質量なし)",                    # a body, shape only, no mass
     "not_in": "この計算に入っていない",             # not in this calculation
+    "sprung": "ばね上 (車体と一緒の剛体)",          # K2: in the one rigid sprung body
+    "half": "半分ばね下・半分ばね上",               # K2: suspension kinds, half with the wheel
 }
 
 FN_ON_BOARD = "hiraku.contract.loading.parts_on_board"
@@ -341,6 +428,9 @@ FN_CRASH_A = "hiraku.solvers.shelf.crash.CrashTool.analyse (mass_summary -> plas
 FN_CRASH_B = "hiraku.solvers.k2_vehicle.crash_beam.mesh._lump_parts (branch claude/k2-crash-beam-b)"
 FN_ASSEMBLY = "hiraku.solvers.k4_geometry.model.bodies, assembly.steps"
 FN_SHAFT = "hiraku.solvers.k1_frame.shaft.driveshaft_modes"
+FN_K2 = "hiraku.solvers.k2_vehicle.model.build_vehicle (_unsprung: UNSPRUNG_KINDS / HALF_UNSPRUNG_KINDS)"
+FN_K3 = "hiraku.solvers.k3_power_thermal.from_design (one mass)"
+K2_TOOLS = ("tilt", "braking", "lane_change", "offroad_roll", "crosswind", "launch", "step_climb_dynamic", "rollover_tilt")
 
 
 def _stated_b(record: Record) -> Record | None:
@@ -405,6 +495,7 @@ def parts_ledger(tool: str, design: Record, load_case: Record | None, record: Re
             shaft_ids = set(shaft_inputs(on))
         except Exception as e:
             out["notes"].append(f"{FN_SHAFT}: not reproduced ({e})")
+    k2 = k2_vehicle(design, loading) if tool in K2_TOOLS else None
     for p in parts:
         pid, src = p["id"], dparts.get(p["id"], {})
         mass = float(src.get("mass_kg", 0.0) or 0.0)
@@ -413,6 +504,10 @@ def parts_ledger(tool: str, design: Record, load_case: Record | None, record: Re
         if pid not in on_ids:
             e.update(fn=FN_ON_BOARD, how=f"left off by the loading {loading} (occupants board in design order; cargo only "
                                          f"with two_cargo): not in the design the tool is given")
+            out["parts"].append(e)
+            continue
+        if k2 is not None or tool == "drive_energy":
+            e.update(k2_entry(src, mass, k2))
             out["parts"].append(e)
             continue
         if tool == "assembly":
@@ -485,7 +580,11 @@ def parts_ledger(tool: str, design: Record, load_case: Record | None, record: Re
         out["parts"].append(e)
 
     # the frame members
-    if tool == "assembly":
+    if k2 is not None or tool == "drive_energy":
+        out["members"] = {"count": len(design.get("members", [])), "mass_kg": frame_kg, "fn": FN_K2 if k2 else FN_K3,
+                          "how": ("細い棒として重さだけ車体 (ばね上) に入る。剛性はなく、フレームはたわまない"
+                                  if k2 else "車両の一つの質量に入る。剛性はない")}
+    elif tool == "assembly":
         out["members"] = {"count": len(design.get("members", [])), "mass_kg": None, "fn": FN_ASSEMBLY,
                           "how": "each member is a body (its tube as an OBB) for the interference checks; no mass"}
     else:
@@ -542,6 +641,13 @@ def parts_ledger(tool: str, design: Record, load_case: Record | None, record: Re
                                "tol_kg": 0.051, "source": "same assumption, per support"})
         else:
             out["notes"].append("the crash_beam record states no mass assumption")
+    elif tool == "drive_energy":
+        v = result(record, "vehicle_mass")
+        if v is not None:
+            stated.append({"label": "vehicle_mass", "stated_kg": v, "computed_kg": out["total_kg"], "tol_kg": 0.05,
+                           "source": "record result vehicle_mass"})
+    elif k2 is not None:
+        out["notes"].append("K2 の記録には質量の値がない (照合なし)")
     elif tool == "modal":
         out["notes"].append(f"the modal record states no mass; the parts on board follow the load case's loading "
                             f"({loading}, {loading_src})")
@@ -617,8 +723,170 @@ def motion_nodes(ledger_entry: Record, design: Record, has_node: Callable[[str],
     return out
 
 
-def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Callable[[argparse.ArgumentParser], None] | None = None,
-         argv: list[str] | None = None) -> Path:
+# ---------------------------------------------------------------- K2 (rigid 6-DOF vehicle) replays
+# K2 has one rigid sprung body and, per sprung corner, a wheel that moves along its suspension path. A K2 record's
+# series (hiraku.solvers.k2_vehicle.record) give the body pose (design origin carried by the body, R = Rz Ry Rx) and
+# each wheel's centre, contact, forces and angles; the frame's flexing is not in the model.
+
+def k2_vehicle(design: Record, loading: str):
+    """K2's own vehicle for the design with the loading's occupants and cargo on board (the tools' rule:
+    hiraku.contract.loading.on_board, then hiraku.solvers.k2_vehicle.model.build_vehicle). None if K2 cannot read it."""
+    from hiraku.contract import loading as contract_loading
+    from hiraku.solvers.k2_vehicle.model import build_vehicle
+    try:
+        return build_vehicle(contract_loading.on_board(design, loading))
+    except Exception:  # the design cannot be read by K2 here: the parts stay with the body, said in the ledger
+        return None
+
+
+def k2_entry(src: Record, mass: float, veh) -> Record:
+    """A part's place in K2's model (model._unsprung): a wheel kind goes to the nearest corner's unsprung mass, a
+    suspension kind half; a corner without its own suspension travel (rigid) keeps them in the body; everything
+    else is the sprung body. veh None: drive_energy (K3), one mass. Returns the ledger fields plus 'corner'."""
+    if veh is None:
+        return {"cat": "mass_only", "fn": FN_K3, "nodes": [["車両", mass]], "corner": None,
+                "how": "車両の一つの質量に入る (電力の計算の重さ)。形と剛性は使わない"}
+    from hiraku.solvers.k2_vehicle.model import HALF_UNSPRUNG_KINDS, UNSPRUNG_KINDS
+    kind = str(src.get("kind", "")).lower()
+    c = [float(v) / 1000.0 for v in src["box"]["center_mm"]]
+    if kind in UNSPRUNG_KINDS or kind in HALF_UNSPRUNG_KINDS:
+        i = min(range(len(veh.corners)), key=lambda j: sum((a - b) ** 2 for a, b in zip(c, veh.corners[j].pos)))
+        cn = veh.corners[i]
+        if cn.dof:
+            if kind in UNSPRUNG_KINDS:
+                return {"cat": "unsprung", "fn": FN_K2, "nodes": [[f"輪 {cn.id}", mass]], "corner": i,
+                        "how": f"ばね下: いちばん近い輪 {cn.id} の質量。輪と一緒に上下する (形は剛体の箱)"}
+            return {"cat": "half", "fn": FN_K2, "nodes": [[f"輪 {cn.id}", mass / 2], ["車体", mass / 2]], "corner": i,
+                    "how": f"半分は輪 {cn.id} と一緒 (ばね下)、半分は車体 (ばね上)。箱は輪と車体の中ほどに描く"}
+        return {"cat": "sprung", "fn": FN_K2, "nodes": [["車体", mass]], "corner": None,
+                "how": f"輪 {cn.id} にばねがないので、車体と一緒の剛体"}
+    return {"cat": "sprung", "fn": FN_K2, "nodes": [["車体", mass]], "corner": None,
+            "how": "ばね上: 車体の一つの剛体に質量と慣性が入る。剛性はなく、変形しない"}
+
+
+def rot_zyx(roll: float, pitch: float, yaw: float) -> list[list[float]]:
+    """R = Rz(yaw) Ry(pitch) Rx(roll), angles in degrees (hiraku.solvers.k2_vehicle.record)."""
+    import math
+    a, b, c = (math.radians(v) for v in (roll, pitch, yaw))
+    ca, sa, cb, sb, cc, sc = math.cos(a), math.sin(a), math.cos(b), math.sin(b), math.cos(c), math.sin(c)
+    return [[cc * cb, cc * sb * sa - sc * ca, cc * sb * ca + sc * sa],
+            [sc * cb, sc * sb * sa + cc * ca, sc * sb * ca - cc * sa],
+            [-sb, cb * sa, cb * ca]]
+
+
+WHEEL_CH = ("wheel_center_x", "wheel_center_y", "wheel_center_z", "contact_x", "contact_y", "contact_z",
+            "reaction_x", "reaction_y", "reaction_z", "grip_x", "grip_y", "grip_z",
+            "wheel_load", "friction_use", "wheel_steer", "wheel_spin", "wheel_stroke", "sliding")
+W_MM = 6   # the first six (centre and contact) are m in the record, mm here
+
+
+def k2_motion(record: Record, veh, ledger: Record) -> Record:
+    """The replay of a K2 record: t (packed, nT), pose (packed nT x 6: design origin x, y, z mm, roll, pitch, yaw deg),
+    wheels (packed nT x nw x len(WHEEL_CH)), corners [{id, r, width, cb (wheel centre in the body frame, mm, from the
+    first instant: R0^T (centre0 - origin0)), drive, brake, steer, dof}], part_mode per part (0 body, 1 wheel, 2
+    half) and part_corner, channels (WHEEL_CH order). Every channel is the record's own, at the body series' times."""
+    ser = {s["channel"]: s for s in record.get("series", []) or []}
+    if "body_x" not in ser:
+        raise LookupError("the record has no body_x series (not a K2 replay)")
+    t = [float(v) for v in ser["body_x"]["t_s"]]
+
+    def at(ch):
+        s = ser.get(ch)
+        if s is None:
+            return [0.0] * len(t)
+        ts, vs = s.get("t_s") or [], s["values"]
+        if len(ts) == len(t):
+            return [float(v) for v in vs]
+        out, j = [], 0
+        for tv in t:   # linear, the series sorted in time
+            while j + 1 < len(ts) - 1 and ts[j + 1] < tv:
+                j += 1
+            if len(ts) < 2:
+                out.append(float(vs[0]))
+                continue
+            a, b = ts[j], ts[j + 1]
+            w = min(1.0, max(0.0, (tv - a) / (b - a))) if b > a else 0.0
+            out.append(float(vs[j]) * (1 - w) + float(vs[j + 1]) * w)
+        return out
+
+    body = [at(c) for c in ("body_x", "body_y", "body_z", "roll", "pitch", "yaw")]
+    pose = [v for k in range(len(t)) for v in (body[0][k] * 1000, body[1][k] * 1000, body[2][k] * 1000,
+                                                 body[3][k], body[4][k], body[5][k])]
+    ids = [c.id for c in veh.corners] if veh is not None else sorted(
+        {c.split(".", 1)[1] for c in ser if c.startswith("wheel_load.")})
+    W = {cid: [at(f"{ch}.{cid}") for ch in WHEEL_CH] for cid in ids}
+    wheels = [W[cid][j][k] * (1000.0 if j < W_MM else 1.0) for k in range(len(t)) for cid in ids for j in range(len(WHEEL_CH))]
+    R0 = rot_zyx(body[3][0], body[4][0], body[5][0])
+    o0 = [body[a][0] * 1000 for a in range(3)]
+    corners = []
+    for i, cid in enumerate(ids):
+        c0 = [W[cid][a][0] * 1000 - o0[a] for a in range(3)]
+        cb = [sum(R0[r][a] * c0[r] for r in range(3)) for a in range(3)]   # R0^T c0
+        cn = veh.corners[i] if veh is not None else None
+        corners.append({"id": cid, "cb": cb, "r": (cn.radius * 1000 if cn else 300.0), "width": (cn.width * 1000 if cn else 200.0),
+                        "drive": bool(cn and cn.drive), "brake": bool(cn and cn.brake), "steer": bool(cn and cn.steer),
+                        "dof": bool(cn and cn.dof)})
+    mode, corner = [], []
+    for e in ledger["parts"]:
+        ci = e.get("corner")
+        mode.append({"unsprung": 1, "half": 2}.get(e["cat"], 0) if ci is not None else 0)
+        corner.append(ci if ci is not None else -1)
+    return {"t": pack_f32(t), "pose": pack_f32(pose, [len(t), 6]),
+            "wheels": pack_f32(wheels, [len(t), len(ids), len(WHEEL_CH)]), "channels": list(WHEEL_CH),
+            "corners": corners, "part_mode": mode, "part_corner": corner, "nT": len(t),
+            "t_end": t[-1] if t else 0.0}
+
+
+def k2_plot_series(record: Record, channels: list[str]) -> Record:
+    """{channel: {unit, t (packed), v (packed)}} for the plots (the record's own times)."""
+    out = {}
+    for s in record.get("series", []) or []:
+        if s["channel"] in channels and s.get("t_s"):
+            out[s["channel"]] = {"unit": s.get("unit", ""), "t": pack_f32(s["t_s"]), "v": pack_f32(s["values"])}
+    return out
+
+
+def k2_scene(record: Record) -> list[Record]:
+    """The record's scene for a K2 replay, every kind (gate and cone have no box; road_profile has its profile):
+    {kind, label, c, s, rpy, angle_channel, profile}."""
+    out = []
+    for s in record.get("scene", []) or []:
+        e = {"kind": s.get("kind", ""), "label": s.get("label", s.get("kind", "")),
+             "c": [float(v) for v in s.get("position_mm", [0, 0, 0])], "s": [float(v) for v in s.get("size_mm", [0, 0, 0])],
+             "rpy": [float(v) for v in s.get("rpy_deg", [0, 0, 0])], "angle_channel": s.get("angle_channel")}
+        if s.get("profile"):
+            p = s["profile"]
+            e["profile"] = {"x": pack_f32(p["x_mm"]), "left": pack_f32(p["z_mm"]["left"]), "right": pack_f32(p["z_mm"]["right"])}
+            m = re.search(r"y = \+([\d.]+) mm", s.get("label", ""))
+            e["profile"]["half_track"] = float(m.group(1)) if m else None
+        out.append(e)
+    return out
+
+
+def hot_spots_k2(record: Record) -> list[Record]:
+    out = []
+    for h in record.get("hot_spots", []) or []:
+        v, lim = h.get("value") or {}, h.get("limit") or {}
+        out.append({"where": h.get("where", ""), "quantity": h.get("quantity", ""), "value": v.get("value"),
+                    "unit": v.get("unit", ""), "limit": lim.get("value"), "u": h.get("utilisation")})
+    return out
+
+
+def judge(record: Record, load_case: Record | None) -> Record | None:
+    """The load case's criterion against the record's result of that quantity: {quantity, op, limit, value, ok}."""
+    crit = (load_case or {}).get("criterion")
+    if not crit:
+        return None
+    v = result(record, crit["quantity"])
+    lim = float(crit["limit"]["value"])
+    ops = {">=": lambda a, b: a >= b, ">": lambda a, b: a > b, "<=": lambda a, b: a <= b, "<": lambda a, b: a < b}
+    ok = None if v is None or crit["op"] not in ops else ops[crit["op"]](v, lim)
+    return {"quantity": crit["quantity"], "op": crit["op"], "limit": lim, "unit": crit["limit"].get("unit", ""),
+            "value": v, "ok": ok, "basis": crit.get("basis", "")}
+
+
+def parser(field: str, extra: Callable[[argparse.ArgumentParser], None] | None = None) -> argparse.ArgumentParser:
+    """The command line of a field's script (main); viewer.src.build makes the same arguments for one analysis."""
     ap = argparse.ArgumentParser(prog=f"python -m viewer.src.{field}",
                                  description=f"Write viewer/data/{field}.js from a run folder")
     ap.add_argument("run", type=Path, help="run folder (with v###/) or one version folder (with analyses/)")
@@ -627,7 +895,12 @@ def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Calla
     ap.add_argument("--analysis", help="analysis id, e.g. ana-0038")
     if extra:
         extra(ap)
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Callable[[argparse.ArgumentParser], None] | None = None,
+         argv: list[str] | None = None) -> Path:
+    args = parser(field, extra).parse_args(argv)
     obj = build(args)
     path = write_data(field, obj, args.out)
     print(f"wrote {path} ({path.stat().st_size} bytes) from {obj['source']['version']} {obj['source']['analysis_id']}")

@@ -128,7 +128,7 @@ class ShelfBrowserTest(unittest.TestCase):
         page.not_found = []
         page.on("response", lambda r: r.status == 404 and page.not_found.append(r.url.split("/api/", 1)[-1]))
         page.on("console", lambda m: m.type == "error" and "status of 404" not in m.text and errors.append(m.text))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0{extra}")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0{extra}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
@@ -168,12 +168,12 @@ class ShelfBrowserTest(unittest.TestCase):
         heads = {b["key"]: b["head"] for b in tree}
         self.assertIn("操安", heads["handling"])
         self.assertIn("1 ツール", heads["handling"])
-        self.assertIn("OK 0", heads["handling"])
+        self.assertIn("確かめた 0", heads["handling"])
         self.assertIn("衝突", heads["crash"])
         self.assertIn("2 ツール", heads["crash"])
-        self.assertIn("OK 1", heads["crash"])
+        self.assertIn("確かめた 1", heads["crash"])
         self.assertEqual({b["key"]: b["tools"] for b in tree}["crash"], ["rollbar", "roof_crush"])
-        self.assertEqual(page.text_content("#view-shelf .sh-sum"), "5 ツール・OK 3")
+        self.assertEqual(page.text_content("#view-shelf .sh-sum"), "5 ツール・確かめた 3")
 
         # one row: name, tests, the formula's title (no id; a formula without a title by its id), the base,
         # the checks; marks
@@ -190,7 +190,7 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual(row["fsK0"], "レールの曲げ")
         self.assertEqual(row["fsName"], "フレームの静的")
         self.assertEqual(row["rbK0"], "rollbar.portal_sway")  # not in the shelf's formulas: no title, the id as it is
-        self.assertEqual(row["fsChk"], "OK 2 / 2")
+        self.assertEqual(row["fsChk"], "確かめ 2 / 2")
         self.assertIn("noval", row["tiltChk"])  # a check the tool gave no value for
         self.assertTrue(row["tiltOff"])
         self.assertIn("Claude が作った", row["rb"])
@@ -216,7 +216,7 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual([b["key"] for b in tree], ["K1", "K2"])
         self.assertIn("3D の梁", tree[0]["head"])
         self.assertIn("4 ツール", tree[0]["head"])
-        self.assertIn("OK 3", tree[0]["head"])
+        self.assertIn("確かめた 3", tree[0]["head"])
         self.assertEqual(tree[1]["tools"], ["tilt"])
 
         # a branch closes and opens
@@ -232,10 +232,10 @@ class ShelfBrowserTest(unittest.TestCase):
             return self.shown_tools(page)
 
         self.assertEqual(filtered("claude"), ["rollbar", "roof_crush"])
-        # OK でない: a check that did not pass (roof_crush) or gave no value (tilt)
+        # 確かめを通っていない: a check that did not pass (roof_crush) or gave no value (tilt)
         self.assertEqual(filtered("notok"), ["roof_crush", "tilt"])
         self.assertEqual([b.text_content() for b in page.query_selector_all("#view-shelf .sh-filter button")],
-                         ["すべて", "Claude が作った", "OK でない", "使えない"])
+                         ["すべて", "Claude が作った", "確かめを通っていない", "使えない"])
         self.assertEqual(filtered("unusable"), ["roof_crush", "tilt"])
         self.assertEqual(len(filtered("all")), 5)
 
@@ -254,8 +254,8 @@ class ShelfBrowserTest(unittest.TestCase):
         table = page.evaluate("""() => [...document.querySelectorAll('#view-shelf .sh-checks tbody tr')].map((tr) =>
             [...tr.children].map((td) => td.textContent))""")
         self.assertEqual(table, [
-            ["両端を支えた梁 (形の例)", "停止距離", "1.25", "1.25", "mm", "2.0 %", "OK", "梁の式 (形の例)"],
-            ["cantilever", "deflection", "4", "4.04", "mm", "2.0 %", "OK", "cantilever (shape example)"],
+            ["両端を支えた梁 (形の例)", "停止距離", "1.25", "1.25", "mm", "2.0 %", "✓", "梁の式 (形の例)"],
+            ["cantilever", "deflection", "4", "4.04", "mm", "2.0 %", "✓", "cantilever (shape example)"],
         ])
         card = page.evaluate("""() => { const d = document.querySelector('#view-shelf .sh-detail');
             return { head: d.querySelector('header').textContent, h4: d.querySelector('h4').textContent,
@@ -264,8 +264,8 @@ class ShelfBrowserTest(unittest.TestCase):
                      fl: [...d.querySelectorAll('.sh-fl')].map((x) => x.textContent),
                      text: document.getElementById('view-shelf').textContent,
                      more: d.querySelectorAll('.sh-more').length }; }""")
-        self.assertEqual(card["head"], "フレームの静的OK 2 / 2")
-        self.assertEqual(card["h4"], "答えの分かっている問題で確かめた結果 (2 問、OK 2)")
+        self.assertEqual(card["head"], "フレームの静的確かめ 2 / 2")
+        self.assertEqual(card["h4"], "答えの分かっている問題で確かめた結果 (2 問、通った 2)")
         self.assertEqual(page.text_content("#view-shelf .sh-detail .sh-what"),
                          "ツールを使う前に、式で答えが出る簡単な問題を解かせ、答えと合うかを確かめた結果です。設計を確かめる手計算とは別のものです。")
         self.assertEqual(card["th"], ["確かめに使った問題", "比べた値", "式で出した答え", "ツールの答え", "単位", "ずれてよい幅", "結果", "答えの出し方"])
@@ -290,8 +290,8 @@ class ShelfBrowserTest(unittest.TestCase):
         # a check the tool gave no value for (got null, pass false: 値が出ない, ×), and a failed one
         page.click('#view-shelf .sh-tool[data-tool="tilt"]')
         rows = page.evaluate("[...document.querySelectorAll('#view-shelf .sh-checks tbody tr')].map((tr) => [tr.className, tr.children[3].textContent, tr.children[6].textContent])")
-        self.assertEqual(rows, [["ok", "30.1", "OK"], ["noval", "値が出ない", "×"]])
-        self.assertEqual(page.text_content("#view-shelf .sh-detail h4"), "答えの分かっている問題で確かめた結果 (2 問、OK 1、OK でない 1)")
+        self.assertEqual(rows, [["ok", "30.1", "✓"], ["noval", "値が出ない", "×"]])
+        self.assertEqual(page.text_content("#view-shelf .sh-detail h4"), "答えの分かっている問題で確かめた結果 (2 問、通った 1、通っていない 1)")
         self.assertEqual(page.get_attribute("#view-shelf .sh-detail .sh-chk", "title"), "ツールの値が出ない問題がある")
         self.assertNotIn("確かめ中", page.text_content("#view-shelf"))
 
@@ -340,7 +340,7 @@ class ShelfBrowserTest(unittest.TestCase):
                      "simply supported beam (shape example)"):
             self.assertIn(word, inners, word)
             self.assertNotIn(word, got["outside"], word)
-        self.assertEqual(got["head"], "フレームの静的OK 2 / 2")
+        self.assertEqual(got["head"], "フレームの静的確かめ 2 / 2")
         # a check without case_ja / source_ja: the English as written, with nothing folded
         self.assertEqual(got["cells"][1][0], "cantilever")
         self.assertEqual(got["cells"][0][0], "両端を支えた梁 (形の例)")
@@ -377,7 +377,7 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual(got["rows"], ["ok"])
         self.assertEqual(got["code"], CODE_2)
         self.assertTrue(got["note"])
-        self.assertEqual(got["sum"], "5 ツール・OK 3")
+        self.assertEqual(got["sum"], "5 ツール・確かめた 3")
         self.assertNotIn("読んでいます", got["text"])
         # the card is scrolled to its checks (as far as it scrolls)
         top = page.evaluate("""() => { const box = document.querySelector('#view-shelf .sh-right');

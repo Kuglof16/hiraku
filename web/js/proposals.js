@@ -6,7 +6,7 @@
 //
 // No three.js here: state.js uses proposalText for the log lines.
 
-import { agentName, designNumberName, designerModule, designerRole, esc, fmt, moduleName, moduleOwner, unitLabel, verLabel } from "./labels.js";
+import { agentName, designNumberName, designerModule, designerRole, esc, fmt, judgedWords, moduleName, moduleOwner, unitLabel, verLabel } from "./labels.js";
 
 // The module colours: pet3d.js v10 ROLES (the rows with a module) when the page has them, else
 // the same values here. package is the packager's (its pet's colour, app.js PET_COLORS.packager).
@@ -117,7 +117,7 @@ function rowHtml(chg, base) {
     `<li data-change="${esc(chg.change_id)}" data-module="${esc(chg.module_id)}"><span class="mdot" style="--mod:${moduleColor(chg.module_id)}"></span>` +
     `<span class="pw"><b>${esc(who)}</b>: ${esc(changeWords(chg, base).join("・") || "変更")}</span>` +
     // (the reason in two lines at most, all of it in the title: a long one hid the 3D)
-    (chg.reason ? `<span class="pr" title="${esc(chg.reason)}">${esc(chg.reason)}</span>` : "") +
+    (chg.reason ? `<span class="pr" title="${esc(judgedWords(chg.reason))}">${esc(judgedWords(chg.reason))}</span>` : "") +
     `</li>`
   );
 }
@@ -137,7 +137,7 @@ export function roundCardHtml(s, playhead) {
     return (
       `<div class="rc-head" data-round="pending">${esc(verLabel(pending[0].baseVersion ?? s.currentVersion))} を直す提案: 設計役 ${who} 人が並べて出した</div>` +
       `<ol class="rc-list">${pending.map((p) => rowHtml(p, base)).join("")}</ol>` +
-      `<div class="rc-foot">${esc(agentName("packager"))}が 1 つの版にまとめるのを待っている</div>`
+      `<div class="rc-foot">${esc(agentName("packager"))}が 1 つの設計にまとめるのを待っている</div>`
     );
   }
   const v = s.currentVersion;

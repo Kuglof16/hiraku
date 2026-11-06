@@ -67,7 +67,7 @@ offroad-4w:
   # No revision adds the parts' brackets by hand: no red of a version asks for them.
   revise:
     - &rev_layout
-      say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、運転席の位置を直し、横の守りと握り棒を付けます
+      say: 組み立て (レイアウト) の NG を、ほかの何よりも先に直すため、トレッドを広げ、運転席の位置を直し、横の守りと握り棒を付けます
       fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
       fit_evals: 150  # designs the fit builds and measures: a fixed count, so every machine finds the same place
       # H6: the mud the wheels throw reaches the occupants. H7: nothing to hold beside the seat; a grab bar stands on the
@@ -95,7 +95,7 @@ offroad-4w:
         H7: the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json: entry_handhold 0;
         on it with this side guard and grab bar (no fit): entry_handhold 3, entry_blocked 3 (the bolted net, red on version 2)
     - &rev_opening
-      say: 乗り降り (H7) の赤を直すため、横の守りの網の前の部分を、片手で外せる留め具の網にします
+      say: 乗り降り (H7) の NG を直すため、横の守りの網の前の部分を、片手で外せる留め具の網にします
       choices: {side_opening: clip_net}
       reason: >-
         H7: 横の守りの網がボルトで留まっていて、座席の横の乗り降りの開口に、動かない物がある。
@@ -109,19 +109,24 @@ offroad-4w:
     # tests since the standard file listed it; 15 kW passed P3 at version 4 of the demo run but not after the joints'
     # reinforcement, which adds weight: see the source)
     - &rev_motor
-      say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
+      say: 動力 (段 2、車の動き) の NG を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 17, unit: kW}
       reason: >-
-        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
+        P3: 40 km/h までの時間が 6 s を超える (値は版 3 の P3 の合否の記録) ので、モーターの最大出力を 10 kW から上げる。
         このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
       source: >-
+        With tyre_stiffness 60 N/mm (the analysis department's claude/analysis-tyre60 b1356513): the demo scripted run
+        20261106-180216-offroad-4w-scripted gave P3 time_to_speed 7.187 s on version 3 (NG), 5.314 s on version 4 with this
+        change and 5.499 s on version 5 (the video and N15 scripted runs 181440 and 183330 the same). With 80 N/mm
+        (aed92d35), run 20261106-125316: 7.267, 5.479 and 5.674 s; with 150 N/mm, run 20261106-081501: 7.386, 5.724 and
+        5.937 s. Before, with 150 N/mm:
         the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
         (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
         With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
         the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
     - &rev_joints
-      say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
+      say: 強度 (段 3、つなぎ目の壁) の NG を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
       changes:
         rail_t: {value: 4.5, unit: mm}
         gusset_leg: {value: 80, unit: mm}
@@ -130,7 +135,7 @@ offroad-4w:
       reason: >-
         R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
         レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
+        (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
       source: >-
         the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
         at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
@@ -261,6 +266,29 @@ offroad-4w:
       # (frame_shell) and R9 read their upstream mount forces from that record's vectors and series, so R1s-step100
       # moved by +15 % (QA's trial 6b, cmp-0139). The drive for the screen needs a record that feeds no load case.
       predictions: *p1_pushed
+      # P1-step100 has no criterion: a mismatch of the force ends the step with its cause (tool_decides is only for a
+      # judged quantity, functions._check_on_criterion). P1-step250-beyond (<<: *p1_dynamic) gives its own entry.
+      expected_mismatch:
+        quantity: front_wheel_force
+        when: high
+        source: >-
+          the analysis department's step_climb_dynamic runs on version 4 of the demo scripted run
+          20261106-171449-offroad-4w-scripted (claude/analysis-tyre60 b1356513), P1-step100 with only the tyre
+          changed, 2026-11-06: tyre_stiffness 45 / 60 / 80 / 90 / 150 N/mm gives the push force 988.7 / 1039.6 /
+          1087.4 / 1106.0 / 1154.5 N against the formula's 1163.8 N (-15.0 / -10.7 / -6.6 / -5.0 / -0.8 %); the front
+          wheel load stays within 1.5 % (1034.9 to 1050.0 N); the rigid wheel's F/W is
+          sqrt(2rh - h^2)/(r - h) = 1.118 for r 300 mm, h 100 mm
+        cause: >-
+          式は固い車輪で、段の角が前輪の車軸の高さへまっすぐ押すとみる。K2 の step_climb_dynamic はタイヤを縦のばね
+          (tyre_stiffness) で持ち、柔らかいほどタイヤが沈んで角への当たりが浅くなり、押す力と荷重の比 F/W が下がる。
+          荷重 W は変わらない (タイヤ 45〜150 N/mm で 1.5 % の中)
+        fix: >-
+          設計の変更は要らない。手計算は固い車輪の上限として残す。R1 と R1s は、上流の P1 の解析の輪の反力 (step_climb
+          か step_climb_dynamic) と、K2 の記録があればその取付の力の時系列 (タイヤのばねつき、時刻ごと) で解くので、
+          押す力の違いはそこに入っている (frame_static.upstream_ground_forces・upstream_mount_series)
+        end: true
+        end_say: >-
+          原因を記録しました。P1 には合否の基準が無く、R1 と R1s は上流の解析の力で解くので、K2 の段差の手順はここで終えます
     # Past the limit (requirements `beyond`): the same steps at the 250 mm step. On the demo vehicle the
     # lever rule is off by -51 % there and the couple formula matches, as at 100 mm; the beam formula is
     # +34 % off (the same cause) and rail_joint_stress -20 %, whose parts are written in the cause below.
@@ -290,7 +318,7 @@ offroad-4w:
           friction 2.0 lifts the front wheels and matches the formula (W -4.5 %, F +5.8 %, required friction +3.2 %)
         cause: >-
           段差 250 mm を前輪が乗り越えるには、後輪が前輪の荷重の約 6 倍の力で押す必要があり、後輪の摩擦が約 μ 1.5 要る
-          (版 1 で後輪の荷重 4655 N、押す力 6775 N)。路面は μ 0.8 なので、静かな押し上げでは前輪が浮く前に後輪が空回りし、
+          (v1 で後輪の荷重 4655 N、押す力 6775 N)。路面は μ 0.8 なので、静かな押し上げでは前輪が浮く前に後輪が空回りし、
           K2 の値は前輪が浮いた瞬間ではなく、空回りした瞬間のもの。手計算の式は、後輪が押し切れることを前提にしている
         fix: >-
           後輪の駆動では、静かな押し上げではこの段差を越えられない。勢いをつける (10 km/h では越えたが、大きな衝撃が出る)、

@@ -126,7 +126,7 @@ CHECKS = [
 CLEARANCE_PRED = -413.5  # mm, the safe side's prediction the verdict takes (shape example)
 # The shelf's tools the run did not check, as the system names them (hiraku/tools/shelf.py).
 UNCHECKED = ["frame_static", "frame_shell", "step_climb", "thermal"]
-# A third check (shape example), for a tool whose ticks, name and "照合 ✓" would be more
+# A third check (shape example), for a tool whose ticks, name and "判定 ✓" would be more
 # labels than the story allows.
 CHECK3 = {"case": "c3", "quantity": "tip_deflection", "expected": 12.0, "got": 12.0, "unit": "mm", "tolerance_rel": 0.001, "pass": True,
           "source": "closed form delta = P L^3 / (3 E I)"}
@@ -280,7 +280,7 @@ class CutN11N13Test(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/cut.html?cut={cut}&run={run}&t=0")
+        page.goto(f"{self.base}/cut.html?cut={cut}&run={run}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         out = {}
@@ -367,18 +367,19 @@ class CutN11N13Test(unittest.TestCase):
             self.assertEqual(seen[t]["counts"].get("number"), 2, t)
         # neutral before mismatch_s; then red with the difference and the allowed range
         self.assertEqual(c[T["lead_s"]]["labels"], [])
-        self.assertEqual(c[T["mismatch_s"]]["diff"], [f"差 {pct(_rel(PRED1, ANA))} (許す幅 ±10 %) ✕ 食い違い"])
-        self.assertEqual(c[T["mismatch_s"]]["marks"], [["✕ 食い違い", RED]])
+        self.assertEqual(c[T["mismatch_s"]]["diff"], [f"差 {pct(_rel(PRED1, ANA))} (許す幅 ±10 %) ! 不一致"])
+        self.assertEqual(c[T["mismatch_s"]]["marks"], [["! 不一致", RED]])
         # the cause from cause_s, in one line: the requirement's name, cm meant and mm written
         self.assertEqual(c[T["cause_s"] - 0.1]["cause"], [])
         self.assertEqual(c[T["cause_s"]]["cause"], [f"荷の重心の高さ (形の見本): {SETTING} cm のつもりが {SETTING} mm と書かれていた"])
         self.assertEqual(c[T["fixed_s"] - 0.1]["fix"], [])
-        # from fixed_s the comparison that resolved it: green, and the fix with "✓ OK"
+        # from fixed_s the comparison that resolved it: green 予想通り, and the fix with "✓ 解決"
+        # (a comparison and a cause: no OK, which is for a verdict only)
         late = c[T["fixed_s"]]
-        self.assertEqual(late["diff"], [f"差 {pct(_rel(PRED2, ANA))} (許す幅 ±10 %) ✓ 一致"])
+        self.assertEqual(late["diff"], [f"差 {pct(_rel(PRED2, ANA))} (許す幅 ±10 %) ✓ 予想通り"])
         self.assertEqual(late["again"], ["直してから予測し直した"])
-        self.assertEqual(late["fix"], ["直し方: 荷の高さを設計のとおりにして予測し直す ✓ OK"])
-        self.assertEqual(late["marks"], [["✓ 一致", GREEN], ["✓ OK", GREEN]])
+        self.assertEqual(late["fix"], ["直し方: 荷の高さを設計のとおりにして予測し直す ✓ 解決"])
+        self.assertEqual(late["marks"], [["✓ 予想通り", GREEN], ["✓ 解決", GREEN]])
 
     # ---- N13 --------------------------------------------------------------------------
 
@@ -402,11 +403,11 @@ class CutN11N13Test(unittest.TestCase):
         self.assertEqual(g["cards"][-1]["state"], "missing")
         self.assertEqual(g["gap"], ["点線: 「転倒の守りを確かめるツール」が棚に無い"])
         # the dotted card's name (a label, red until the checks pass), under it and flush with
-        # its right edge; the other cards have no names; "照合 ✓" not yet
+        # its right edge; the other cards have no names; "判定 ✓" not yet
         self.assertEqual([(x["text"], x["kind"], x["color"]) for x in g["tag"]], [("転倒の守りを確かめるツール", "label", RED)])
         self.assertAlmostEqual(g["tag"][0]["right"], g["cards"][-1]["right"], delta=0.5)
         self.assertGreaterEqual(g["tag"][0]["top"], g["cards"][-1]["bottom"])
-        self.assertEqual([x["text"] for x in g["cards"]], [""] * (len(UNCHECKED) + 1) + ["照合✓"])
+        self.assertEqual([x["text"] for x in g["cards"]], [""] * (len(UNCHECKED) + 1) + ["判定✓"])
         self.assertEqual(g["checked"], [])
         self.assertEqual(c[T["lead_s"]]["tag"], [])
         # the code from write_s, typed in up to check_s from the analyse method; the caret moves meanwhile
@@ -430,7 +431,7 @@ class CutN11N13Test(unittest.TestCase):
         rows = [[x for x in r["text"].split("\n") if x.strip()] for r in c[ticks[1]]["rows"]]
         self.assertEqual(rows[0], ["片持ちの管の先のたわみ", "✓", "答え 79.58 mm ・ ツール 79.58 mm", "出典: 梁の手計算の式"])
         self.assertEqual(rows[1], ["門形の枠が横に崩れる力", "✓", "答え 2,260 N ・ ツール 2,261 N", "出典: 骨組が崩れる力の教科書 (Neal)"])
-        # once both are ticked: the new card is solid in the shelf with "照合 ✓" on it, and its
+        # once both are ticked: the new card is solid in the shelf with "判定 ✓" on it, and its
         # name green as that mark (the tool passed its checks), to the end
         for t in (ticks[1], T["shelf_s"], end):
             self.assertEqual(c[t]["cards"][-1]["state"], "solid", t)
@@ -438,17 +439,17 @@ class CutN11N13Test(unittest.TestCase):
             self.assertEqual([(x["text"], x["color"]) for x in c[t]["tag"]], [("転倒の守りを確かめるツール", GREEN)], t)
             self.assertEqual(len(c[t]["checked"]), 1, t)
             ck = c[t]["checked"][0]
-            self.assertEqual((ck["text"], ck["kind"], ck["color"]), ("照合 ✓", "label", GREEN), t)
+            self.assertEqual((ck["text"], ck["kind"], ck["color"]), ("判定 ✓", "label", GREEN), t)
             card = c[t]["cards"][-1]
             self.assertTrue(card["left"] <= ck["left"] and ck["right"] <= card["right"] and card["top"] <= ck["top"] and ck["bottom"] <= card["bottom"], (t, ck, card))
             self.assertEqual(c[t]["made"], ["Claude がその場で書き、答えの分かっている例で確かめた"], t)
             self.assertEqual(c[t]["gap"], [], t)
-            self.assertEqual(c[t]["marks"], [["照合✓", GREEN], ["転倒の守りを確かめるツール", GREEN], ["✓", GREEN], ["✓", GREEN]], t)
-            self.assertEqual(seen[t]["counts"].get("label"), 4, t)  # the two ticks, the name and "照合 ✓"
-        # the last screen: "転倒の守り" never alone (only in the tool's name), "照合 ✓" shown
+            self.assertEqual(c[t]["marks"], [["判定✓", GREEN], ["転倒の守りを確かめるツール", GREEN], ["✓", GREEN], ["✓", GREEN]], t)
+            self.assertEqual(seen[t]["counts"].get("label"), 4, t)  # the two ticks, the name and "判定 ✓"
+        # the last screen: "転倒の守り" never alone (only in the tool's name), "判定 ✓" shown
         self.assertEqual(re.findall(r"転倒の守り(?!を確かめるツール)", c[end]["text"]), [])
         self.assertIn("転倒の守りを確かめるツール", c[end]["text"])
-        self.assertIn("照合 ✓", [x["text"] for x in c[end]["checked"]])
+        self.assertIn("判定 ✓", [x["text"] for x in c[end]["checked"]])
         # the analyses made with it are not shown: no figure, no verdict (they fail on the safe
         # side's prediction), nothing red once the checks have passed
         for t in times:
@@ -460,14 +461,14 @@ class CutN11N13Test(unittest.TestCase):
         self.assertNotIn(RED, [m[1] for m in c[end]["marks"]])
 
     def test_n13_three_checks_join_the_mark_to_the_name(self):
-        """Three ticks, the name and "照合 ✓" would be 5 labels (the story allows 4): the mark
+        """Three ticks, the name and "判定 ✓" would be 5 labels (the story allows 4): the mark
         joins the name, one label, shown only once the checks have passed."""
         T = self.layout["n13"]["times"]
         end = self.layout["n13"]["duration_s"] - 0.1
         seen = self.read("n13", self.three_run, [T["gap_s"], end])
         g, e = seen[T["gap_s"]]["cut"], seen[end]["cut"]
         self.assertEqual([(x["text"], x["color"]) for x in g["tag"]], [("転倒の守りを確かめるツール", RED)])
-        self.assertEqual([(x["text"], x["color"]) for x in e["tag"]], [("転倒の守りを確かめるツール ・ 照合 ✓", GREEN)])
+        self.assertEqual([(x["text"], x["color"]) for x in e["tag"]], [("転倒の守りを確かめるツール ・ 判定 ✓", GREEN)])
         self.assertEqual(e["checked"], [])
         self.assertEqual(seen[end]["counts"].get("label"), 4)
         self.assertEqual(re.findall(r"転倒の守り(?!を確かめるツール)", e["text"]), [])
@@ -511,7 +512,7 @@ class CutN11N13Test(unittest.TestCase):
             del node[last]
             base = self.serve(layout, f"layout-missing-{i}.json")
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0")
+            page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
             err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
             self.assertIn(f"layout.json の {cut} に無い: ", err, (cut, key))

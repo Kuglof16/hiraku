@@ -1,6 +1,7 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
-H5 assembly; and R4 (the roll bar), judged by K2's rollover_beam (R4-rollover). R7 and R8 (load_path)
+H5 assembly; and R4 (the roll bar), judged by K2's rollover_beam (R4-rollover). F2 (air drag, no criterion,
+no tool on the shelf: no PLAN yet) is in drag.py. R7 and R8 (load_path)
 are in load_path.py, H6 (spray_reach) in spray.py, joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
@@ -13,8 +14,10 @@ from __future__ import annotations
 import copy
 import math
 
-from hiraku.catalog.builders.common import BuildError, Record, design_var, entry, loading, number, q, text, tolerance
+from hiraku.catalog.builders.common import (BuildError, Record, design_var, entry, loading, number, q, required_vars, text,
+                                            tolerance, variable_records)
 from hiraku.catalog.loading import LOADING_JA
+from hiraku.solvers.k0_handcalc.scene_inputs import TYRE_STIFFNESS_NOTE
 
 # ---------------------------------------------------------------- C1 crash
 
@@ -318,12 +321,13 @@ def _r3_common(design: Record, load_case: Record) -> Record:
 def _hand_damage(design: Record, load_case: Record, formula_id: str, inputs: Record, qc: Record) -> float:
     from hiraku.solvers import formula_registry
 
+    variables = variable_records(design, [name for name, _ in _DAMAGE_VARS.values()], "R3 (the fatigue hand calculation)")
     reg = formula_registry()
     s = reg.evaluate(formula_id, inputs)["outputs"]
     p = load_case["params"]
     return reg.evaluate("fatigue.road_damage_four_wheels", {
         **{k: s[k] for k in ("sigma_ra", "sigma_rb", "sigma_fa", "sigma_fb")}, **qc,
-        **{k: design["variables"][name] for k, (name, _) in _DAMAGE_VARS.items()},
+        **{k: variables[name] for k, (name, _) in _DAMAGE_VARS.items()},
         "v": p["speed"], "d": p["distance"]})["outputs"]["D"]["value"]
 
 
@@ -416,7 +420,8 @@ _LEG_ASSUME = ["はしごがねじれると左右のレールが上下逆に曲�
 _DAMAGE_ASSUME = ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
                   "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
                   "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
-                  "設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので使わない"]
+                  "設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので使わない",
+                  TYRE_STIFFNESS_NOTE]
 
 
 # A known bias, not worked on (the analysis department's comparisons, 2026-11-03): on the revised version and
@@ -529,6 +534,8 @@ def p4_calc(design: Record, load_case: Record) -> Record:
     from hiraku.solvers.k0_handcalc import units
 
     p = load_case["params"]
+    var = required_vars(design, {"drivetrain_efficiency": "1", "motor_efficiency": "1", "controller_efficiency": "1",
+                                 "battery_voltage": "V", "battery_capacity": "Ah"}, "P4 (the drive energy hand calculation)")
 
     def val(name, unit):
         return units.to_unit(p[name], unit, name)
@@ -540,10 +547,9 @@ def p4_calc(design: Record, load_case: Record) -> Record:
     rms = math.sqrt(sum(s.length * s.speed**2 for s in segs) / length)
     eta = 1.0
     for name in ("drivetrain_efficiency", "motor_efficiency", "controller_efficiency"):
-        eta *= design_var(design, name, "1")
+        eta *= var[name]
     return {"loop_climb": q(climb, "m"), "loop_rms_speed": q(rms * 3.6, "km/h"), "drive_efficiency": q(eta, "1"),
-            "battery_energy": q(design_var(design, "battery_voltage", "V") * design_var(design, "battery_capacity", "Ah") / 1000.0,
-                                "kWh")}
+            "battery_energy": q(var["battery_voltage"] * var["battery_capacity"] / 1000.0, "kWh")}
 
 
 P4_PLAN = {
@@ -587,7 +593,8 @@ def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
         elif head == "lc":
             vals[name] = load_case["params"][rest]
         else:  # design.var.<name>
-            vals[name] = design["variables"][rest.split(".", 1)[1]]
+            var = rest.split(".", 1)[1]
+            vals[name] = variable_records(design, [var], "the thermal hand calculation")[var]
     return formula_registry().evaluate("thermal.loop_steady_temperature", vals)["outputs"][output]["value"]
 
 
@@ -788,7 +795,7 @@ H1_PLAN = {
          "assumptions": ["車輪は上から見て直径 x 幅の長方形", "車輪の中心を通る縦の軸で回る", "レールの面は前後に真っすぐ"],
          "inputs": {"w": "from.steer_w", "l": "from.steer_l", "c": "from.steer_c"}, "inputs_from": h1_calc},
         {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle_limited", "output": "theta",
-         "assumptions": ["ハンドルは max_steer_angle で止まる (組み立ての道具も、そこより先は回さない)"],
+         "assumptions": ["ハンドルは max_steer_angle で止まる (組み立てのツールも、そこより先は回さない)"],
          "inputs": {"theta_free": "pred.free_steer_angle_geometric", "theta_stop": "design.var.max_steer_angle"}},
     ],
 }
@@ -1166,9 +1173,11 @@ from hiraku.catalog.builders.entry import PLANS as _ENTRY_PLANS  # noqa: E402
 from hiraku.catalog.builders.mounts_r9 import BUILDERS as _R9_BUILDERS  # noqa: E402  (R9: mounts_r9.py)
 from hiraku.catalog.builders.mounts_r9 import FEEDS as _R9_FEEDS  # noqa: E402
 from hiraku.catalog.builders.mounts_r9 import PLANS as _R9_PLANS  # noqa: E402
+from hiraku.catalog.builders.drag import BUILDERS as _DRAG_BUILDERS  # noqa: E402  (F2: drag.py, no plan yet)
 
 BUILDERS = {
     **_LOAD_PATH_BUILDERS,
+    **_DRAG_BUILDERS,
     **_SPRAY_BUILDERS,
     **_ENTRY_BUILDERS,
     **_R9_BUILDERS,

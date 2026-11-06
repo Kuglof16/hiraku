@@ -111,7 +111,8 @@ READ = """async ({ t, tab }) => {
   if (tab) document.querySelector(`.tab[data-tab="${tab}"]`).click();
   await window.hiraku.seek(t ?? window.hiraku.player.playhead);
   const shown = (e) => e.offsetParent !== null;
-  const pets = [...document.querySelectorAll(".petbox")].filter(shown).map((b) => {
+  // (the list's and the grid's pets; ③'s board of tests has its own: test_test_board_browser)
+  const pets = [...document.querySelectorAll(".petbox")].filter((b) => shown(b) && !b.closest("#tests")).map((b) => {
     const c = b.querySelector("canvas.pet3d");
     let ink = 0;
     if (c && c.width) { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) ink += d[i] > 0 ? 1 : 0; }
@@ -161,7 +162,7 @@ class AgentPetsTest(unittest.TestCase):
         # (one row per agent: the bundles of the agents' list open, ?agents=open; the bundles have their own test)
         # (?petmotion=on: the pets move as with a GPU, though this Chromium draws by SwiftShader; None: as detected)
         pm = f"&petmotion={motion}" if motion else ""
-        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}{pm}&{query}")
+        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}{pm}&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -220,7 +221,7 @@ class AgentPetsTest(unittest.TestCase):
         page, errors = self.open(self.serve(), "tab=bench&t=0")
         got = page.evaluate(READ, {"t": 2.8, "tab": None})
         on = {s["agent"]: s["text"] for s in got["says"] if s["on"]}
-        self.assertTrue(on["cae.nvh"].startswith("照合: 差"), on)  # the comparison's log line
+        self.assertTrue(on["cae.nvh"].startswith("比べた: 差"), on)  # the comparison's log line
         got = page.evaluate(READ, {"t": 3.3, "tab": None})
         on = {s["agent"]: s["text"] for s in got["says"] if s["on"]}
         self.assertTrue(on["cae.crash"].endswith("…"), on)
@@ -228,13 +229,13 @@ class AgentPetsTest(unittest.TestCase):
         self.assertLessEqual(len(on["cae.crash"]), 26)
         self.assertEqual(on["cae.nvh"], "解析が終わった")  # its newer line (analysis.finished at 3.0) replaced it
         log = page.evaluate("() => [...document.querySelectorAll('#log li')].map((li) => li.textContent)")
-        self.assertTrue(any(line.startswith("音振: 照合: 差") for line in log), log)
+        self.assertTrue(any(line.startswith("音振: 比べた: 差") for line in log), log)
         later = page.evaluate(READ, {"t": 3.2 + 5.05, "tab": None})
         self.assertNotIn("cae.crash", {s["agent"] for s in later["says"] if s["on"]})
         # the judgement's line is the bubble of its domain's agent (the event's agent is system)
         grid = page.evaluate(READ, {"t": 12.2, "tab": "grid"})
         nvh = {s["agent"]: s["text"] for s in grid["says"] if s["on"]}
-        self.assertTrue(nvh["cae.nvh"].startswith("v2 の判定は緑"), nvh)
+        self.assertTrue(nvh["cae.nvh"].startswith("v2 の判定は OK"), nvh)
         self.assertEqual(errors, [])
         page.close()
 

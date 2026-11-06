@@ -24,13 +24,15 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 REPO_DIR = Path(__file__).resolve().parents[2]
 LINT_JS = (Path(__file__).with_name("layout_lint.js")).read_text(encoding="utf-8")
+# the boxes laid over the 3D that must not cross one another (layout_lint.js, the apart rule)
+APART = ["#toggles button", "#expand-btn", "#legend", "#now", "#causenote", "#graph"]
 
 WIDTHS = ((1280, 720), (1920, 1080), (900, 506))  # 16:9; the stage is scaled to the window
 
@@ -45,10 +47,14 @@ HELD = "20261104-200000-held"  # held: a load case without a criterion counting 
 MODULES = "20261104-210000-modules"  # modules: tests.web.modules_fixture.RUN_ID
 JOINTS = "20261102-207000-joints"  # joints: the frozen offroad-4w v1 alone (test_joints_browser.joints_events)
 FIRSTTIME = "20261105-200000-firsttime"  # many load cases sharing ids, long log ids, a long change (tests.web.firsttime_fixture)
+GRIP = "20261106-120000-grip"  # grip: K2 records of a lane change and a braking with the bench (tests.web.grip_fixture)
 RUNUP = "20261106-120000-n06-runup"  # N06's step tile with run 2 at 330 and 100 mm (tests.web.runup_fixture.RUN_ID)
 HEAT = "20261106-120000-heat"  # heat: the energy's flow on a thermal record cut from a showcase run (tests.web.heat_fixture)
 
 READY = "window.hiraku && window.hiraku.ready"
+# The run list fills #launch after its own fetch of /api/launch, in one go (app.js renderLaunch);
+# with a launcher it always has something in it (the ways to run, the demo rows).
+LAUNCH_FILLED = "document.querySelector('#launch') && document.querySelector('#launch').children.length > 0"
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,13 @@ SCREENS = (
     Screen("A1", "?new=1", wait="document.querySelector('#view-intake textarea')"),
     Screen("A2", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6"),
     Screen("A5", f"?run={HEARING}&tab=A5&live=0&pace=0&t=1e6"),
+    # the CAE agents' pets on the intake screens (js/intake_pets.js): A2's row of every domain's agent, and the video's A1 and A2
+    Screen("A2 (ペット)", f"?run={DOMAINS}&tab=A2&live=0&pace=0&t=1e6", wait=f"{READY} && document.querySelector('.a2-pets .ipet canvas')"),
+    # Known (found when this row was added; the intake's name under the pet, not the pet): the fixture's shown_name is
+    # the id "powertrain", 18 px bold in the video, wider than the 104 px place (overflow by 4-9 px).
+    Screen("A1 (ペット・動画)", f"?run={DOMAINS}&tab=A1&live=0&pace=0&t=1e6&present=1&video=1", wait=f"{READY} && document.querySelector('.in-pet canvas')",
+           known=('.in-pet[data-domain="powertrain"]',)),
+    Screen("A2 (ペット・動画)", f"?run={DOMAINS}&tab=A2&live=0&pace=0&t=1e6&present=1&video=1", wait=f"{READY} && document.querySelector('.a2-pets .ipet canvas')"),
     Screen("報告", f"cut.html?cut=n17&run={REPORT_RUN}&t=8.7"),
     Screen("ツールの棚", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6"),
     Screen("組み立て", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6"),
@@ -96,6 +109,10 @@ SCREENS = (
     # the shapes of a real record a first-time viewer opened: the chips' row, the log, the change line
     Screen("作業台 (試験が多い)", f"?run={FIRSTTIME}&tab=bench&pace=0&t=1e6&on=names"),
     Screen("解析結果 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
+    # grip: the tyre panel on a lane change and on a braking where every wheel slides, and in the video layout
+    Screen("作業台 (タイヤ)", f"?run={GRIP}&tab=bench&pace=0&t=7&on=grip"),
+    Screen("作業台 (タイヤ・滑り)", f"?run={GRIP}&tab=bench&pace=0&t=20.9&on=grip"),
+    Screen("作業台 (タイヤ・動画)", f"?run={GRIP}&tab=bench&pace=0&t=20.9&on=grip&video=1"),
     # N06's step tile with the two runs at the step (tests.web.runup_fixture): large at 4.2 s, in the list at 6 s
     Screen("N06 (段差の二つの走り)", f"cut.html?cut=n06&run={RUNUP}&t=4.2"),
     Screen("N06 (段差の二つの走り・一覧)", f"cut.html?cut=n06&run={RUNUP}&t=6"),
@@ -153,6 +170,9 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     from tests.web.firsttime_fixture import firsttime_events
 
     _write_run(runs, FIRSTTIME, firsttime_events())
+    from tests.web.grip_fixture import grip_events  # grip:
+
+    _write_run(runs, GRIP, grip_events(run_id=GRIP))
     from tests.web.runup_fixture import runup_events
 
     _write_run(runs, RUNUP, runup_events(RUNUP))
@@ -182,12 +202,13 @@ def start_servers(tmp: Path, repo: Path = REPO_DIR):
 
 def open_screen(browser, bases: dict, screen: Screen, size: tuple[int, int]):
     page = browser.new_page(viewport={"width": size[0], "height": size[1]})
-    page.goto(f"{bases[screen.server]}/{screen.path}")
+    page.goto(f"{bases[screen.server]}/{screen.path}", wait_until="domcontentloaded")
     page.wait_for_function(screen.wait, timeout=60000)
     if screen.wait == READY:  # (the list and A1 never resolve it: they play nothing)
         page.evaluate("window.hiraku.ready")
+    if "list=1" in screen.path:
+        page.wait_for_function(LAUNCH_FILLED, timeout=60000)
     page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
-    page.wait_for_timeout(300)  # the list fills #launch after its own fetch
     return page
 
 
@@ -198,7 +219,7 @@ def lint(browser, bases: dict, screens=SCREENS, widths=WIDTHS, shots: Path | Non
         for size in widths:
             page = open_screen(browser, bases, screen, size)
             try:
-                for p in page.evaluate(LINT_JS, {"root": screen.root, "skip": list(screen.known)}):
+                for p in page.evaluate(LINT_JS, {"root": screen.root, "skip": list(screen.known), "apart": APART}):
                     out.append({"screen": screen.name, "width": size[0], **p})
                 if shots is not None:
                     shots.mkdir(parents=True, exist_ok=True)
@@ -215,7 +236,7 @@ def describe(p: dict) -> str:
 
 PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
 <div style="position: relative; height: 30px"><span class="wordmark" id="name">HIRAKU</span>
-  <span class="vbox" id="over" style="position: absolute; left: 10px; top: 0">版 2 赤 2</span>
+  <span class="vbox" id="over" style="position: absolute; left: 10px; top: 0">v2 赤 2</span>
   <span class="wordmark" id="clear" style="position: absolute; left: 300px; top: 0">HIRAKU</span></div>
 <div style="position: relative; height: 40px">
   <button id="b1" style="position: absolute; left: 0; top: 0; width: 120px">再生</button>
@@ -239,6 +260,13 @@ PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
 <button data-lint="wrap" style="width: 40px">まだ長い札</button>
 <div id="card" style="width: 160px; overflow: hidden"><table id="wide"><tr><td style="white-space: nowrap">rops_occupant_clearance.side_mirror</td><td>2.772 mm</td></tr></table></div>
 <div style="width: 300px"><table><tr><td>名前</td><td id="split" style="width: 30px">4.143 mm</td></tr></table></div>
+<div style="position: relative; height: 60px">
+  <div id="row" style="position: absolute; left: 0; top: 0; width: 300px; height: 24px"><button id="t1">重心</button></div>
+  <div id="panel" style="position: absolute; left: 20px; top: 4px; width: 100px; height: 50px; background: #fff; z-index: 2"><button>応力</button></div>
+  <div id="line" style="position: absolute; left: 100px; top: 30px; width: 200px; pointer-events: none">いま: 線の箱</div>
+</div>
+<div id="frame" style="height: 30px; overflow: hidden; line-height: 20px; width: 200px"><p id="half" style="margin: 0">一行目<br>二行目</p></div>
+<div id="clamped" style="display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; width: 60px; line-height: 20px; height: 30px">長い長い長い長い文です</div>
 <div style="width: 300px"><table id="fits"><tr><td style="overflow-wrap: anywhere">rops_occupant_clearance.side_mirror</td><td id="whole" style="white-space: nowrap">2.772 mm</td></tr></table></div>
 </body></html>"""
 
@@ -263,9 +291,11 @@ class LayoutLintBrowserTest(unittest.TestCase):
 
     def test_the_lint_finds_planted_breaks(self):
         """Each rule on a page made to break it; the ellipsis and data-lint="wrap" are let off."""
-        page = self.browser.new_page(viewport={"width": 800, "height": 700})  # (the tables at the end in view)
+        page = self.browser.new_page(viewport={"width": 800, "height": 1000})  # (the tables and the frames at the end in view)
         page.set_content(PLANTED)
         got = page.evaluate(LINT_JS, {})
+        # apart: a box over a button wholly (the hit test sees the box only), a line that does not take the pointer
+        apart = page.evaluate(LINT_JS, {"apart": ["#row button", "#panel", "#line"]})
         page.close()
         found = {(p["rule"], p["sel"]) for p in got}
         self.assertIn(("overlap", "#b1"), found)
@@ -296,6 +326,12 @@ class LayoutLintBrowserTest(unittest.TestCase):
         self.assertIn(("unit", "#split"), found)
         for quiet in ("#fits", "#whole"):
             self.assertNotIn(quiet, {p["sel"] for p in got})
+        self.assertNotIn("apart", {p["rule"] for p in got})  # only with opts.apart
+        # a line cut in half by a frame that does not scroll; not a box clamped on purpose
+        self.assertIn(("cut", "#half"), found)
+        self.assertNotIn("#clamped", {p["sel"] for p in got if p["rule"] == "cut"})
+        crossed = {frozenset((p["sel"], p["with"])) for p in apart if p["rule"] == "apart"}
+        self.assertEqual(crossed, {frozenset(("#t1", "#panel")), frozenset(("#panel", "#line"))})  # (#line is clear of #t1)
 
     def test_no_layout_breaks_on_the_screens(self):
         problems = lint(self.browser, self.bases)
