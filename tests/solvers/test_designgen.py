@@ -162,7 +162,7 @@ class DesignGenTest(unittest.TestCase):
 
     def test_derived_variables_follow_the_wheel(self):
         d = designgen.regenerate(V1, {"wheel_radius": mm(340)})
-        self.assertEqual(d["variables"]["tyre_relaxation_length"], {"value": 340.0, "unit": "mm"})
+        self.assertEqual(d["variables"]["tyre_relaxation_length"], {"value": 340.0, "unit": "mm", "basis": "assumption"})
         wheel = next(p for p in d["parts"] if p["kind"] == "wheel")
         self.assertAlmostEqual(d["variables"]["wheel_inertia"]["value"], wheel["mass_kg"] * 0.34**2 / 2, places=12)
         self.assertNotIn("wheel_inertia", GEN.values_of(d))  # not an input: rebuilt every time

@@ -236,7 +236,8 @@ class BuildersTest(unittest.TestCase):
         for part, ja, other in (("motor", "モーター", "制御器"), ("controller", "制御器", "モーター")):
             lc = self.cases[f"T2-40C-{part}"]
             self.assertEqual((lc["test_id"], lc["criterion"]["quantity"]), ("T2", f"temp_{part}_max"))
-            self.assertEqual(lc["criterion"]["limit"], DESIGN["variables"][f"{part}_max_temperature"])
+            var = DESIGN["variables"][f"{part}_max_temperature"]
+            self.assertEqual(lc["criterion"]["limit"], {"value": var["value"], "unit": var["unit"]})
             self.assertIn(f"{part}_max_temperature", lc["criterion"]["basis"])
             self.assertIn(f"{ja}の温度", lc["title"])
             self.assertNotIn(other, lc["title"])
