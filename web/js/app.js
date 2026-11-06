@@ -169,6 +169,9 @@ function softwareGL() {
 const quality = qualityFromParams(params, softwareGL()); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 // sky: the real look shows the sky with its horizon behind the vehicle (look.js Look.sky)
 const bench = new Workbench3D(viewport, look, { quality, sky: true });
+// ?words=1: every arrow's words as before (not only where chosen); the present mode does the same
+const WORDS_ALL = params.get("words") === "1";
+bench.autoWords = WORDS_ALL || params.get("present") === "1";
 const modLayer = new ModuleLayer(bench); // modules:
 const heat = new EnergyFlow(bench, viewport, { dev: DEV }); // heat: ids in its legend only with ?dev=1
 const nodeView = new NodeMotionView(bench, viewport); // node_motion: the nodes' motion (js/node_motion.js)
@@ -880,10 +883,11 @@ function renderTop(s) {
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
   $("pill-version").textContent = `${verLabel(v)}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
-  // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0.
-  // A scripted run (project.driver) calls no Claude: no cost, said so rather than $0.00.
+  // No cost to show (s.cost null: the user's own Claude Code pays, or a driver that gives none; a
+  // scripted run, project.driver, calls no Claude): a dash only, no limit, never $0.00.
   const scripted = s.project?.driver === "scripted";
-  $("pill-cost").textContent = scripted ? "費用なし (決まった手順)" : `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  const costKnown = !scripted && s.cost !== null && s.cost !== undefined;
+  $("pill-cost").textContent = costKnown ? `費用 ${fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}` : "費用 —";
   const live = player.live;
   // a replay says where the record is at the playhead (not that something runs now)
   // (a followed run that is over while the replay is still behind its end: said so, not 記録の途中)
@@ -1935,6 +1939,9 @@ function applyPresent() {
   $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
   $("detail-btn").classList.toggle("on", ui.detail);
   if (on && ui.detail) $("chain-more").open = true; // 詳しく asked for the contents: the cards open
+  // the arrows' words: only where chosen (pressed or pointed at), except the present mode (its one
+  // key label, as the filming has it) and ?words=1
+  bench.setAutoWords(on || WORDS_ALL);
   const url = new URL(location.href);
   if (on) url.searchParams.set("present", "1");
   else url.searchParams.delete("present");
@@ -2238,6 +2245,16 @@ viewport.addEventListener("pointerup", (ev) => {
   const r = bench.renderer.domElement.getBoundingClientRect();
   if (bench.pickAt((ev.clientX - r.left) / stageScale, (ev.clientY - r.top) / stageScale)) drawn.rev = -2;
   pressAt = null;
+});
+// The pointer near an arrow (no button held): that arrow's words while it stays.
+viewport.addEventListener("pointermove", (ev) => {
+  if (ev.buttons) return;
+  const r = bench.renderer.domElement.getBoundingClientRect();
+  const on = ev.target === bench.renderer.domElement;
+  if (bench.hoverAt(on ? (ev.clientX - r.left) / stageScale : null, (ev.clientY - r.top) / stageScale)) drawn.rev = -2;
+});
+viewport.addEventListener("pointerleave", () => {
+  if (bench.hoverAt(null, null)) drawn.rev = -2;
 });
 $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");

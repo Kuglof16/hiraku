@@ -851,7 +851,7 @@ class BrowserReplayTest(unittest.TestCase):
         ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
         # shape example: one mounting point's force, not a result
         ana["vectors"] = list(ana.get("vectors") or []) + [{"kind": "joint", "at": "FL.lca_front", "origin_mm": [-150.0, 300.0, 330.0], "vector_N": [0.0, -800.0, 1200.0]}]
-        page, errors = self.open("run=sample&pace=0&t=0")
+        page, errors = self.open("run=sample&pace=0&t=0&words=1")  # every arrow's words (by default only where chosen)
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
         tags = page.evaluate("[...document.querySelectorAll('.lbl-vec')].map((x) => x.textContent)")
         self.assertEqual(errors, [])
