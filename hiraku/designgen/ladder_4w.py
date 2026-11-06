@@ -890,7 +890,7 @@ SIDE_NET_COVER_MM = 100.0  # every point R at least this far inside the net's ta
 SIDE_NET_FRONT_GAP_MM = 100.0  # the net's front end at least this far behind the front wheels' tyres
 FENDER_T_MM = 3.0  # fender wall (assumption)
 FENDER_PIECES = 4
-# nu 0.46: Goodfellow's generic HDPE page as the material card's nu note records (the card still carries 0.4)
+# nu 0.46: Goodfellow's generic HDPE page, as the material card does
 HDPE = {"name": "HDPE (high-density polyethylene), molded", "E_MPa": 1000.0, "nu": 0.46, "density_kg_m3": 950.0,
         "yield_MPa": 25.0, "source": "material card data/materials/cards/hdpe.json: E 1000 MPa and yield 25 MPa are "
                                     "round values inside Goodfellow's generic HDPE ranges (E 0.5-1.2 GPa, tensile "
