@@ -10,7 +10,7 @@
 //   rule_check.recorded  a rule applied to a design; the newest design version wins     (A5)
 //   design.created     the chat ends, rules have a design to be applied to
 
-import { DOMAINS, CATEGORIES } from "./data.js";
+import { DOMAINS, CATEGORIES, TESTS } from "./data.js";
 
 const NOTE_KINDS = new Set(["domains.picked", "hearing.asked", "hearing.answered"]); // what A1's chat tells; the knowledge has A5
 
@@ -129,6 +129,11 @@ export function buildModel(events, options = {}) {
 // ----------------------------------------------------------------------------- A1
 
 /** One card per analysis domain, in the contract's order: lit (picked), off, or not yet decided. */
+/** The tests Claude added to the code's choice (domains.picked added_tests), with the test's title and the reason it gave. */
+export function addedTests(m) {
+  return (m.domains?.added_tests || []).map((a) => ({ id: a.test_id, reason: a.reason, title: TESTS[a.test_id]?.title || a.test_id, domain: TESTS[a.test_id]?.domain || null }));
+}
+
 export function domainCards(m) {
   const picks = new Map((m.domains?.picks || []).map((p) => [p.domain, p]));
   const off = new Map((m.domains?.off || []).map((o) => [o.domain, o]));
@@ -137,7 +142,7 @@ export function domainCards(m) {
     if (p) {
       const draft = m.domainsDraft && !m.finished && !m.picksFinal;
       return { domain: name, ja, state: draft ? "draft" : "lit", litAt: m.litAt.get(name) ?? null, shownName: p.shown_name, renamed: p.shown_name !== ja, reason: p.reason,
-               testIds: p.test_ids, testCount: p.test_ids ? p.test_ids.length : null };
+               testIds: p.test_ids, testCount: p.test_ids ? p.test_ids.length : null, added: addedTests(m).filter((a) => a.domain === name) };
     }
     const o = off.get(name);
     if (o) return { domain: name, ja, state: "off", shownName: ja, reason: o.reason, testIds: [], testCount: 0 };

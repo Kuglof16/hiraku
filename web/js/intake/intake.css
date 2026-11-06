@@ -211,3 +211,6 @@
 .in-ask-head h2 { margin: 0; }
 .in-ask-head .in-actions { margin: 0; }
 .in-ask-top { max-height: 58vh; }
+body.video .in-pane.a1 .in-added { font-size: 22px; }
+body.video .in-pane.a1 .in-add-mark { font-size: 18px; }
+body.video .in-pane.a1 .in-review { font-size: 22px; margin: 0 0 6px; }
