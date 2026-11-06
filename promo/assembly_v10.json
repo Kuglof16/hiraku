@@ -27,13 +27,13 @@
    "cuts": [
     "N06"
    ],
-   "video": "${WORK}/clips/n06_app_1080p.mp4"
+   "video": "${WORK}/clips/n06_real_1080p.mp4"
   },
   {
    "cuts": [
     "N07"
    ],
-   "video": "${WORK}/clips/n07_app_1080p.mp4"
+   "video": "${WORK}/clips/n07_real_1080p.mp4"
   },
   {
    "cuts": [
