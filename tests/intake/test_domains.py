@@ -9,6 +9,20 @@ from hiraku.intake import (IntakeError, describe_condition, flags_text, load_pro
 from hiraku.intake.products import answers_file
 
 
+_SAVED_WRITER = []
+
+
+def setUpModule():
+    """These tests assume no load-case writer is registered (hiraku.tools registers one when it is imported, and
+    stays registered in a process that ran other tests first): hold the state here and put it back after."""
+    _SAVED_WRITER.append(domains_module.load_case_writer)
+    domains_module.load_case_writer = None
+
+
+def tearDownModule():
+    domains_module.load_case_writer = _SAVED_WRITER.pop()
+
+
 def pick(slug, **kw):
     req = load_product(slug)
     return pick_domains(req["want"], req["flags"], req.get("speed_class"), **kw)
