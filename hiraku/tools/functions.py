@@ -526,6 +526,8 @@ def design_kind(ctx: RunContext) -> str | None:
     design = _shared_design(ctx)[1]
     if design.get("archetype"):
         return design["archetype"]
+    if design.get("written_by"):  # Claude wrote it: never guessed from variables a draft may have kept
+        return None
     gen_of, kinds = getattr(ctx.designgen, "generator_of", None), getattr(ctx.designgen, "ARCHETYPES", None)
     if gen_of is None or not kinds:
         return None
@@ -1572,6 +1574,9 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     if not reason:
         raise ToolError("reason に、どの試験が通らず、変更がそれにどう効くかを書いてください")
     v = ctx.version
+    if v and ctx.store.design().get("written_by"):
+        raise ToolError("この設計は Claude が書いた設計 (written_by) なので、revise_design では直しません (変数から組み直すと、"
+                        "書いた所が消えます)。次の版は write_design で書いてください")
     _round_and_cost_left(ctx)
     design = ctx.store.design()
     choices = dict(args.get("choices") or {})
@@ -1852,9 +1857,9 @@ def check_design(ctx: RunContext, args: dict[str, Any] | None = None, agent: str
 
 def write_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """The designer writes the design itself (docs/contract.md Claude が書く設計): the first call makes version 1,
-    a later call the next version. The tool sets design_version, parent_version and change_reason (the reason,
-    and the archetype of the draft when based_on names one: the design has no field for it) and drops an
-    archetype (that field marks a design a generator made). check_design must pass (every problem said at once).
+    a later call the next version. The tool sets design_version, parent_version, change_reason (the reason),
+    written_by ("claude") and based_on (the archetype of the draft, when given), and drops an archetype (that
+    field marks a design a generator made). check_design must pass (every problem said at once).
     Version 1 then goes as propose_design's (first_version); a later version as revise_design's: within
     round_limit and the cost limit, design.created, the load cases built again, pending tiles. Only the designer,
     and not on a design with modules (the module designers propose, the packager builds)."""
@@ -1879,9 +1884,11 @@ def write_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     v = ctx.version
     if v:
         _round_and_cost_left(ctx)
-    said = [k for k in (*WRITE_FIELDS, "archetype") if k in given]
-    design = _as_version(ctx, {k: x for k, x in given.items() if k not in said},
-                         reason + (f" (下書き: 型 {based_on} の設計)" if based_on else ""))
+    said = [k for k in (*WRITE_FIELDS, "archetype", "written_by", "based_on") if k in given]
+    design = _as_version(ctx, {k: x for k, x in given.items() if k not in said}, reason)
+    design["written_by"] = "claude"  # contract ac46bf22: revise_design refuses it, and its kind is never guessed
+    if based_on:
+        design["based_on"] = based_on
     check = design_check(ctx, design)
     if check["problems"]:
         listed = " / ".join(f"({i}) {p}" for i, p in enumerate(check["problems"], 1))
@@ -1889,7 +1896,8 @@ def write_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None
                         f"{listed}。全部を直して write_design を呼び直してください")
     notes = list(check["notes"])
     if said:
-        notes.insert(0, f"{', '.join(said)} はツールが付ける (archetype は型から作った設計の印) ので、書かれた値は外しました")
+        notes.insert(0, f"{', '.join(said)} はツールが付ける (archetype は型から作った設計の印、written_by と based_on は "
+                        "write_design が付ける) ので、書かれた値は外しました")
     if not v:
         load_cases = first_version(ctx, design, requirements_now(ctx), agent)
         out: Record = {"design_version": 1, "parent_version": None, "change_reason": design["change_reason"],

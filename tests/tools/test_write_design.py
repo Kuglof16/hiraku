@@ -3,7 +3,7 @@ versions of a hand-written serving robot frame, check_design says what is wrong 
 tool that does not apply to a design says why (its applies(design), else applies_to).
 
 The design is written here (no archetype, no variables): four legs 500 x 400 mm, shelves at z 400 and 850 mm,
-20 x 20 x 1.6 mm square tube, wheels in front and casters behind, two trays, 10 kg of cargo and a 3 kg battery.
+20 x 20 x 1.6 mm square tube, four driven wheels, two trays, 10 kg of cargo and a 3 kg battery.
 Its sizes and the steel's values are the test's assumptions, not checked against a source. The requirements are
 the fixed off-road file's with Q30 empty and Q40 10 kg (the catalog does not yet build a cargo-only loading for a
 design without occupants; the empty loading lets the builders run on it).
@@ -48,9 +48,10 @@ def serving_robot() -> dict:
         for a, b in (("FL", "FR"), ("RL", "RR"), ("FL", "RL"), ("FR", "RR")):
             members.append({"id": f"{lvl}_{a}_{b}", "node_a": f"{lvl}_{a}", "node_b": f"{lvl}_{b}", "section": "sq20",
                             "material": "steel", "name": f"{lvl} の枠 {a}-{b}"})
-    supports = [{"id": c + s, "kind": "wheel" if c == "F" else "caster", "position_mm": [x, y, WHEEL_R],
+    # four driven wheels: the step-climb tool pushes a wheel over the step with the ones still on the ground
+    supports = [{"id": c + s, "kind": "wheel", "position_mm": [x, y, WHEEL_R],
                  "radius_mm": WHEEL_R, "width_mm": 25.0, "suspension": {"type": "rigid"},
-                 "actuation": {"drive": c == "F", "brake": c == "F", "steer": False}, "frame_node": f"foot_{c + s}"}
+                 "actuation": {"drive": True, "brake": c == "F", "steer": False}, "frame_node": f"foot_{c + s}"}
                 for c, x in CORNERS.items() for s, y in SIDES.items()]
     mid = (CORNERS["F"] + CORNERS["R"]) / 2
     corners = ("FL", "FR", "RL", "RR")
@@ -81,7 +82,7 @@ def robot_requirements(folder: Path, tests=("R1",)) -> Path:
     req = read_data(REQUIREMENTS)
     req.pop("design_file")
     req["tests"] = list(tests)
-    values = {"Q30": "empty", "Q40": 10}
+    values = {"Q30": "empty", "Q40": 10, "Q15": 20}  # a 20 mm step: below the robot's 50 mm wheels
     req["requirements"] = [dict(r, value=values[r["key"]]) if r["key"] in values else r for r in req["requirements"]]
     path = folder / "requirements.json"
     path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
@@ -109,7 +110,7 @@ class WriteDesignTest(WrittenCase, unittest.TestCase):
     def test_the_first_call_makes_version_1(self):
         out = write_design(self.ctx, {"design": self.design, "reason": "配膳ロボの型が無いので骨組みを書いた"}, "designer")
         self.assertEqual((out["design_version"], out["parent_version"]), (1, None))
-        self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["R1-step100"])
+        self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["R1-step20"])
         self.assertEqual(out["load_cases"][0]["owner"], "cae.strength")
         d = self.ctx.store.design()
         self.assertEqual((d["design_version"], d["parent_version"], d["change_reason"]),
@@ -130,7 +131,7 @@ class WriteDesignTest(WrittenCase, unittest.TestCase):
         thicker["sections"]["sq20"]["dims_mm"]["t"] = 2.0
         out = write_design(self.ctx, {"design": thicker, "reason": "R1 の応力に答えて管を厚くした"}, "designer")
         self.assertEqual((out["design_version"], out["parent_version"]), (2, 1))
-        self.assertEqual(out["redo"], ["R1-step100"])
+        self.assertEqual(out["redo"], ["R1-step20"])
         self.assertEqual(out["revisions_left"], self.ctx.project["round_limit"] - 1)
         self.assertEqual(self.ctx.version, 2)
         self.assertEqual(self.ctx.store.design()["sections"]["sq20"]["dims_mm"]["t"], 2.0)
@@ -184,15 +185,26 @@ class WriteDesignTest(WrittenCase, unittest.TestCase):
                            "designer")
         d = self.ctx.store.design()
         self.assertEqual((d["design_version"], d["parent_version"]), (1, None))
-        self.assertNotIn("archetype", d)  # the design is one Claude wrote; based_on is not a design field
-        self.assertIn("care_bed", d["change_reason"])
+        self.assertNotIn("archetype", d)  # the design is one Claude wrote (contract ac46bf22: written_by, based_on)
+        self.assertEqual((d["written_by"], d["based_on"]), ("claude", "care_bed"))
+        self.assertEqual(d["change_reason"], "ベッドの骨組みを下書きに")
         self.assertEqual(out["based_on"], "care_bed")
         self.assertIn("archetype", out["check"]["notes"][0])
 
     def test_a_written_design_is_revised_by_write_design(self):
         write_design(self.ctx, {"design": self.design, "reason": "版 1"}, "designer")
-        with self.assertRaisesRegex(ToolError, "write_design で次の版"):
+        self.assertEqual(self.ctx.store.design()["written_by"], "claude")
+        with self.assertRaisesRegex(ToolError, "written_by"):
             revise_design(self.ctx, {"changes": {"track": {"value": 1200.0, "unit": "mm"}}, "reason": "r"}, "designer")
+        self.assertEqual(self.ctx.version, 1)
+
+    def test_a_written_design_keeping_a_types_variables_is_not_taken_for_that_type(self):
+        from hiraku.tools.functions import design_kind
+
+        with_vars = dict(self.design, variables={"bed_length": {"value": 2000.0, "unit": "mm"}})
+        write_design(self.ctx, {"design": with_vars, "reason": "版 1"}, "designer")
+        with mock.patch.object(self.ctx.designgen or mock.Mock(), "generator_of", side_effect=AssertionError("guessed")):
+            self.assertIsNone(design_kind(self.ctx))
 
     def test_through_mcp_a_call_without_its_caller_is_refused(self):
         from hiraku.tools.mcp import HANDLERS, make_handler
@@ -208,6 +220,55 @@ class WriteDesignTest(WrittenCase, unittest.TestCase):
             reason = rules.stop_reason(self.ctx)
         self.assertIn("write_design", reason)
         self.assertNotIn("propose_design", reason)
+
+
+class WrittenCycleTest(unittest.TestCase):
+    """Before a real run on a product no archetype fits: by hand instead of the scripted plan, with the real K0
+    formulas and tools, version 1 by write_design, R1 predicted, analyzed, compared and judged, then version 2 by
+    write_design, whose load case starts again."""
+
+    def setUp(self):
+        from hiraku.tools import load_solvers
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        formulas, tools = load_solvers()
+        self.ctx = start_run(robot_requirements(root), root=root / "runs", formulas=formulas, tools=tools)
+
+    def test_version_1_judged_then_version_2(self):
+        from hiraku.tools.functions import analyze, compare, record_cause, record_prediction
+
+        ctx, design = self.ctx, serving_robot()
+        write_design(ctx, {"design": design, "reason": "配膳ロボの型が無いので骨組みを書いた"}, "designer")
+        lc_id = "R1-step20"
+        # the rail-bending formula on one shelf tube as a simple beam: a bound above the welded frame
+        pred = record_prediction(ctx, {
+            "load_case_id": lc_id, "quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+            "inputs": {"F": {"value": 100.0, "unit": "N"}, "L": {"value": 500.0, "unit": "mm"},
+                       "b": {"value": 20.0, "unit": "mm"}, "h": {"value": 20.0, "unit": "mm"},
+                       "t": {"value": 1.6, "unit": "mm"}},
+            "assumptions": ["棚の 1 本の管を単純支持の梁とみる (溶接の枠より大きく出る)"]}, "cae.strength")
+        ana = analyze(ctx, {"tool": "frame_static", "load_case_id": lc_id, "prediction_ids": [pred["prediction_id"]]},
+                      "cae.strength")
+        self.assertEqual(ana["status"], "ok", ana.get("error"))
+        cmp = compare(ctx, {"prediction_id": pred["prediction_id"], "analysis_id": ana["analysis_id"]},
+                      "cae.strength")["comparison"]
+        self.assertEqual(cmp["status"], "mismatch")  # the beam formula is far above the frame: judged on the safe side
+        self.assertGreater(cmp["predicted"]["value"], cmp["analyzed"]["value"])
+        out = record_cause(ctx, {"comparison_id": cmp["comparison_id"], "cause": "管 1 本を単純支持の梁とみた式は、"
+                                 "溶接の枠より大きく出る", "fix": "枠の式か make_tool のツールで予測し直す", "safe_side": True,
+                                 "safe_side_reason": "単純支持の梁は、両端を溶接した枠より曲げが大きい"}, "cae.strength")
+        self.assertTrue(out["verdict"]["pass"])
+        self.assertEqual([(j["domain"], j["state"]) for j in ctx.store.judgements(1)], [("strength", "green")])
+        thicker = copy.deepcopy(design)
+        thicker["sections"]["sq20"]["dims_mm"]["t"] = 2.0
+        v2 = write_design(ctx, {"design": thicker, "reason": "R1 に余裕を足すため管を 2.0 mm にした"}, "designer")
+        self.assertEqual((v2["design_version"], v2["redo"]), (2, [lc_id]))
+        self.assertEqual(ctx.store.design()["written_by"], "claude")
+        self.assertEqual([(j["domain"], j["state"]) for j in ctx.store.judgements(2)], [("strength", "pending")])
+        for e in ctx.store.events():
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
 
 
 class ModulesTest(unittest.TestCase):
