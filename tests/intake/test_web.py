@@ -700,6 +700,60 @@ if __name__ == "__main__":
 
 
 @unittest.skipUnless(NODE, "node is not installed")
+class DomainPetsTest(unittest.TestCase):
+    """A1: each domain is a pet's place and a bubble that says only what the record says."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ saidOf }} from "{url('model.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const picked = e(1, 1, 'domains.picked', {{ want: 'w', flags: {{}}, flag_reasons: {{ ride: 'x' }},
+  picks: [{{ domain: 'handling', shown_name: '操安', reason: '悪路を走るので、旋回で倒れないかを確かめます', test_ids: ['S2'] }},
+          {{ domain: 'aero', shown_name: '空力', reason: '風に当てはまるので、F1 横風 を当てる', test_ids: ['F1'] }}],
+  off: [{{ domain: 'thermal', reason: 'この製品の性質では当てはまる試験が無い: T1 電池の温度 (池∧続)' }}], assembly_test_ids: [] }});
+let events = [picked];
+const api = {{ events: () => events, onEvent: () => () => {{}}, exclude: () => {{}} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A1' }});
+const card = (d) => el.all('article').find((a) => a.dataset.domain === d);
+{{BODY}}
+"""
+
+    def run_body(self, body: str) -> dict:
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_bubble_has_the_records_words_the_codes_sentence_is_made_plain_and_an_off_domain_says_so(self):
+        got = self.run_body("""
+const say = (d) => card(d).all('p').find((p) => p.className === 'in-reason').text();
+console.log(JSON.stringify({ handling: say('handling'), aero: say('aero'), thermal: say('thermal'), nvhWait: say('nvh') }));
+""")
+        self.assertEqual(got["handling"], "悪路を走るので、旋回で倒れないかを確かめます")  # Claude's words, as the record has them
+        self.assertEqual(got["aero"], "「風」を調べます")  # the code's sentence lists test ids: plain words instead
+        self.assertEqual(got["thermal"], "今回は見ません。この製品の性質では当てはまる試験が無い")
+        self.assertEqual(got["nvhWait"], "今回は見ません")  # decided, and the record names no reason
+
+    def test_each_domain_has_one_pet_place_that_stays_when_the_screen_is_drawn_again(self):
+        got = self.run_body("""
+const slots = () => el.all('div').filter((d) => d.dataset && d.dataset.slot === 'pet');
+const before = slots();
+const mine = new El('span'); intake.petSlots.get('handling').children.push(mine);
+events = [picked]; intake.update();
+const after = slots();
+console.log(JSON.stringify({ n: before.length, same: before.every((s, i) => s === after[i]), kept: intake.petSlots.get('handling').children.includes(mine),
+  states: Object.fromEntries([...intake.petSlots].map(([d, s]) => [d, s.dataset.state])) }));
+""")
+        self.assertEqual(got["n"], 7)
+        self.assertTrue(got["same"])
+        self.assertTrue(got["kept"])
+        self.assertEqual((got["states"]["handling"], got["states"]["thermal"], got["states"]["nvh"]), ("lit", "off", "off"))
+
+    def test_the_headline_counts_what_was_picked(self):
+        got = self.run_body("""console.log(JSON.stringify({ text: el.text() }));""")
+        self.assertIn("HIRAKU が調べることを選びました", got["text"])
+        self.assertIn("2 個を調べ、5 個は今回は見ません", got["text"])
+
+
+@unittest.skipUnless(NODE, "node is not installed")
 class PetsSlotTest(unittest.TestCase):
     """A2 keeps an empty place for the host's own pets; what the host mounts there stays when A2 draws again."""
 
