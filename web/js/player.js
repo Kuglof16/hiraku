@@ -212,6 +212,27 @@ export class Player {
     this.sync();
   }
 
+  // seek(t) with the events applied in steps of at most sliceMs, awaited between them, so building a
+  // long record's state does not hold the page (the caller draws nothing until it resolves).
+  async seekInSteps(t, sliceMs = 25) {
+    this.playhead = Math.max(0, Math.min(t, this.duration));
+    if (this.live) this.liveAttached = false;
+    const target = this.targetCount();
+    if (target < this.applied) {
+      this.state = initialState();
+      this.applied = 0;
+    }
+    let t0 = performance.now();
+    while (this.applied < target) {
+      applyEvent(this.state, this.events[this.applied]);
+      this.applied += 1;
+      if (performance.now() - t0 > sliceMs) {
+        await new Promise((r) => setTimeout(r, 0));
+        t0 = performance.now();
+      }
+    }
+  }
+
   // Jump to the previous / next event time.
   step(dir) {
     const ts = this.events.map((e) => e.t);
@@ -280,9 +301,11 @@ export class Player {
 
 // Read /api/runs/<id>/events from a byte offset until the run finishes.
 export class EventFeed {
-  constructor(runId, onEvents, { intervalMs = 500 } = {}) {
+  // onProgress(fraction 0..1): how far the first read of the record is (eventread.js)
+  constructor(runId, onEvents, { intervalMs = 500, onProgress = null } = {}) {
     this.runId = runId;
     this.onEvents = onEvents;
+    this.onProgress = onProgress;
     this.intervalMs = intervalMs;
     this.offset = 0;
     this.timer = null;
@@ -292,7 +315,7 @@ export class EventFeed {
 
   async readOnce() {
     // (fetchEvents throws "<status> <path>" with .status on a failed request, as main's read did)
-    const body = await fetchEvents(this.runId, this.offset);
+    const body = await fetchEvents(this.runId, this.offset, this.loaded ? null : this.onProgress);
     const moved = body.next_offset !== this.offset || !!body.reset;
     this.offset = body.next_offset;
     // ask again at once only when this read got somewhere; a line still being written

@@ -47,7 +47,7 @@ import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
 import { TileViews } from "./tile3d.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { AssemblyPanel } from "./assembly.js";
+import { AssemblyPanel, assemblyRecord } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
@@ -72,15 +72,63 @@ import { STATIC, getUrl } from "./source.js"; // a static export: its files in p
 import { domainIconSvg } from "./domain_icons.js";
 import { footerActivity, mountHookLine, withoutRuleIds } from "./hookline.js";
 import { boardHtml } from "./test_board.js"; // ③'s tests at a glance
+import { askAll, heavyPending, heavyReady, heavyWaiting, onHeavy, prefetch, quietly, tracked } from "./heavy.js"; // a static export's heavy parts, read when drawn
 
 const $ = (id) => document.getElementById(id);
+
+// ---- while the record is read: the page is one line and a pet (index.html #boot) --------------
+// No frame (tabs, the top band, an empty 3D) until the record is read and drawn: the middle of the
+// page says 「記録を読み込んでいます NN %」 beside the lead's pet (its circle until pet3d.js is in).
+// A read that fails says why in one line (no red); one that takes BOOT_TIMEOUT_MS fails as 時間切れ.
+// index.html's own script does the same when this module never runs (window.hirakuBootTimer).
+const BOOT_TIMEOUT_MS = 60000;
+clearTimeout(window.hirakuBootTimer);
+const boot = { on: document.documentElement.classList.contains("booting"), pct: -1, timer: null, failed: false, petTimer: null };
+function bootLine(text) {
+  const el = $("boot-line");
+  if (el && el.textContent !== text) el.textContent = text;
+}
+function bootProgress(f) {
+  if (!boot.on || boot.failed) return;
+  const pct = Math.max(0, Math.min(99, Math.floor(f * 100)));
+  if (pct === boot.pct) return;
+  boot.pct = pct;
+  bootLine(`記録を読み込んでいます ${pct} %`);
+  $("boot")?.setAttribute("data-pct", String(pct));
+}
+function bootDone() {
+  if (!boot.on || boot.failed) return;
+  boot.on = false;
+  clearTimeout(boot.timer);
+  clearInterval(boot.petTimer);
+  document.documentElement.classList.remove("booting");
+  $("boot")?.remove();
+}
+// why: the one line; links: [[text, href]] under it (開き直す, 一覧へ)
+function bootFailed(why, links = []) {
+  boot.failed = true;
+  clearTimeout(boot.timer);
+  document.documentElement.classList.add("booting");
+  const el = $("boot");
+  if (!el) return;
+  el.classList.add("failed");
+  el.dataset.failed = "1";
+  bootLine(why);
+  el.querySelector(".boot-links")?.remove();
+  if (links.length) {
+    const p = document.createElement("p");
+    p.className = "boot-links";
+    p.innerHTML = links.map(([t, href]) => `<a href="${esc(href)}">${esc(t)}</a>`).join(" ");
+    el.append(p);
+  }
+}
 // A static export opened with no parameters starts at ① of the run its export picked (data/static.json
 // first: a saved run whose record has the request, the picked domains and the hearing), stopped at the
 // record's end so ① and ② show all of it; 「この記録を再生する」 plays it (STATIC_REPLAY). Without such a
 // run: the run list, as before.
 async function staticFirst() {
   try {
-    return (await (await fetch("data/static.json")).json()).first ?? null;
+    return (await (await fetch(getUrl("/data/static.json"))).json()).first ?? null;
   } catch {
     return null;
   }
@@ -241,10 +289,49 @@ let agentPets = null;
 let intakePets = null; // js/intake_pets.js, made on the first intake frame once the pets are loaded
 const petsReady = (params.get("pets") === "0" ? Promise.resolve(null) : AgentPets.load().catch(() => null)).then((p) => {
   agentPets = p;
+  setTimeout(bootPet, 0); // (a task of its own: making the pet is long enough already)
   document.documentElement.dataset.agentPets = p ? "on" : "none";
   if (p) p.setPixel((window.devicePixelRatio || 1) * stageScale);
   drawn.rev = -1;
 });
+
+// The lead's pet beside the boot's line, waiting (BOOT_PET_FPS: the page is busy reading; a software
+// renderer (agentPets.still): one picture).
+const BOOT_PET_FPS = 5;
+function bootPet() {
+  const slot = $("boot-pet");
+  if (!agentPets || !boot.on || !slot || !agentPets.has("lead")) return;
+  const el = agentPets.box("lead", "boot");
+  const p = agentPets.pets.get("lead");
+  const b = p.boxes.boot;
+  const t0 = performance.now();
+  // (its shaders compiled off the page's thread where the browser can: the first picture would
+  // otherwise hold the page while they are)
+  const r = agentPets.stage.renderer;
+  p.pet.group.visible = true;
+  const compiled = r.compileAsync ? r.compileAsync(agentPets.stage.scene, agentPets.stage.cameraFor(1).cam).catch(() => {}) : Promise.resolve();
+  p.pet.group.visible = false;
+  compiled.then(() => {
+    if (!boot.on) return;
+    slot.append(el);
+    slot.classList.add("has-pet");
+    start();
+  });
+  function start() {
+    const paint = () => {
+      if (!boot.on || !b.el.isConnected) return clearInterval(boot.petTimer);
+      const px = Math.max(1, Math.round(b.el.clientWidth * (window.devicePixelRatio || 1)));
+      if (b.canvas.width !== px) {
+        b.canvas.width = b.canvas.height = px;
+        agentPets.stage.grow(px, px);
+      }
+      agentPets.stage.paint(p.pet, b.ctx, (performance.now() - t0) / 1000, "waiting", null);
+      b.el.dataset.petDraws = String(Number(b.el.dataset.petDraws) + 1);
+    };
+    paint();
+    if (!agentPets.still) boot.petTimer = setInterval(paint, 1000 / BOOT_PET_FPS);
+  }
+}
 
 // ---- player ---------------------------------------------------------------
 const player = new Player();
@@ -276,6 +363,8 @@ const PACE_MIN = {
 const motionSpans = new Map(); // analysis_id -> seconds of motion (or null)
 function motionSpanOf(ev) {
   const id = ev.data?.analysis_id;
+  // (a static export's light record carries it, worked out as here: its series are read later)
+  if (!motionSpans.has(id) && ev._lite && "pace" in ev._lite) motionSpans.set(id, ev._lite.pace);
   if (!motionSpans.has(id)) motionSpans.set(id, (ev.data?.series ? motionSpan(ev.data) : null) ?? nodeMotionPlaySpan(ev.data));
   return motionSpans.get(id);
 }
@@ -827,7 +916,9 @@ function renderIntake(tab) {
     $("view-intake").innerHTML =
       `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}${STATIC ? `<div class="draftbar replaybar" id="replaybar"></div>` : ""}` +
       `<div class="tab-head" id="tab-head-intake"></div><div class="intake-host" id="intake-host"></div>`;
+    // (mounted with the events applied so far: not drawn again at once for the same events)
     intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
+    intakeApplied = `${player.state.runId}|${player.applied}|${runGoing()}`;
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
@@ -1795,7 +1886,7 @@ function renderToggles(motion, lc, graphs = false, design = null, heatAvail = fa
 // ---- the test's motion (series) -------------------------------------------
 let motionMemo = { ana: null, motion: null };
 function motionFor(ana) {
-  if (ana !== motionMemo.ana) motionMemo = { ana, motion: ana && ana.status === "ok" ? motionOf(ana) : null };
+  if (ana !== motionMemo.ana || heavyPending(ana)) motionMemo = { ana, motion: ana && ana.status === "ok" ? motionOf(ana) : null };
   return motionMemo.motion;
 }
 
@@ -1839,7 +1930,7 @@ let shownMotion = null; // { motion, ana, tau } of the last frame, for the bar's
 // series against another quantity, one Map per analysis (the chart redraws on a new one).
 let graphMemo = { ana: null, channels: null };
 function graphChannels(ana, motion) {
-  if (ana !== graphMemo.ana) graphMemo = { ana, channels: new Map([...(motion?.channels ?? []), ...xSeriesOf(ana)]) };
+  if (ana !== graphMemo.ana || heavyPending(ana)) graphMemo = { ana, channels: new Map([...(motion?.channels ?? []), ...xSeriesOf(ana)]) };
   return graphMemo.channels;
 }
 
@@ -2154,7 +2245,70 @@ function applyPresent() {
 let resolvedMemo = { rev: -1, s: null, set: new Set() };
 
 // ---- frame ----------------------------------------------------------------
+// The views that draw a mesh, a field or a motion; on the others (① ② ⑤ and the shelf) the heavy
+// parts of a static export are not asked for (heavy.js quietly).
+function drawsHeavy(tab) {
+  return ui.present || tab === "bench" || tab === "grid" || tab === "A7";
+}
 function draw() {
+  const tab = currentTab(player.state);
+  if (drawsHeavy(tab)) drawNow();
+  else quietly(drawNow);
+  heavyNote(drawsHeavy(tab) ? viewOf(tab, openSpan(tab)) : null);
+}
+
+// A static export's heavy parts asked for and not read yet: one line on the 3D (or the grid).
+function heavyNote(view) {
+  const n = view === "bench" || view === "grid" || view === "A7" ? heavyWaiting() : 0;
+  let el = $("heavy-note");
+  if (!n) {
+    if (el) el.hidden = true;
+    return;
+  }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "heavy-note";
+    el.className = "heavy-note";
+    document.body.append(el);
+  }
+  el.hidden = false;
+  const text = `解析の結果を読み込んでいます (残り ${n})`;
+  if (el.textContent !== text) el.textContent = text;
+}
+
+// A static export: does what fn reads have parts not read yet? They are asked for (first); the
+// caller draws it once they are in (onHeavy).
+function waitsForHeavy(fn) {
+  const [, recs] = tracked(fn);
+  const pending = [...recs].filter(heavyPending);
+  for (const d of pending) askAll(d, true);
+  return pending.length > 0;
+}
+
+// A heavy part read: what was drawn from it before (nothing yet) is drawn again.
+onHeavy(() => {
+  motionMemo = { ana: null, motion: null };
+  graphMemo = { ana: null, channels: null };
+  contour = null;
+  if (board) board.key = null;
+  drawn.rev = -1;
+});
+
+// A replay coming to events whose heavy parts are not read: they are asked for PREFETCH_S ahead,
+// and the replay waits at an event until its parts are in (so it shows as with the whole record).
+const PREFETCH_S = 15;
+function holdForHeavy(dt) {
+  if (!STATIC || !player.playing || !drawsHeavy(currentTab(player.state))) return false;
+  const ahead = [];
+  for (let i = player.applied; i < player.events.length && player.events[i].t <= player.playhead + PREFETCH_S; i++) ahead.push(player.events[i]);
+  prefetch(ahead);
+  const next = player.events[player.applied];
+  if (!next || heavyReady(next) || next.t > player.playhead + dt * player.speed + 1e-9) return false;
+  prefetch([next], true);
+  return true;
+}
+
+function drawNow() {
   const s = player.state;
   const tab = currentTab(s);
   // ④ with a domain open: the 3D and the cards of that domain's load case at the playhead (or the one
@@ -2176,13 +2330,18 @@ function draw() {
     renderTop(s);
     // (the chips ring ③'s load case on ③ only; on ④ the domain open there, else none)
     renderChips(s, view === "bench" ? lcId : null, span?.domain);
-    renderAgents(s);
-    renderLog(s, resolved);
-    renderTests(s, lcId, span);
+    // the side panels and the 3D only while the workbench shows (on ① ②, ④'s grid, the shelf and A7
+    // they are hidden; showing the workbench again draws everything, the tab or view having changed)
+    const benchShown = view === "bench" || ui.present;
+    if (benchShown) {
+      renderAgents(s);
+      renderLog(s, resolved);
+      renderTests(s, lcId, span);
+      renderChain(s, chain);
+    }
     renderDomainHead(span);
-    renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, !!heatIn);
+    if (benchShown) renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, !!heatIn);
     const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = view !== "bench";
     $("view-grid").hidden = view !== "grid";
@@ -2199,32 +2358,51 @@ function draw() {
     if (intakeTab) renderIntake(tab);
     if (tab === "A4") renderShelf();
 
-    const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
-    bench.setDesign(design);
-    // the workbench's くわしく: what the real look's dummy is drawn from (hybrid3.js)
-    $("bench-more").hidden = !bench.dummyDrawn;
-    if ($("bench-dummy-note").textContent !== DUMMY_NOTE_JA) $("bench-dummy-note").textContent = DUMMY_NOTE_JA;
-    bench.setLoading(chain.loadCase?.params?.loading ?? null);
-    bench.setMotion(motion);
-    bench.setScene(chain.loadCase, chain.shown);
-    let ct = buildContour(s, chain);
-    // the present mode shows a shell's before / after side by side when there is an earlier version
-    if (ui.present && view === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
-    if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
-    bench.setContour(ui.toggles.contour && !heatOn ? framedContour() : null);
-    if (!contour?.mesh?.maxAt) ui.zoomMax = false;
-    renderLegend(heatOn ? null : contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
-    renderMeshCard(contour);
-    setCompare(s, chain, ui.toggles.contour && !heatOn && view === "bench" ? contour : null);
-    bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
-    cmpView?.bench.setCloseUp(!!bench.focused);
-    // With a motion the arrows come from the series, frame by frame.
-    bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
-    bench.setToggles(ui.toggles);
-    // modules: the module colours and spaces on the 3D, and their legend
-    modLayer.set({ colors: ui.toggles.modules, spaces: ui.toggles.spaces });
-    renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces }, modLayer);
-    renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && view === "bench"); // joints:
+    // the contour (the present mode shows a shell's before / after side by side when there is an earlier version)
+    const contourNow = () => {
+      const c = buildContour(s, chain);
+      return ui.present && view === "bench" && c?.mesh && c.canCompare && !c.compare ? buildContour(s, chain, true) : c;
+    };
+    // a static export: the 3D is drawn from the shown analysis and what its contour reads (its meshes,
+    // the version before) once every part of them is read (heavy.js); until then the design alone
+    let waitHeavy = false;
+    let ctReady = null;
+    if (benchShown && STATIC) {
+      const [c, recs] = tracked(contourNow);
+      if (heavyPending(chain.shown)) recs.add(chain.shown);
+      const pending = [...recs].filter(heavyPending);
+      for (const d of pending) askAll(d, true);
+      waitHeavy = pending.length > 0;
+      ctReady = c;
+    }
+    if (benchShown) {
+      const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
+      bench.setDesign(design);
+      // the workbench's くわしく: what the real look's dummy is drawn from (hybrid3.js)
+      $("bench-more").hidden = !bench.dummyDrawn;
+      if ($("bench-dummy-note").textContent !== DUMMY_NOTE_JA) $("bench-dummy-note").textContent = DUMMY_NOTE_JA;
+      bench.setLoading(chain.loadCase?.params?.loading ?? null);
+    }
+    if (benchShown && !waitHeavy) {
+      bench.setMotion(motion);
+      bench.setScene(chain.loadCase, chain.shown);
+      const ct = STATIC ? ctReady : contourNow();
+      if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
+      bench.setContour(ui.toggles.contour && !heatOn ? framedContour() : null);
+      if (!contour?.mesh?.maxAt) ui.zoomMax = false;
+      renderLegend(heatOn ? null : contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
+      renderMeshCard(contour);
+      setCompare(s, chain, ui.toggles.contour && !heatOn && view === "bench" ? contour : null);
+      bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
+      cmpView?.bench.setCloseUp(!!bench.focused);
+      // With a motion the arrows come from the series, frame by frame.
+      bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
+      bench.setToggles(ui.toggles);
+      // modules: the module colours and spaces on the 3D, and their legend
+      modLayer.set({ colors: ui.toggles.modules, spaces: ui.toggles.spaces });
+      renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces }, modLayer);
+      renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && view === "bench"); // joints:
+    }
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = withoutRuleIds(nowSentence(s, chain, (tool) => toolTitle(s, tool)), { dev: DEV });
     $("now").textContent = now;
@@ -2271,7 +2449,8 @@ function draw() {
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
   if (agentPets && view === "bench") agentPets.tick(s, player.events, player.playhead, "board", ui.frozen ? Infinity : PET_PAINTS); // test_board.js
-  if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("asm-host"))).render(s, asmClock());
+  // (a static export: once the assembly shown is read)
+  if (tab === "A7" && !(STATIC && waitsForHeavy(() => assemblyRecord(s)))) (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("asm-host"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS);
   if (TAB_HEADS[tab]) renderTabHead(s, tab);
@@ -2281,9 +2460,15 @@ function draw() {
 let lastTs = null;
 let lastPlayhead = null;
 function loop(ts) {
+  if (ui.building) {
+    // (the state is being built in steps: play)
+    lastTs = null;
+    requestAnimationFrame(loop);
+    return;
+  }
   const dt = lastTs === null ? 0 : Math.min(0.25, (ts - lastTs) / 1000);
   lastTs = ts;
-  if (!ui.frozen) {
+  if (!ui.frozen && !holdForHeavy(dt)) {
     player.tick(dt);
     // ④'s domain replay stays in its span: it stops at its last comparison
     const span = openSpan(currentTab(player.state));
@@ -2531,15 +2716,26 @@ function startPlayback() {
   // the pets first (a page opened at ?t= draws them in its first frame)
   Promise.all([petsReady, loadModuleNames()]).then(play); // modules: the module names before the first frame
 }
-function play() {
+async function play() {
   if (animLoop?.findArrival(player.events) != null) {
-    seekAndDraw(params.has("t") ? Number(params.get("t")) || 0 : null).then(() => readyResolve(player.playhead));
+    seekAndDraw(params.has("t") ? Number(params.get("t")) || 0 : null).then(() => {
+      bootDone();
+      readyResolve(player.playhead);
+    });
     return;
   }
   if (params.has("t")) {
+    // (the state up to t built in steps first, nothing drawn meanwhile: a long record does not hold the page)
+    const t = Number(params.get("t")) || 0;
+    ui.building = true;
+    await player.seekInSteps(t >= player.duration - END_SNAP_S ? player.duration : t);
+    ui.building = false;
     // (A4 shown: ready once the shelf no longer changes by itself, so the frame is the same each time)
-    seekAndDraw(Number(params.get("t")) || 0).then(() => (shelf && !$("view-shelf").hidden ? shelf.settled() : null))
-      .then(() => readyResolve(player.playhead));
+    seekAndDraw(t).then(() => (shelf && !$("view-shelf").hidden ? shelf.settled() : null))
+      .then(() => {
+        bootDone();
+        readyResolve(player.playhead);
+      });
     return;
   }
   ui.frozen = false;
@@ -2550,6 +2746,7 @@ function play() {
     player.playing = params.get("autoplay") !== "0";
   } else if (player.live) player.attachLive();
   else if (params.get("autoplay") !== "0") player.play();
+  bootDone();
   readyResolve(player.playhead);
 }
 
@@ -2586,67 +2783,53 @@ function setClock(clock) {
 }
 
 function loadEvents(events, { live }) {
+  bootDone();
   resetPlayer();
   addEvents(events);
   player.live = live;
   startPlayback();
 }
 
-// While a record is read (all of it, before it plays): a notice with how much is read, on the 3D
-// (inside #viewport: the other tabs and the tabs row stay uncovered).
-function loadingNote(body) {
-  let el = $("loading-note");
-  if (!body) return el?.remove();
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "loading-note";
-    el.className = "loading-note in-view";
-    viewport.append(el);
-  }
-  const mb = (n) => fmt(n / 1e6, 2);
-  // (before the first part comes back the size is not known yet: the note shows at once, so the
-  // screen is never an empty bench with nothing to press)
-  const done = body.size ? ` ${mb(body.next_offset ?? 0)} / ${mb(body.size)} MB` : "";
-  el.innerHTML = `<div>記録を読み込んでいます…${esc(done)}</div>` +
-    `<div class="ln-sub">読み終わると再生が始まります。 <a href="${withDev("?list=1")}">☰ 一覧へ</a></div>`;
+// Why a record could not be read, in one line: 「記録を読み込めませんでした (what)。what to do」 (the
+// status and the address after it under ?dev=1). kind: "timeout", "broken", or none (from e).
+function loadFailedWhy(e, kind = null) {
+  let what, todo = "ページを読み込み直してください";
+  if (kind === "timeout") what = "時間切れ";
+  else if (kind === "broken" || e?.broken || e instanceof SyntaxError) what = "記録が壊れています";
+  else if (e?.status === 404) [what, todo] = ["見つかりません", "消されたか、名前が違います。一覧から選び直してください"];
+  else if (e?.status) what = `サーバー ${e.status}`;
+  else if (STATIC) what = "ネットワーク";
+  else [what, todo] = ["ネットワーク", "HIRAKU が動いているか確かめて、ページを読み込み直してください"];
+  const line = `記録を読み込めませんでした (${what})。${todo}`;
+  return DEV && e ? `${line} — ${e?.message ?? e}` : line;
 }
 
-// Why a record could not be read, in words (the status and the address only under ?dev=1).
-function loadFailedWhy(e) {
-  if (DEV) return String(e?.message ?? e);
-  if (e?.status === 404) return "この記録は見つかりませんでした。消されたか、名前が違います。";
-  if (e?.status) return `サーバーが記録を返せませんでした (${e.status})。`;
-  if (e instanceof SyntaxError) return "サーバーの返事が読めませんでした。";
-  if (STATIC) return "記録のファイルを読めませんでした。新しいブラウザで開き直してください。";
-  return "サーバーにつながりませんでした。HIRAKU が動いているか確かめてください。";
-}
-
-// A record that could not be read: why, and what to press next (open it again, or the list).
-function loadFailedNote(runId, e) {
-  loadingNote(null);
-  const el = document.createElement("div");
-  el.id = "loading-note";
-  el.className = "loading-note failed";
-  el.innerHTML = `<div>記録を読み込めませんでした</div><div class="ln-sub why">${esc(loadFailedWhy(e))}</div>` +
-    `<div class="ln-sub"><a href="${withDev(`?run=${encodeURIComponent(runId)}`)}">↻ 開き直す</a> <a href="${withDev("?list=1")}">☰ 一覧へ</a></div>`;
-  document.body.append(el);
+// A record that could not be read: why in one line, and what to press next (open it again, or the list).
+function loadFailedNote(runId, e, kind = null) {
+  bootFailed(loadFailedWhy(e, kind), [["↻ 開き直す", withDev(`?run=${encodeURIComponent(runId)}`)], ["☰ 一覧へ", withDev("?list=1")]]);
 }
 
 async function openRun(runId) {
   resetPlayer();
+  boot.timer = setTimeout(() => loadFailedNote(runId, null, "timeout"), BOOT_TIMEOUT_MS);
+  let bad = 0;
   feed = new EventFeed(runId, (evs, body) => {
     addEvents(evs);
-    if (!feed?.loaded && body && body.next_offset < body.size) loadingNote(body);
-  });
-  loadingNote({});
+    bad += body?.bad_lines ?? 0;
+  }, { onProgress: bootProgress });
   try {
     await feed.readAll();
   } catch (e) {
-    loadFailedNote(runId, e);
+    if (!boot.failed) loadFailedNote(runId, e);
     return;
   }
+  if (boot.failed) return; // (時間切れ said already)
+  if (!player.events.length && bad) {
+    loadFailedNote(runId, null, "broken");
+    return;
+  }
+  bootProgress(1);
   feed.loaded = true;
-  loadingNote(null);
   // (a static export holds finished records only: nothing to follow)
   const follow = !STATIC && !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
@@ -2694,6 +2877,7 @@ window.addEventListener("resize", placeRunList);
 const wantShort = (s) => (s.split("。")[0].replace(/\s*[(（][^()（）]*[)）]/g, "").trim() || s);
 
 async function showRunList(message = "", runs = null) {
+  bootDone();
   const box = $("runlist");
   box.hidden = false;
   placeRunList();
@@ -2892,7 +3076,7 @@ const LOCAL_RUN_HTML =
 // The export's other pages (data/static.json extras: [{href, title}], e.g. N10's answers), one line each.
 async function staticExtrasHtml() {
   try {
-    const got = await (await fetch("data/static.json")).json();
+    const got = await (await fetch(getUrl("/data/static.json"))).json();
     const rows = (got.extras ?? []).map((x) => `<p class="extra"><a href="${esc(x.href)}">${esc(x.title)}</a></p>`);
     return rows.join("");
   } catch {
@@ -3109,6 +3293,9 @@ else if (params.get("src")) {
     .then((text) => loadEvents(parseJsonl(text), { live: false }))
     .catch((e) => showRunList(`読めなかった: ${e}`));
 } else if (params.get("list")) showRunList();
-else if (draft) startDraft();
+else if (draft) {
+  bootDone();
+  startDraft();
+}
 // no run, no file, no draft: the run list too (a saved run is one 見る away, from おすすめ or its row)
 else showRunList();

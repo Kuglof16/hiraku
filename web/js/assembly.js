@@ -23,6 +23,7 @@ import { esc, fmt, keepAsides } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { mountAssemblySwitch } from "./modules.js"; // modules:
 import { assemblyJointControls, JOINT_KINDS } from "./joints.js"; // joints:
+import { pendingLength } from "./heavy.js";
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -48,7 +49,9 @@ export function assemblyRecord(s) {
   const ids = s?.order?.analyses ?? [];
   for (let i = ids.length - 1; i >= 0; i -= 1) {
     const a = s.analyses[ids[i]];
-    if (a?.status !== "ok" || !Array.isArray(a.assembly) || !a.assembly.length) continue;
+    // (a static export's assembly not read yet: its length from the light record, so the older ones are not read)
+    const n = pendingLength(a, "assembly") ?? (Array.isArray(a?.assembly) ? a.assembly.length : 0);
+    if (a?.status !== "ok" || !n) continue;
     const design = s.designs?.[a.design_version] ?? s.designs?.[s.currentVersion] ?? null;
     const steps = [...a.assembly].sort((x, y) => x.order - y.order);
     return { ana: a, steps, interferences: a.interferences ?? [], design };

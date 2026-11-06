@@ -154,7 +154,11 @@ class ExportTest(unittest.TestCase):
                     if nxt >= size or nxt == offset:
                         break
                     offset = nxt
-                self.assertEqual(gzip.decompress((data / "runs" / rid / "events.jsonl.gz").read_bytes()), read, rid)
+                # the light record with its heavy parts put back: the server's events, line for line
+                run_dir = data / "runs" / rid
+                parts = {p.name: p.read_bytes() for p in (run_dir / ex.HEAVY_DIR).glob("*")} if (run_dir / ex.HEAVY_DIR).is_dir() else {}
+                joined = ex.join_record(gzip.decompress((run_dir / ex.LIGHT_FILE).read_bytes()), parts)
+                self.assertEqual(joined, [json.loads(line) for line in read.splitlines()], rid)
         finally:
             server.shutdown()
             server.server_close()
