@@ -168,4 +168,21 @@ def all_formulas() -> list[Formula]:
         requires=[(r > 0, "r must be positive")],
         symbols=s,
     ))
+    # N1 on the linkage model (modal_shell, suspension linkage) has no hand estimate of its first frame-involving
+    # mode: the plan predicts it with the beam model's first frame mode, carried over as it is.
+    s = _sym("f_beam")
+    out.append(Formula(
+        formula_id="modal.beam_frame_mode",
+        title="梁のモードの模型のフレームのいちばん低いモード (そのまま、シェルのサスペンションの模型の予測に)",
+        domain="nvh",
+        expression="f = f_beam",
+        inputs={"f_beam": _in("Hz", "first frame mode of the beam model (k1_frame.modal: springs at the wheel centres, "
+                                     "no suspension linkage)", min=0)},
+        outputs={"f": ("Hz", "predicted first frame-involving mode", s["f_beam"])},
+        assumptions=["the frame's lowest bending mode on the beam model stands for the shell's on its suspension "
+                     "linkage (no hand estimate of the linkage model)"],
+        source="the beam model's own result (hiraku.solvers.k1_frame.modal), not a formula from the literature",
+        requires=[(s["f_beam"] > 0, "f_beam must be positive")],
+        symbols=s,
+    ))
     return out

@@ -119,6 +119,10 @@ def design_for(tool):
 
 
 COARSE = {"frame_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "off"},
+          # on the suspension linkage (N1's plan): its results hold every predicted quantity, first_frame_involving_mode
+          # too (spring mode has no linkage energies); the spring mode's record is tested in test_modal_shell
+          "modal_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "suspension": "linkage",
+                          "tyre_stiffness": {"value": 60.0, "unit": "N/mm"}},
           # 8 facets per round tube (hot_spot_facets): the test needs the results' names, not the 40-facet read
           "frame_tubes": {"element_size": {"value": 40.0, "unit": "mm"}, "hot_spot_facets": {"value": 8, "unit": "1"}}}
 
