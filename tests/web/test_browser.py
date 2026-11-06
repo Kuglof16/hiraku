@@ -1267,7 +1267,7 @@ class BrowserReplayTest(unittest.TestCase):
                        answers: k.answers.map((a) => a.key), note: k.note, docs: k.docs.map((x) => x.doc.doc_id),
                        rules: Object.keys(k.rules), checks: Object.values(k.ruleChecks).map((c) => [c.rule_check_id, c.pass]),
                        lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent)
-                         .filter((x) => ["分野を選んだ", "要件を", "答えがそろった", "規則の束", "規則 SM-01"].some((w) => x.includes(w))) };
+                         .filter((x) => ["確かめる分野を", "決まっていないことを", "標準の値で進めました", "答えてもらいました", "規則の束", "規則 SM-01"].some((w) => x.includes(w))) };
             }""",
             events,
         )
@@ -1280,7 +1280,10 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["rules"], ["SM-01"])
         self.assertEqual(got["checks"], [["rchk-0001", True]])
         self.assertEqual(len(got["lines"]), 5, got["lines"])
-        self.assertIn("当てはまる試験 2", got["lines"][0])
+        # the intake's plain lines (hiraku/intake/domains.py summary_line: the assembly's test counts too; hearing.py hearing_text)
+        self.assertIn("確かめる分野を 1 つ、試験を 3 個選びました: 強度信頼性", got["lines"][0])
+        self.assertIn("決まっていないことを 1 つ聞きます", got["lines"][1])
+        self.assertIn("答えはなかったので、標準の値で進めました。設計を始めます", got["lines"][2])
         self.assertIn("値が無くて当てられない部品 1", got["lines"][4])
         self.assertNotIn("守れていない", got["lines"][4])
         page.close()

@@ -200,8 +200,11 @@ export function applyEvent(s, ev) {
       s.intake.picked = d;
       const picks = d.picks ?? [];
       const tests = new Set(picks.flatMap((p) => p.test_ids ?? []));
+      for (const id of d.assembly_test_ids ?? []) tests.add(id);
       const names = picks.map((p) => p.shown_name ?? DOMAIN_JA[p.domain] ?? p.domain).join("・");
-      const txt = `分野を選んだ: ${names || "なし"} (当てはまる試験 ${tests.size}・選ばなかった分野 ${(d.off ?? []).length})`;
+      // the intake's plain line (hiraku/intake/domains.py summary_line), with the domains' names after it
+      const added = (d.added_tests ?? []).length;
+      const txt = `確かめる分野を ${picks.length} つ、試験を ${tests.size} 個選びました${added ? ` (Claude が足した ${added} 個を含む)` : ""}${names ? `: ${names}` : ""}`;
       log(s, ev, "info", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -210,13 +213,16 @@ export function applyEvent(s, ev) {
       const qs = d.questions ?? [];
       s.intake.questions = qs;
       if (agent) agent.status = "答え待ち";
-      const must = qs.filter((q) => q.ask === "must").length;
-      // rule hits that need a person (contract: rule_questions), in the same ask or on their own
+      // rule hits that need a person (contract: rule_questions) and trade-offs, in the same ask or on their own
       const rqs = d.rule_questions ?? [];
+      const tqs = d.tradeoff_questions ?? [];
+      s.intake.asked = { rules: rqs.length, trades: tqs.length };
+      // the intake's plain line (hiraku/intake/events.py asked_event): one rule hit is said in its own sentence
       const said = [];
-      if (qs.length || !rqs.length) said.push(`足りない要件を ${qs.length} 個${rqs.length ? "" : "聞いた"} (値がまだ無い ${must}・既定値を確かめる ${qs.length - must})`);
-      if (rqs.length) said.push(`規則の当たりを ${rqs.length} 個聞いた${qs.length ? "" : " (設計を直すか、規則を外すか)"}`);
-      const txt = said.join("・");
+      if (qs.length) said.push(`決まっていないことを ${qs.length} つ聞きます`);
+      if (rqs.length) said.push(rqs.length === 1 && rqs[0].text ? String(rqs[0].text).trim().replace(/。$/, "") : `規則に当たったことを ${rqs.length} つ、このままでいいか聞きます`);
+      if (tqs.length) said.push(`どちらを優先するかを ${tqs.length} つ聞きます`);
+      const txt = said.join("。");
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -227,19 +233,36 @@ export function applyEvent(s, ev) {
       s.intake.note = d.note ?? null;
       if (agent) agent.status = "見守り";
       const byDefault = ans.filter((a) => a.source === "default").length;
+      const byHearing = ans.filter((a) => a.source === "hearing").length;
       const ras = d.rule_answers ?? [];
-      const said = [];
-      if (ans.length || !ras.length) said.push(`答えがそろった: ${ans.length} 個 (既定値のまま ${byDefault})`);
-      if (ras.length) {
-        const n = (c) => ras.filter((a) => a.choice === c).length;
-        said.push(`規則の当たりの答え: 設計を直す ${n("revise_design")}・規則を外す ${n("drop_rule")}`);
-      }
-      // asked (hearing.asked), with neither an answer nor a default in hearing.answered: the
-      // record's "答えが無いまま" (hiraku/intake/hearing.py unresolved), said what it is
+      const tas = d.tradeoff_answers ?? [];
+      const asked = s.intake.asked ?? { rules: 0, trades: 0 };
+      const rules = asked.rules || ras.length;
+      const trades = asked.trades || tas.length;
+      // asked (hearing.asked), with neither an answer nor a default in hearing.answered (hiraku/intake/hearing.py unresolved)
       const got = new Set(ans.map((a) => a.key));
+      const qn = (s.intake.questions ?? []).length;
       const left = (s.intake.questions ?? []).filter((q) => q.req_key && !got.has(q.req_key)).length;
-      if (left) said.push(`答えが無いまま ${left} 個 (聞いたが、答えも既定値も無いので要件に入っていない)`);
-      const txt = said.join("・");
+      // the intake's plain line (hiraku/intake/hearing.py hearing_text): no ids, no counts of defaults
+      const standard = "分からない所は標準の値で進めました";
+      const dropped = ras.filter((a) => a.choice === "drop_rule").length;
+      let txt;
+      if (trades && !qn && !rules) {
+        txt = tas.length >= trades ? "どちらを優先するかの答えをもらいました" : `どちらを優先するかは、${trades - tas.length} つがまだ決まっていません (人がまだ決めていない)`;
+      } else if (rules && !qn) {
+        txt = (ras.length >= rules ? "規則に当たったことへの答えをもらいました" : `規則に当たったことのうち ${rules - ras.length} つが、まだ決まっていません (人がまだ決めていない)`)
+          + (dropped ? `。${dropped} つの規則は、この実行では外します` : "");
+      } else if (!qn) {
+        txt = byDefault ? `聞くことはありませんでした。${standard}` : "聞くことはありませんでした。設計を始めます";
+      } else {
+        const said = [byHearing ? `${byHearing} つ答えてもらいました` : "答えはなかったので、標準の値で進めました"];
+        if (byHearing && byDefault) said.push(standard);
+        if (left) said.push(`答えも標準の値も無い ${left} つは、要件に入っていません`);
+        if (rules) said.push(ras.length ? "規則に当たったことへの答えもあります" : "規則に当たったことは、まだ決まっていません");
+        if (trades) said.push(tas.length ? "どちらを優先するかの答えもあります" : "どちらを優先するかは、まだ決まっていません");
+        if (!left) said.push("設計を始めます");
+        txt = said.join("。");
+      }
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
