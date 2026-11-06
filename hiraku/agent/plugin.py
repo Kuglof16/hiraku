@@ -24,7 +24,6 @@ state and outbox files.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import sys
@@ -350,6 +349,8 @@ class PluginServer:
 
     async def call_tool(self, name: str, args: Record) -> Record:
         """{"content": [{"type": "text", "text": ...}], "is_error"?} as hiraku.tools.mcp answers."""
+        import asyncio  # here, not at the top: the hook command imports this module and never needs it
+
         from hiraku.tools.mcp import HANDLERS, make_handler
 
         await asyncio.to_thread(self.drain)

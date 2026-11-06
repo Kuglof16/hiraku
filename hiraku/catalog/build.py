@@ -243,10 +243,22 @@ Builder = Callable[[Record, Record, Record], Record]
 
 # Builders named by `build:` in data/catalog/tests.yaml (this module's own).
 def _with_modules(build: Builder) -> Builder:
-    # load_case.modules on designs split into modules, as the builders package sets it (builders.modules)
-    from hiraku.catalog.builders.modules import with_modules
+    """load_case.modules on designs split into modules, as the builders package sets it (builders.modules).
+    builders.modules is imported on the first build, not here: importing it runs the builders package's
+    __init__ (the formulas, sympy and numpy), which this module's importers (the plugin's hook command
+    among them) would otherwise pay for on every start."""
+    wrapped_once: list[Builder] = []
 
-    return with_modules(build)
+    def wrapped(spec: Record, req: Record, design: Record) -> Record:
+        if not wrapped_once:
+            from hiraku.catalog.builders.modules import with_modules
+
+            wrapped_once.append(with_modules(build))
+        return wrapped_once[0](spec, req, design)
+
+    wrapped.__name__ = getattr(build, "__name__", "build")
+    wrapped.general = getattr(build, "general", build)  # type: ignore[attr-defined]
+    return wrapped
 
 
 BUILDERS: dict[str, Builder] = {
