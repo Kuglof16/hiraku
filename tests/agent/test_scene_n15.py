@@ -20,21 +20,26 @@ EXPECTED_REDS = {
     1: {"assembly"},  # stage 0: H1-motion, H1-steer, H3, H6 and H7-handhold (nothing to hold to get in)
     2: {"assembly"},  # stage 0: H7-opening (the bolted side net shuts the way in)
     3: {"powertrain"},  # stage 2: P3 (time to 40 km/h); R7-hand passes at stage 1 (path_checked)
-    # stage 3: R1s (the hot spot at the rail joints) and C1-40kmh (K2's crash_beam: the least room to the occupant
-    # boxes -22.8 and -32.5 mm on 9bffe19c, run 20261106-182436); the rails and joints of version 5 answer both (+62.3 mm)
+    # stage 3: R1s (the hot spot at the rail joints) and C1-40kmh (K2's crash_beam: the least room to the occupant boxes)
     4: {"strength", "crash"},
-    5: set(),
+    # the rails and joints of version 5 answer R1s; C1-40kmh stays NG (-22.9 mm at tower_post_LA2): with the seat's mount
+    # brackets (claude/analysis-seat 032e7d20) the driver fit seats the driver 125 mm further forward than the plan's v5
+    # was made for, and the plan has no revision left (the submission's v5, reach222, answers it: batch 7c5)
+    5: {"crash"},
 }
-JUDGED_ON_LAST = ("R7-hand-300N", "R7-foot-500N", "C1-40kmh", "C1-split")  # judged on the last version, and passing
-# judged on the tool's value after the path check (contract 2fc1006): R7-hand on the grip, C1-40kmh on crash_beam
-PATH_CHECKED_ON_LAST = ("R7-hand-300N", "C1-40kmh")
+# the run ends there: stopped, not judged (HK5: the heavier stages wait behind the red crash tile)
+EXPECTED_END = ("stopped", "not_judged")
+RED_ON_LAST = {"C1-40kmh"}  # the only failing verdict of the last version
+JUDGED_ON_LAST = ("R7-hand-300N", "R7-foot-500N", "C1-split")  # judged on the last version, and passing
+# judged on the tool's value after the path check (contract 2fc1006): R7-hand on the grip
+PATH_CHECKED_ON_LAST = ("R7-hand-300N",)
 
 
 @unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "the N15 scripted run takes about half an hour (HIRAKU_SLOW_TESTS=1)")
 class SceneN15Test(unittest.TestCase):
     """The N15 scripted run with the real solvers."""
 
-    def test_the_run_ends_with_every_tile_green(self):
+    def test_the_run_ends_on_the_crash_tile_of_the_last_version(self):
         from qa import shared_runs  # the N15 run made once per code version, shared with QA's run checks
 
         root = Path(__file__).resolve().parents[2]
@@ -45,8 +50,9 @@ class SceneN15Test(unittest.TestCase):
 
         finished = [e for e in events if e["kind"] == "run.finished"]
         self.assertEqual(len(finished), 1)
-        self.assertEqual((finished[0]["data"]["status"], finished[0]["data"]["stop_code"]), ("done", "done"),
+        self.assertEqual((finished[0]["data"]["status"], finished[0]["data"]["stop_code"]), EXPECTED_END,
                          finished[0]["data"].get("stop_reason"))
+        self.assertIn("衝突が NG のまま", finished[0]["data"].get("stop_reason") or "")
 
         tiles: dict[tuple[int, str], str] = {}  # the newest state of each tile
         for e in events:
@@ -57,10 +63,10 @@ class SceneN15Test(unittest.TestCase):
         self.assertEqual(reds, EXPECTED_REDS)
 
         last = versions[-1]
-        self.assertEqual({d: s for (w, d), s in tiles.items() if w == last and s != "green"}, {})
+        self.assertEqual({d: s for (w, d), s in tiles.items() if w == last and s != "green"}, {"crash": "red"})
         verdicts = {e["data"]["load_case_id"]: e["data"]["pass"] for e in events if e["kind"] == "verdict.recorded"
                     and e.get("design_version") == last}
-        self.assertTrue(verdicts and all(verdicts.values()), verdicts)
+        self.assertEqual({lc for lc, ok in verdicts.items() if not ok}, RED_ON_LAST, verdicts)
         self.assertTrue(set(JUDGED_ON_LAST) <= set(verdicts), verdicts)
         bases = {e["data"]["load_case_id"]: e["data"].get("basis") for e in events if e["kind"] == "verdict.recorded"
                  and e.get("design_version") == last}
