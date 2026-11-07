@@ -283,10 +283,22 @@ function resize3d() {
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
   const h = viewport.clientHeight;
   if (w > 0 && h > 0) {
+    const aspect = bench.camera.aspect;
     bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
     grip.resize(w, h); // grip:
     if (half && cmpView) cmpView.bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    if (bench.camera.aspect !== aspect) refitForSize();
   }
+}
+// ③'s framing left of the legend (Workbench3D.fit with fitWidth: by the outline's points in the
+// view's free width) depends on the view's shape: framed again when the 3D's size changes (the
+// strip under the 3D, benchnote.js, comes after the first framing), so the same t gives the same
+// picture however the page got there. Not a camera turned by hand, a focus, or the compare view.
+function refitForSize() {
+  if (!bench.fitWidth || !(bench.reserveRight > 0) || !bench.design || bench.focused || bench.handMoved) return;
+  if (viewport.classList.contains("compare")) return;
+  if (grip.reserved) grip.reserve(grip.reserved, true); // (its own view from higher up)
+  else bench.fit(VIEWS[bench.view ?? "default"]);
 }
 new ResizeObserver(resize3d).observe(viewport);
 window.addEventListener("resize", fitStage);
@@ -2229,6 +2241,13 @@ function fitOverlays() {
       if (f.scrollHeight > f.clientHeight) f.scrollTop = Math.max(0, on.offsetTop - f.offsetTop - (f.clientHeight - on.offsetHeight) / 2);
     }
   } else setStyle(lg, "maxHeight", "");
+  // the mesh's list (above the legend, app.css .meshcard) ends above the legend's top, whatever the
+  // legend's height (its Japanese title may take another line): the list scrolls instead
+  if (meshCard && !meshCard.hidden) {
+    const room = lgIn && lg.offsetWidth ? lg.offsetTop - meshCard.offsetTop - 6 : null;
+    // (in px, as the browser keeps it: setStyle compares the string; 520: the CSS's calc(100% - 520px))
+    setStyle(meshCard, "maxHeight", room != null ? `${Math.max(0, Math.floor(Math.min(viewport.clientHeight - 520, room)))}px` : "");
+  }
 
   const nowEl = $("now");
   if (!nowEl.hidden && tg.offsetWidth && nowEl.parentElement === viewport) {
