@@ -177,7 +177,7 @@ console.log(JSON.stringify(out));
 """)
         by = dict(got)
         self.assertIn("mountIntake", by["index.js"])
-        self.assertEqual(by["a1.js"], ["REPLY_STEP_S", "inTurn", "keepBrackets", "renderA1"])
+        self.assertEqual(by["a1.js"], ["REPLY_STEP_S", "inTurn", "keepBrackets", "renderA1", "replyText"])
         self.assertEqual(by["a2.js"], ["askingPanel", "renderA2", "submit"])
         self.assertEqual(by["a5.js"], ["renderA5"])
 
@@ -912,6 +912,52 @@ console.log(JSON.stringify({{ text: el.text(), box: !!box, items: box ? box.all(
         got = self.run_events("[]")
         self.assertFalse(got["box"])
         self.assertTrue(got["empty"])
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class ReplyBubbleTest(unittest.TestCase):
+    """A1: HIRAKU's reply under the request, made from the record: the domains, assembly, and what the hearing came to."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ replyText }} from "{url('a1.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const pick = (d, n) => ({{ domain: d, shown_name: n, reason: '悪路を走るので確かめます', test_ids: ['S2'] }});
+const picked = e(1, 1, 'domains.picked', {{ want: 'w', flags: {{}}, flag_reasons: {{ ride: 'x' }}, picks: [pick('handling', '操安'), pick('thermal', '熱')], off: [], assembly_test_ids: ['H1'] }});
+const std = [{{ key: 'Q63', name: 'n', value: 25, unit: 'mm', source: 'default', trust: 3, basis: 'assumption' }}, {{ key: 'Q41', name: 'n2', value: 150, unit: 'mm', source: 'default', trust: 3, basis: 'assumption' }}];
+const user = e(0, 0, 'user.said', {{}}); user.text = '林道を走る車を作りたい'; user.agent = 'user';
+let events = [user, picked];
+const api = {{ events: () => events, onEvent: () => () => {{}} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A1', picksFinal: true }});
+const reply = () => (el.all('div').find((d) => d.dataset && d.dataset.reply === '1') || {{ text: () => '' }}).text();
+{{BODY}}
+"""
+
+    def run_body(self, body):
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_reply_says_the_domains_assembly_and_the_hearing_from_the_record(self):
+        got = self.run_body("""
+const afterPick = replyText(intake.model);
+events = [user, picked, e(2, 2, 'hearing.answered', { answers: std })]; intake.update();
+const none = replyText(intake.model);
+events = [user, picked, e(2, 2, 'hearing.asked', { questions: [{ req_key: 'Q34', name: 'x', text: 't', ask: 'confirm' }, { req_key: 'Q03', name: 'y', text: 't', ask: 'confirm' }] })]; intake.update();
+const asked = replyText(intake.model);
+console.log(JSON.stringify({ afterPick, none, asked, shown: reply() }));
+""")
+        self.assertEqual(got["afterPick"], "受け取りました。2 分野 (操安・熱)と組み立てを調べます。")
+        self.assertEqual(got["none"], "受け取りました。2 分野 (操安・熱)と組み立てを調べます。質問は無く、分からない 2 つは標準の値で進めます。")
+        self.assertEqual(got["asked"], "受け取りました。2 分野 (操安・熱)と組み立てを調べます。決まっていないことを 2 つ質問します。")
+        self.assertIn("決まっていないことを 2 つ質問します", got["shown"])  # on the screen
+
+    def test_there_is_no_reply_before_claude_has_picked(self):
+        got = self.run_body("""
+const draft = e(1, 1, 'domains.picked', { want: 'w', flags: {}, picks: [pick('handling', '操安')], off: [], assembly_test_ids: [] });
+events = [user, draft]; const i2 = mountIntake(new El('div'), { events: () => events, onEvent: () => () => {} }, { screen: 'A1' });
+console.log(JSON.stringify({ draft: replyText(i2.model) }));
+""")
+        self.assertIsNone(got["draft"])  # the code's first candidates are not an answer yet
 
 
 class TradeoffQuestionTest(unittest.TestCase):

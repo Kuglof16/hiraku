@@ -14,6 +14,37 @@ export function keepBrackets(text) {
   return String(text).split(/([(（][^()（）]{1,40}[)）])/).map((s, i) => (i % 2 ? h("span", { class: "in-nobreak" }, s) : s));
 }
 
+/** HIRAKU's reply to the request, made from the record (nothing made up): the domains picked, that assembly is looked at on its
+ *  own, what the hearing came to (how many questions, or no question and how many standard values), in the positive.
+ *  null until Claude has picked (the first, code-made candidates are not an answer yet). */
+export function replyText(m) {
+  const d = m.domains;
+  if (!d || m.domainsFromProject || (m.domainsDraft && !m.finished && !m.picksFinal)) return null;
+  const names = (d.picks || []).filter((p) => p.domain !== "assembly").map((p) => p.shown_name); // assembly is said apart, as on the frame
+  const what = names.length
+    ? `${names.length} 分野 (${names.join("・")})${(d.assembly_test_ids || []).length || (d.picks || []).some((p) => p.domain === "assembly") ? "と組み立て" : ""}を調べます。`
+    : "";
+  const q = m.hearing.asked;
+  const asked = (q?.questions?.length || 0) + (q?.rule_questions?.length || 0) + (q?.tradeoff_questions?.length || 0);
+  const std = (m.hearing.answered?.answers || []).filter((a) => a.source !== "hearing").length;
+  let hearing = "";
+  if (asked) hearing = m.hearing.answered?.answers?.some((a) => a.source === "hearing") ? `決まっていないことを ${asked} つ聞いて、答えをもらいました。` : `決まっていないことを ${asked} つ質問します。`;
+  else if (m.hearing.answered) hearing = std ? `質問は無く、分からない ${std} つは標準の値で進めます。` : "質問は無く、このまま進めます。";
+  return ["受け取りました。", what, hearing].filter(Boolean).join("");
+}
+
+/** The chat, with the reply right under the first request of the person. */
+function withReply(chat, m) {
+  const reply = replyBubble(m);
+  const first = chat.findIndex((c) => c.who === "user");
+  return chat.flatMap((msg, i) => (reply && i === first ? [bubble(msg), reply] : [bubble(msg)]));
+}
+
+function replyBubble(m) {
+  const text = replyText(m);
+  return text ? h("div", { class: "in-msg lead in-reply", dataset: { reply: "1" } }, h("div", { class: "in-who" }, "HIRAKU・まとめ"), h("p", {}, text)) : null;
+}
+
 function bubble(msg) {
   if (msg.who === "note") return h("div", { class: "in-note" }, msg.text);
   return h("div", { class: `in-msg ${msg.who}` }, h("div", { class: "in-who" }, msg.who === "user" ? "あなた" : "HIRAKU"), h("p", {}, ...keepBrackets(msg.text)));
@@ -160,7 +191,7 @@ export function renderA1(el, m, api, ui) {
     h("section", { class: "in-chat" },
       h("h2", {}, "作りたいものを伝える"),
       h("div", { class: "in-msgs", dataset: { keepScroll: "a1-msgs" } },
-        m.chat.length ? m.chat.map(bubble) : h("p", { class: "in-empty" }, "作りたいものを書くと、HIRAKU が調べる点を選びます")),
+        m.chat.length ? withReply(m.chat, m) : h("p", { class: "in-empty" }, "作りたいものを書くと、HIRAKU が調べる点を選びます")),
       composer(api, ui)),
     h("section", { class: "in-side", dataset: { keepScroll: "a1-side" } },
       h("div", { class: "in-block" },
