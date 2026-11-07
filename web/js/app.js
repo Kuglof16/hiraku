@@ -683,7 +683,7 @@ function showGridExtras(s) {
     const list = viewerExtras(run, tile.dataset.domain);
     tile.classList.toggle("has-extras", list.length > 0);
     if (!list.length) continue;
-    const rows = list.map((e) => `<li data-extra="${esc(e.id)}" title="押すと、ビューアで見ます"><b>${esc(e.label)}</b> <span>— ${esc(e.note)}</span></li>`).join("");
+    const rows = list.map((e) => `<li data-extra="${esc(e.id)}" title="押すと、ビューアで見ます"><b>${esc(e.label)}</b>${e.note ? ` <span>— ${esc(e.note)}</span>` : ""}</li>`).join("");
     tile.insertAdjacentHTML("beforeend", `<ul class="vextras" data-role="viewer-extras">${rows}</ul>`);
   }
 }

@@ -43,8 +43,9 @@ VIEWER = """() => { const v = document.getElementById('grid-viewer');
                title: v.querySelector('.gv-title').textContent, note: v.querySelector('.gv-sample').textContent } : null; }"""
 ROWS = """() => [...document.querySelectorAll('#tiles [data-role="viewer-extras"]')].map((u) => ({
   domain: u.closest('.tile').dataset.domain, rows: [...u.querySelectorAll('[data-extra]')].map((li) => [li.dataset.extra, li.textContent]) }))"""
-CFD_ROW = "空気の流れ (CFD) — この v5 の形で計算。実験と比べて確かめていない"
-WATER_ROW = "冠水路の水 — 見せるための計算で、走破の判定ではない"
+# (the rows say what they open only; the notes on what the computations are not are in the README)
+CFD_ROW = "空気の流れ (CFD)"
+WATER_ROW = "冠水路の水"
 
 
 class _Pages:
@@ -88,7 +89,7 @@ def check_rows_and_viewer(test, page, fixtures, prefix):
     got = page.evaluate(VIEWER)
     test.assertTrue(got["shown"], got)
     test.assertEqual((got["src"], got["extra"]), (f"{prefix}index.html?data=fixtures/aero_cfd.json#aero_cfd", "aero_cfd"))
-    test.assertEqual(got["note"], "この v5 の形で計算。実験と比べて確かめていない")
+    test.assertEqual(got["note"], "")
     test.assertIn("空気の流れ (CFD)", got["title"])
     page.wait_for_function("() => document.querySelector('#grid-viewer iframe').contentDocument?.readyState === 'complete'", timeout=30000)
     test.assertTrue(wait_for(page, lambda: ("aero_cfd.json", 200) in fixtures), fixtures)
