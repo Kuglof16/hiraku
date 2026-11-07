@@ -122,16 +122,14 @@ requirements:
       assumption: the robot stays still on the steepest slope it is allowed to drive on, the 1/12 (= 8.33 %) of Q13
       (バリアフリー法施行令 第19条, read 2026-11-03 in a source check); that parking uses the same slope is HIRAKU's choice
   - key: Q54
-    name: 稼働時間 (距離に直した値)
-    value: 43.2
-    unit: km
+    name: 稼働時間
+    value: 10
+    unit: h
     source: default
-    trust: 3
+    trust: 1
     basis: >-
-      computed: 10 h x Q50 1.2 m/s (4.32 km/h) = 43.2 km, the distance of one charge if the robot never stands still (an upper
-      bound; HIRAKU's choice). The 10 h is the lower side of the makers' operating hours 9-18 h, https://www.keenon.com/en/product/T9
-      and others; the range 9-18 h read 2026-11-03 in a source check (Keenon). The builders (P4, T1, T2) read a distance in km,
-      so the hours are turned into one here
+      各社の稼働時間 9〜18 h の下の側, https://www.keenon.com/en/product/T9 ほか;
+      the range 9-18 h read 2026-11-03 in a source check (Keenon)
   - key: Q75
     name: 横の加速度
     value: 0.049
