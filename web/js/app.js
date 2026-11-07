@@ -2990,6 +2990,12 @@ async function seekAndDraw(t) {
     board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale);
   }
   await nextFrame();
+  // the real look's Poly Haven files (sky, ground, wall) still loading: the frame at t once they
+  // are in, so a page at ?t= draws the same picture every time (as cut.js waits for them)
+  if (await looksReady()) {
+    draw();
+    await nextFrame();
+  }
   document.documentElement.dataset.t = String(player.playhead);
   return player.playhead;
 }

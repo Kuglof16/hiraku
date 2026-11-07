@@ -33,7 +33,7 @@ C1_TOL = 0.15
 # broken off the seats' side may have: crash_beam.SPLIT_STOP_SHARE (3 %, HIRAKU's choice, no source).
 C1_SPLIT_ID = "C1-split"
 C1_SPLIT_LIMIT = 0.03
-C1_BREAK_BAND_DEG = 1.0  # HIRAKU's choice: how far the break angle is moved each way to find the edge
+C1_BREAK_BAND_DEG = 1.0  # HIRAKU's choice: how far up the break angle is moved (one run more) to find the edge
 
 
 def c1_crash(spec: Record, req: Record, design: Record) -> list[Record]:
@@ -42,7 +42,7 @@ def c1_crash(spec: Record, req: Record, design: Record) -> list[Record]:
         v, vkey = number(req, "Q65", "km/h"), "Q65"
     else:  # the crash speed is the top speed unless the requirements say otherwise
         v, vkey = number(req, "Q50", "km/h"), "Q50"
-    # break_band: crash_beam makes the run again with its break angle 1 deg lower and higher, so the record says when
+    # break_band: crash_beam makes the run again with its break angle 1 deg higher, so the record says when
     # C1's verdict sits on the break angle's edge (a member that breaks or not by the last digits of the arithmetic)
     common = {"test_id": "C1", "domain": spec["domain"],
               "params": {"speed": q(v, "km/h"), "loading": load, "break_band": q(C1_BREAK_BAND_DEG, "deg")},
@@ -142,11 +142,25 @@ C1_SPLIT_PLAN = {
                          "塔やアームの取付がレールを曲げる力は入れない"],
          "inputs": {k: f"from.{k}" for k in ("F", "A", "f_y", "E", "I", "L", "share")}, "inputs_from": c1_split_calc},
     ],
-    # No expected mismatch: with the pieces touching each other and the wheels meeting the wall through their tyres
-    # (crash_beam on claude/k2-crash-contact), no piece of 3 % breaks off on demo v1, the scripted run 150416's
-    # versions 1-5 or the real run 160725's version 7 at 40 km/h (tyre 60 N/mm; demo v1 150 N/mm), as the straight
-    # column says (0). Without them (182f148f) the tower posts broke and 4-6 % came off; the hand calculation has no
-    # bending of the rails by the towers and the arm brackets, so a design that splits stops the plan at the mismatch.
+    # The straight column says 0 (no split) on every design so far; crash_beam splits some: the scripted N15 run
+    # 20261107-091046's version 4 (rail_R_AS1 breaks at 42 ms, 15.4 % comes off, the same at 61 deg) and demo v1 at
+    # the break angle's edge. The mismatch is expected only that way (when: the hand value low); a design that does
+    # not split matches the 0 as before.
+    "expected_mismatch": {
+        "quantity": "frame_split_fraction",
+        "when": "low",
+        "source": ("the K2 department's crash_beam at 40 km/h, two_cargo: the scripted N15 run 20261107-091046 version 4, "
+                   "frame_split_fraction 0.154 (rail_R_AS1 broke at 42 ms; the same with the break angle 61 deg), "
+                   "against the straight column's 0, 2026-11-07"),
+        "cause": ("手計算は、つぶれる所の後ろのレールを、つぶれの力を軸の向きに受けるまっすぐな柱とみる。梁の骨組みでは、塔とアームの"
+                  "取付がレールを曲げ、曲がりの塑性ヒンジが壊れる角度まで回ってレールが折れ、前の塊が座席の側から離れる。手計算は"
+                  "この曲がりを持たないので、裂けないと出す"),
+        "fix": ("曲がって折れる形を手で解く式は無い。手計算はまっすぐな柱の場合の値として残し、合否は梁の骨組みの値 (離れた塊の"
+                "質量の割合) で出す。直すなら、塔とアームの取付の間のレールを太く、取付をレールの曲がりにくい所へ"),
+        "tool_decides": True,
+        "tool_decides_reason": ("レールが曲がって折れる形は手で解けない。手計算 (まっすぐな柱) は値に届かないので、力の道を"
+                                "手計算で確かめたうえで、梁の骨組みの値で決める"),
+    },
 }
 
 # ---------------------------------------------------------------- N1 modal
