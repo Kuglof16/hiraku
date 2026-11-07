@@ -82,6 +82,10 @@ STATIC_META = '<meta name="hiraku-static" content="1">'
 MARK_FILE = ".hiraku-static"  # an export's folder: a new export may empty it
 PAGES = ("index.html", "cut.html")
 N10_DIR = "n10"
+# the exported index.html only: the page's own background from the first paint (not white while the rest
+# loads) and the judges' card (web/js/judge_intro.js: what HIRAKU is, ▶ 最初から再生して見る, the run list's
+# links on ④, 「？ 使い方」); the screen with a server has neither
+JUDGE_HEAD = '<style>html,body{background:#e6e0d3}</style>\n<script src="js/judge_intro.js"></script>'
 DRIVE_PATH_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:(?:\\\\|\\|/)+[A-Za-z]")
 SCAN_SUFFIXES = {".html", ".js", ".mjs", ".css", ".json", ".jsonl", ".md", ".txt", ".py", ".svg"}
 
@@ -455,7 +459,10 @@ def export(
         if rel.parts[0] in ("data", N10_DIR, "pets") or rel.name in ("layout.json", MARK_FILE):
             raise SystemExit(f"web/{rel.as_posix()} would be overwritten by the export's own files")
         if rel.as_posix() in PAGES:
-            _write(out / rel, mark_static(src.read_text(encoding="utf-8")).encode("utf-8"))
+            text = mark_static(src.read_text(encoding="utf-8"))
+            if rel.as_posix() == "index.html":
+                text = text.replace(STATIC_META, STATIC_META + "\n" + JUDGE_HEAD, 1)
+            _write(out / rel, text.encode("utf-8"))
         else:
             _write(out / rel, src.read_bytes())
     data = out / "data"
