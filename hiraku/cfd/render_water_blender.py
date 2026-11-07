@@ -33,7 +33,7 @@ except ImportError:
 
 WATER_THREADS = 4
 MIN_FREE_RAM_GB = 15.0  # meshing and rendering start only with this much free: the PC is shared with other heavy jobs
-STATEMENT ="見せるための計算で、走破の判定ではない"
+STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"
 BLENDER_DEFAULT = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 MATERIALS = {  # group -> base colour (linear), metallic, roughness
     "body": ((0.62, 0.64, 0.66), 0.0, 0.45),

@@ -1,4 +1,5 @@
-"""A vehicle at constant speed through a shallow flooded road, on the GPU: 見せるための計算で、走破の判定ではない.
+"""A vehicle at constant speed through a shallow flooded road, on the GPU. It is judged only on whether water reaches the battery, the
+motor and the controller (test F5), by a calculation not compared with an experiment (STATEMENT).
 
 The water is MLS-MPM (Hu et al. 2018, DOI 10.1145/3197517.3201293): particles carry it, a grid solves it each step, with
 quadratic B-splines and APIC transfers. It is weakly compressible with a Tait equation of state. Why these:
@@ -29,7 +30,8 @@ from hiraku.cfd.geometry import Cylinder, Polytope, Shape
 from hiraku.cfd.solver import check_memory
 from hiraku.cfd.vehicle import design_shapes
 
-STATEMENT = "見せるための計算で、走破の判定ではない"
+STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"
+PROTECTED_PARTS = ("battery", "motor", "controller")  # the parts test F5 asks water not to reach (a powertrain part named so, or <name>_...)
 
 RHO_WATER = 1000.0  # kg/m^3, rounded value for water; 確かめていない
 GRAVITY = 9.80665  # m/s^2, standard gravity; 確かめていない
@@ -751,9 +753,7 @@ def replay_arrays(world: np.ndarray, grid: WaterGrid, road: Road, particle_volum
 def run_flooded_road(gpu: Gpu, design: dict[str, Any], depth_m: float = 0.2, speed_ms: float = 5.0, dx: float = 0.03, rotate_wheels: bool = True,
                      out: str | Path = "water_case", loading: str | None = "two_cargo", keep_particles: bool = True, analyse: bool = True, reserve_mib: int = 600,
                      tests_passed: dict[str, Any] | None = None, progress: Callable[[str], None] | None = None, frame_dt: float = FRAME_DT, **scene: Any) -> dict[str, Any]:
-    """A pass through the flooded road: 見せるための計算で、走破の判定ではない.
-
-    Saves in `out`: case.json, frames/p*.npz (all particles as 16-bit positions) and, after the analysis, replay.npz (compact,
+    """A pass through the flooded road. Saves in `out`: case.json, frames/p*.npz (all particles as 16-bit positions) and, after the analysis, replay.npz (compact,
     for a PC without a GPU). With analyse=False the analysis is left to analyse_case(out, design), so the caller can give up
     its GPU turn first. frame_dt is the time between saved frames; the step is the largest under the CFL limit that fits a whole
     number of times in it, so a different frame_dt also moves the step slightly (case.json has both). Refuses, in Japanese, a run
@@ -829,6 +829,24 @@ def run_flooded_road(gpu: Gpu, design: dict[str, Any], depth_m: float = 0.2, spe
     return analyse_case(folder, design, keep_particles, progress) if analyse else case
 
 
+def protected_shapes(solid: Sequence[Shape]) -> dict[str, Shape]:
+    """The parts test F5 asks water not to reach, by name."""
+    return {s.name: s for s in solid if s.group == "powertrain" and s.name.split("_")[0] in PROTECTED_PARTS}
+
+
+def part_gaps(protected: dict[str, Shape], local: np.ndarray, dx: float) -> dict[str, float]:
+    """For one frame, in vehicle axes: each part's lower face minus the highest water beside or under it (m), None with no water
+    there. Beside means within 2 dx of the part's plan, since water cannot stand inside the part; water more than dx above the
+    part's top is flying past and does not count."""
+    out: dict[str, float] = {}
+    for name, s in protected.items():
+        lo, hi = s.bounds()
+        here = (np.abs(local[:, 0] - 0.5 * (lo[0] + hi[0])) <= 0.5 * (hi[0] - lo[0]) + 2.0 * dx) & (np.abs(local[:, 1] - 0.5 * (lo[1] + hi[1])) <= 0.5 * (hi[1] - lo[1]) + 2.0 * dx) & (local[:, 2] <= hi[2] + dx)
+        if here.any():
+            out[name] = float(lo[2] - local[here, 2].max())
+    return out
+
+
 def analyse_case(out: str | Path, design: dict[str, Any], keep_particles: bool = True, progress: Callable[[str], None] | None = None) -> dict[str, Any]:
     """What the saved particles say, on the CPU: the underfloor numbers, the parts water reached, the compact replay and the
     momentum budget. No GPU, so no GPU turn is needed."""
@@ -852,10 +870,16 @@ def analyse_case(out: str | Path, design: dict[str, Any], keep_particles: bool =
     cube = 2.0 * dx
     cube_rest = (cube / (0.5 * dx)) ** 3
     n_cube = np.ceil((bounds_hi - bounds_lo) / cube).astype(np.int64) + 1
+    protected = protected_shapes(solid)
+    gaps: dict[str, dict[str, Any]] = {name: {"lower_face_mm": float(s.bounds()[0][2]) * 1000.0, "clearance_mm": float(s.bounds()[0][2]) * 1000.0, "reached_s": None} for name, s in protected.items()}
     for frame, rec in enumerate(case["records"]):
         with np.load(folder / "frames" / f"p{frame:04d}.npz") as d:
             world = d["xyz"].astype(np.float64) * d["scale"] + d["lo"]
         local = to_vehicle(world, tuple(rec["pose"]))
+        for name, gap in part_gaps(protected, local, dx).items():
+            gaps[name]["clearance_mm"] = min(gaps[name]["clearance_mm"], gap * 1000.0)
+            if gaps[name]["reached_s"] is None and gap <= 0.5 * dx:
+                gaps[name]["reached_s"] = rec["t"]
         near = np.all((local >= lo) & (local <= hi), axis=1)
         here = local[near]
         rec.update(underfloor_measure(uf, here, vol0, 0.5 * dx))
@@ -878,6 +902,8 @@ def analyse_case(out: str | Path, design: dict[str, Any], keep_particles: bool =
                           "reach_definition": f"列のいちばん低い部品から {0.5 * dx * 1000:.0f} mm 下までに粒子がある列の割合",
                           "max_depth_mean_mm": max(r["depth_mean_mm"] for r in records), "max_depth_mm": max(r["depth_max_mm"] for r in records), "max_reached_share": max(r["reached_share"] for r in records)}
     case["wet_parts_first_seen_s"] = wet_first
+    case["protected_parts"] = gaps
+    case["protected_definition"] = f"下面と水面のすき間 = 部品の下面の高さ - 部品の横 {2.0 * dx * 1000:.0f} mm までと真下にある水のいちばん高い粒子の高さ (部品の上面より {dx * 1000:.0f} mm 上までの粒子)。通過の全部のコマで最も小さい値。{0.5 * dx * 1000:.0f} mm 以下で届いたとする"
     case["momentum_budget"] = momentum_budget(case)
     # Says whether the box was tall enough. The walls' row along z also holds what water leaving the box carried, so this is
     # an upper limit of the lid's share only when the frames show nothing near the lid.

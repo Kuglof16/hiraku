@@ -378,7 +378,7 @@ class RegistrationTest(unittest.TestCase):
         self.assertEqual(sorted(got["properties"]), ["only"])
         self.assertNotIn("description", got)
         with mock.patch.object(contract, "schema", return_value={"$defs": {}}):
-            self.assertEqual(sorted(cfd_tools._input_schema()["properties"]), ["design_version", "dx_mm", "replay", "speed_kmh", "wind_ms", "yaws_deg"])
+            self.assertEqual(sorted(cfd_tools._input_schema()["properties"]), ["design_version", "dx_mm", "judge", "replay", "speed_kmh", "wind_ms", "yaws_deg"])
 
     @unittest.skipUnless(HAS_SDK, "this Python has no Agent SDK, so no MCP tables")
     def test_it_is_registered_and_in_the_production_run(self):
@@ -407,7 +407,7 @@ class RoleTest(unittest.TestCase):
         from hiraku.agent import prompts
 
         text = prompts.cae_prompt("aero")
-        for word in ("cfd_aero", "確かめていない", "GPU が無い", "判定 (verdict) の根拠にしない", "1 つの版で 1 回まで"):
+        for word in ("cfd_aero", "確かめていない", "GPU が無い", "F4", "judge", "1 つの版で 1 回まで"):
             self.assertIn(word, text)
         self.assertNotIn("cfd_aero", prompts.cae_prompt("nvh"))
 

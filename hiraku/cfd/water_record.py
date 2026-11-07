@@ -1,7 +1,8 @@
 """The record of a flooded-road pass (the tool cfd_water): what the run's folder keeps and what the tool answers.
 
-見せるための計算で、走破の判定ではない: the record says so in its first field, holds no OK / NG and no criterion, and
-physically_validated stays false. Nothing in a run reads it as a basis for a judgement.
+The record says in its first field what a judgement on it covers (water.STATEMENT): only whether water reaches the battery, the motor
+and the controller, by a calculation not compared with an experiment. physically_validated stays false. The verdict itself is the
+run's own record: the tool, called with judge, goes through the prediction, analyze and compare (test F5).
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ def make_record(case: Record, *, design_version: int, requested: Record, kept_pa
             "grid": {"dx_mm": case["inputs"]["dx_m"] * 1000.0, "particles": case["particles"], "cells": case["cells"], "frame_s": case["frame_s"], "frames": case["frames"], "steps": case["steps"], "device": case["device"]},
             "water": {"top_m": case.get("top_of_water_m"), "underfloor_depth_mean_largest_mm": uf.get("max_depth_mean_mm"), "underfloor_depth_largest_mm": uf.get("max_depth_mm"), "underfloor_reached_share_largest": uf.get("max_reached_share"),
                       "momentum_residual_over_gross": budget.get("residual_over_gross")},
+            "protected_parts": case.get("protected_parts", {}), "protected_definition": case.get("protected_definition"),
             "vehicle": vehicle_summary(case["records"]) if "coupling" in case else None,
             "coupling": case.get("coupling"),
             "files": {"case": "case.json", "replay": "replay.npz", "particles": "frames/" if kept_particles else None},
@@ -59,4 +61,4 @@ def load_record(path: Path) -> Record:
 
 def answer(record: Record, path: str, replayed: bool) -> Record:
     """What the tool says about a record: the same for the run and for its replay, apart from `replayed`."""
-    return {"statement": record["statement"], "path": path, "replayed": replayed, **{k: record[k] for k in ("design_version", "physically_validated", "vehicle_moves", "faulted", "road", "grid", "water", "vehicle", "assumptions", "wall_time_s")}}
+    return {"statement": record["statement"], "path": path, "replayed": replayed, **{k: record[k] for k in ("design_version", "physically_validated", "vehicle_moves", "faulted", "road", "grid", "water", "protected_parts", "vehicle", "assumptions", "wall_time_s")}}

@@ -5992,6 +5992,10 @@
           "maximum": 320.0,
           "description": "Grid size. Missing: 80."
         },
+        "judge": {
+          "type": "boolean",
+          "description": "true: go to a verdict on test F4 (the wind speed at which the upwind wheels lift, at rest in a wind from each side, against F1's limit): the load case, the hand calculation, the analysis and the comparison. yaws_deg and speed_kmh do not apply. Missing: false."
+        },
         "replay": {
           "anyOf": [
             {
@@ -6008,7 +6012,7 @@
       }
     },
     "tool_input.cfd_water": {
-      "description": "Agent-facing MCP tool (hiraku/tools/cfd_tools.py). 設計の版が冠水路を通るときの水を GPU で解き、実行のフォルダに記録を書く。見せるための計算で、走破の判定ではない。GPU が無ければ回さない。",
+      "description": "Agent-facing MCP tool (hiraku/tools/cfd_tools.py). 設計の版が冠水路を通るときの水を GPU で解き、実行のフォルダに記録を書く。judge で試験 F5 (電池、モーター、制御器に水が届かない) の判定まで進む。実験と比べていない計算による。GPU が無ければ回さない。",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -6048,6 +6052,10 @@
         "keep_particles": {
           "type": "boolean",
           "description": "Keep every frame's particles in the run's folder, for pictures made afterwards (about 8 MB a frame at 30 mm). Missing: false."
+        },
+        "judge": {
+          "type": "boolean",
+          "description": "true: go to a verdict on test F5 (water reaches none of the battery, the motor and the controller): the load case, the hand calculation, the analysis and the comparison. Missing: false."
         },
         "replay": {
           "anyOf": [
