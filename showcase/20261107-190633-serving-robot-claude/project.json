@@ -1,0 +1,1460 @@
+{
+  "run_id": "20261107-190633-serving-robot-claude",
+  "created_at": "2026-11-07T19:06:33.084+09:00",
+  "want": "飲食店で料理と飲み物を運ぶ配膳ロボットを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい",
+  "product": "serving-robot-claude",
+  "flags": {
+    "ride": false,
+    "lean": false,
+    "self_propelled": true,
+    "outdoor": false,
+    "rough": false,
+    "public_road": false,
+    "battery": true,
+    "electric": true,
+    "pinch": true,
+    "cargo": true,
+    "standing": true,
+    "near_people": true,
+    "liquid": true,
+    "vibration": true,
+    "continuous": true,
+    "assembly": true,
+    "preload": false,
+    "sound": false,
+    "handheld": false
+  },
+  "round_limit": 6,
+  "cost_limit_usd": 40.0,
+  "requirements": [
+    {
+      "key": "Q03",
+      "name": "使う頻度・年数",
+      "value": "10 h/日 を 5 年",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q04",
+      "name": "段差に当たるときの速さ",
+      "source": "default",
+      "trust": 3,
+      "basis": "A design condition (HIRAKU's default value), set for the strength check of the step. It is not taken from a standard or a catalogue, so it has no outside source. What it gives, by the K2 calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest",
+      "value": 10,
+      "unit": "km/h"
+    },
+    {
+      "key": "Q11",
+      "name": "路面・床と摩擦係数",
+      "value": 0.5,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the friction coefficient between the wheel and a dry indoor floor (tile, wood, carpet), 0.5, HIRAKU's own value, not read in any source. The floors themselves are the ones of the JARI robot stability test facility's course, p.1, https://img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check (that page lists the surfaces, not a coefficient)",
+      "note": "タイル・木・カーペットの床。摩擦係数は資料で確かめていない"
+    },
+    {
+      "key": "Q12",
+      "name": "路面の粗さ (ISO 8608 のクラス)",
+      "value": "A",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: an indoor floor (tile, wood, carpet) is taken as ISO 8608 class A, the smoothest class; not read in any source for floors (ISO 8608 is for roads). It is only the input the fatigue builder needs"
+    },
+    {
+      "key": "Q13",
+      "name": "縦の坂",
+      "value": 8.33,
+      "unit": "%",
+      "source": "default",
+      "trust": 1,
+      "basis": "バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), 第19条, https://laws.e-gov.go.jp/api/1/lawdata/418CO0000000379; read 2026-11-03 in a source check. 製品の定格は 5 度以下 (Pudu BellaBot), https://www.pudurobotics.com/en/products/bellabot (this part not checked in this repository)"
+    },
+    {
+      "key": "Q15",
+      "name": "段差",
+      "value": 12.7,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "Bear Robotics Servi Plus の敷居 (1/2 in), Servi Plus page, https://www.bearrobotics.ai/servi-plus; read 2026-11-03 in a source check",
+      "note": "床の凹凸は LG CLOi ServeBot の 5 mm、ISO 7176-2 の試験は 15・25 mm も"
+    },
+    {
+      "key": "Q16",
+      "name": "通る幅",
+      "value": 0.7,
+      "unit": "m",
+      "source": "default",
+      "trust": 1,
+      "basis": "Keenon の製品ページの最小通路 (T8 0.55 m・T10 0.59 m・T9 0.70 m) の上の端, https://www.keenon.com/en/product/T9 (read 2026-11-03 in a source check; it recorded only the T9 page address). The earlier value 0.80 m is on none of the pages",
+      "note": "建物の廊下は 1.2 m 以上 (バリアフリー法施行令)"
+    },
+    {
+      "key": "Q17",
+      "name": "曲がり",
+      "value": "その場で旋回",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q19",
+      "name": "気温 (範囲の高い端)",
+      "value": 35,
+      "unit": "degC",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (indoor, 5 to 35 degC; the makers publish no operating temperature)"
+    },
+    {
+      "key": "Q20",
+      "name": "水・ほこり (IP)",
+      "value": "IPX4",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: drinks may splash on a restaurant robot)"
+    },
+    {
+      "key": "Q21",
+      "name": "荷台の固定点 1 か所が受けられる力の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
+      "value": 8000,
+      "unit": "N"
+    },
+    {
+      "key": "Q22",
+      "name": "電線の電流を確かめるときの周りの温度",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https://objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high",
+      "value": 40,
+      "unit": "degC"
+    },
+    {
+      "key": "Q23",
+      "name": "束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "default",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https://objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)",
+      "value": 0.5,
+      "unit": "1"
+    },
+    {
+      "key": "Q24",
+      "name": "回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked",
+      "value": 1.0,
+      "unit": "1"
+    },
+    {
+      "key": "Q25",
+      "name": "1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)",
+      "source": "default",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static), https://media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page 02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06",
+      "value": 3,
+      "unit": "1"
+    },
+    {
+      "key": "Q26",
+      "name": "束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read",
+      "value": 10,
+      "unit": "1"
+    },
+    {
+      "key": "Q27",
+      "name": "配線を支える点どうしの間隔の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)",
+      "value": 609.6,
+      "unit": "mm"
+    },
+    {
+      "key": "Q28",
+      "name": "板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
+      "value": 9.525,
+      "unit": "mm"
+    },
+    {
+      "key": "Q34",
+      "name": "弱い人がいるか",
+      "value": "客の子ども",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q39",
+      "name": "電池の端子から、最初に回路を守る器具までの電線の長さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06, https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines). The longest of these is taken; a road-vehicle value was not checked",
+      "value": 1828.8,
+      "unit": "mm"
+    },
+    {
+      "key": "Q40",
+      "name": "積載",
+      "value": 40,
+      "source": "hearing",
+      "trust": 1,
+      "basis": "Pudu BellaBot: 1 段 10 kg・計 40 kg, https://www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
+      "unit": "kg"
+    },
+    {
+      "key": "Q41",
+      "name": "荷の位置",
+      "value": 150,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity above the shelf it stands on, 150 mm (a cup or a plate on a tray); the demo vehicle's cargo is 150 mm above its deck as well. The shelf's own height is the design's, not this value"
+    },
+    {
+      "key": "Q42",
+      "name": "液体のこぼれまでの余裕角",
+      "value": 5,
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: a full cup spills at about 5 degrees of tilt)",
+      "unit": "deg"
+    },
+    {
+      "key": "Q50",
+      "name": "最高速度",
+      "value": 1.2,
+      "source": "hearing",
+      "trust": 1,
+      "basis": "Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
+      "unit": "m/s"
+    },
+    {
+      "key": "Q51",
+      "name": "加速",
+      "value": 3,
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: 3 seconds from standing to 1.2 m/s, gentle for guests)",
+      "unit": "s"
+    },
+    {
+      "key": "Q52",
+      "name": "停止距離",
+      "value": 0.9,
+      "unit": "m",
+      "source": "user",
+      "trust": 1,
+      "basis": "the person's decision (11/7): stop distance 0.5 m -> 0.9 m, so the drinks' tilt in braking can stay within Q42"
+    },
+    {
+      "key": "Q53",
+      "name": "止まっていられる坂",
+      "value": 8.33,
+      "unit": "%",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the robot stays still on the steepest slope it is allowed to drive on, the 1/12 (= 8.33 %) of Q13 (バリアフリー法施行令 第19条, read 2026-11-03 in a source check); that parking uses the same slope is HIRAKU's choice"
+    },
+    {
+      "key": "Q54",
+      "name": "稼働時間",
+      "value": 10,
+      "unit": "h",
+      "source": "default",
+      "trust": 1,
+      "basis": "各社の稼働時間 9〜18 h の下の側, https://www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)"
+    },
+    {
+      "key": "Q55",
+      "name": "充電時間",
+      "value": 4.5,
+      "unit": "h",
+      "source": "default",
+      "trust": 1,
+      "basis": "Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q58",
+      "name": "最小回転半径の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https://laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https://www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https://www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked",
+      "value": 12,
+      "unit": "m"
+    },
+    {
+      "key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction",
+      "value": 0.3,
+      "unit": "1"
+    },
+    {
+      "key": "Q60",
+      "name": "静的に倒れない限界",
+      "value": 10,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (満載で 10 度。製品の登坂の定格は 5 度以下、JARI の走行路は 10 度)"
+    },
+    {
+      "key": "Q61",
+      "name": "安全率 (降伏に対して)",
+      "value": 1.5,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q62",
+      "name": "人に当たったときの力",
+      "value": 130,
+      "unit": "N",
+      "source": "default",
+      "trust": 2,
+      "basis": "ISO/TS 15066 の体のモデルの表を載せた論文, Table 1, https://arxiv.org/pdf/2311.13814; read 2026-11-03 in a source check. The table's quasi-static values by body part (lower leg 130, thigh 220, chest 140, head 130 N) are borrowed from industrial robots (not a standard's value for a serving robot); 130 N is the smallest of them (computed: min), the safe side for one number"
+    },
+    {
+      "key": "Q63",
+      "name": "挟み込みの隙間",
+      "value": 25,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "ISO 13854:1996 の試し読み, Table 1, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q72",
+      "name": "なぞる規格",
+      "value": "ISO 13482 = JIS B 8445、JIS B 8446-1",
+      "source": "default",
+      "trust": 1,
+      "basis": "ISO 13482 の要旨 https://www.iso.org/standard/53820.html. Secondary: seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository"
+    },
+    {
+      "key": "Q73",
+      "name": "電池の規則",
+      "value": "輸送は UN 38.3",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版), https://certifico.com/component/attachments/download/748; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q74",
+      "name": "電池の電圧",
+      "value": 24,
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: a 24 V battery pack)",
+      "unit": "V"
+    },
+    {
+      "key": "Q75",
+      "name": "横の加速度",
+      "value": 0.049,
+      "unit": "g",
+      "source": "default",
+      "trust": 3,
+      "basis": "computed: v^2 / (R g) = (1.2 m/s)^2 / (3 m x 9.80665 m/s^2) = 0.049 g, the sideways acceleration of the tightest turn the file allows (Q50 1.2 m/s, Q58 3 m). That the design's inertia loads use it is HIRAKU's choice (assumption); the vehicle's value is not borrowed"
+    },
+    {
+      "key": "Q76",
+      "name": "前後の加速度",
+      "value": 0.082,
+      "unit": "g",
+      "source": "default",
+      "trust": 3,
+      "basis": "a = v^2 / (2 s g) = 1.2^2 / (2 x 0.9 x 9.80665) (Q50, Q52 = the person's decision 0.9 m); was 0.147 g from Q52 0.5 m"
+    },
+    {
+      "key": "Q80",
+      "name": "材料と接合",
+      "value": "樹脂 + アルミ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q82",
+      "name": "出荷の形",
+      "value": "完成品",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q90",
+      "name": "走行距離 (疲労)",
+      "value": 78840,
+      "unit": "km",
+      "source": "default",
+      "trust": 3,
+      "basis": "computed: Q03 10 h a day for 5 years, at Q50 1.2 m/s (4.32 km/h) with the robot never standing still: 43.2 km x 365 x 5 = 78 840 km (an upper bound; HIRAKU's choice). The hours and the years are Q03's assumption"
+    },
+    {
+      "key": "Q91",
+      "name": "運転時間",
+      "value": "10 h/日 を 5 年",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    }
+  ],
+  "domain_picks": [
+    {
+      "domain": "handling",
+      "shown_name": "操安",
+      "reason": "止まるときや曲がるときに倒れないかを見る。S2 旋回での転倒 (J ターン・定常円) は Claude が荷重条件を書く",
+      "test_ids": [
+        "S1",
+        "S2",
+        "S4",
+        "S6"
+      ]
+    },
+    {
+      "domain": "powertrain",
+      "shown_name": "動力",
+      "reason": "モーターと電池で歩く速さを出し、営業時間を走り切れるかを見る",
+      "test_ids": [
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ]
+    },
+    {
+      "domain": "aero",
+      "shown_name": "液体のこぼれ",
+      "reason": "加減速と曲がりで飲み物がこぼれないかを見る。F3 液体のこぼれ は Claude が荷重条件を書く",
+      "test_ids": [
+        "F3"
+      ]
+    },
+    {
+      "domain": "crash",
+      "shown_name": "人との接触",
+      "reason": "人にぶつかったときの力を小さくできるかを見る。C2 人との接触 は Claude が荷重条件を書く",
+      "test_ids": [
+        "C2"
+      ]
+    },
+    {
+      "domain": "strength",
+      "shown_name": "強度信頼性",
+      "reason": "棚と骨組みが料理の重さと段差の衝撃に耐えるかを見る。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は Claude が荷重条件を書く",
+      "test_ids": [
+        "R1",
+        "R2",
+        "R3",
+        "R6",
+        "R8"
+      ]
+    },
+    {
+      "domain": "nvh",
+      "shown_name": "音振",
+      "reason": "店の中で走る音と振動が気にならないかを見る",
+      "test_ids": [
+        "N1"
+      ]
+    },
+    {
+      "domain": "thermal",
+      "shown_name": "熱",
+      "reason": "続けて走ったときにモーターと電池が熱くなりすぎないかを見る",
+      "test_ids": [
+        "T1",
+        "T2"
+      ]
+    }
+  ],
+  "load_cases": [
+    {
+      "load_case_id": "S1-tilt-two_cargo",
+      "test_id": "S1",
+      "domain": "handling",
+      "title": "傾斜台で倒れない (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo",
+        "direction": "both",
+        "cargo_cg_above_deck": {
+          "value": 150.0,
+          "unit": "mm"
+        }
+      },
+      "requirement_keys": [
+        "Q40",
+        "Q60",
+        "Q41"
+      ],
+      "tolerance_rel": 0.1,
+      "criterion": {
+        "quantity": "tilt_angle",
+        "op": ">=",
+        "limit": {
+          "value": 10.0,
+          "unit": "deg"
+        },
+        "basis": "Q60 10 deg (for the loading of Q30)",
+        "requirement_keys": [
+          "Q60"
+        ]
+      }
+    },
+    {
+      "load_case_id": "S4-brake35",
+      "test_id": "S4",
+      "domain": "handling",
+      "title": "35 km/h から急制動、μ 0.5 で 0.9 m 以内に止まる (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo",
+        "speed": {
+          "value": 35.0,
+          "unit": "km/h"
+        },
+        "mu": {
+          "value": 0.5,
+          "unit": "1"
+        },
+        "reaction_time": {
+          "value": 0.0,
+          "unit": "s"
+        }
+      },
+      "requirement_keys": [
+        "Q40",
+        "Q11",
+        "Q52"
+      ],
+      "tolerance_rel": 0.05,
+      "criterion": {
+        "quantity": "stopping_distance",
+        "op": "<=",
+        "limit": {
+          "value": 0.9,
+          "unit": "m"
+        },
+        "basis": "Q52 0.9 m from 35 km/h (細目告示 第171条 第5項, borrowed)",
+        "requirement_keys": [
+          "Q52"
+        ]
+      }
+    },
+    {
+      "load_case_id": "S6-turn",
+      "test_id": "S6",
+      "domain": "handling",
+      "title": "小回り: 全切りで回るときの外側の前輪の円の半径が 12 m 以下 (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo",
+        "speed": {
+          "value": 5.0,
+          "unit": "km/h"
+        },
+        "direction": "both"
+      },
+      "requirement_keys": [
+        "Q40",
+        "Q58"
+      ],
+      "tolerance_rel": 0.03,
+      "criterion": {
+        "quantity": "turning_radius_wheel",
+        "op": "<=",
+        "limit": {
+          "value": 12.0,
+          "unit": "m"
+        },
+        "basis": "Q58 12 m",
+        "requirement_keys": [
+          "Q58"
+        ]
+      }
+    },
+    {
+      "load_case_id": "P1-step12.7",
+      "test_id": "P1",
+      "domain": "powertrain",
+      "title": "段差 12.7 mm を2 人 + 荷で越える",
+      "params": {
+        "step_height": {
+          "value": 12.7,
+          "unit": "mm"
+        },
+        "speed": {
+          "value": 10.0,
+          "unit": "km/h"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q15",
+        "Q30",
+        "Q40"
+      ],
+      "tolerance_rel": 0.1,
+      "feeds": [
+        "R1-step12.7"
+      ]
+    },
+    {
+      "load_case_id": "P2-grade8.33",
+      "test_id": "P2",
+      "domain": "powertrain",
+      "title": "8.33 % の坂を発進して登る (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo",
+        "grade": {
+          "value": 8.33,
+          "unit": "%"
+        },
+        "until": "top_speed",
+        "max_time": {
+          "value": 120.0,
+          "unit": "s"
+        }
+      },
+      "requirement_keys": [
+        "Q40",
+        "Q13"
+      ],
+      "tolerance_rel": 0.1,
+      "criterion": {
+        "quantity": "top_speed",
+        "op": ">",
+        "limit": {
+          "value": 0.0,
+          "unit": "km/h"
+        },
+        "basis": "climbs Q13 8.33 %: a speed above 0 from a standstill",
+        "requirement_keys": [
+          "Q13"
+        ]
+      }
+    },
+    {
+      "load_case_id": "P3-accel4.32",
+      "test_id": "P3",
+      "domain": "powertrain",
+      "title": "止まった所から 4.32 km/h まで 3 s 以内 (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo",
+        "target_speed": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "grade": {
+          "value": 0.0,
+          "unit": "%"
+        }
+      },
+      "requirement_keys": [
+        "Q40",
+        "Q50",
+        "Q51"
+      ],
+      "tolerance_rel": 0.1,
+      "criterion": {
+        "quantity": "time_to_speed",
+        "op": "<=",
+        "limit": {
+          "value": 3.0,
+          "unit": "s"
+        },
+        "basis": "Q51 3 s to Q50 4.32 km/h",
+        "requirement_keys": [
+          "Q51"
+        ]
+      }
+    },
+    {
+      "load_case_id": "P4-43.2km",
+      "test_id": "P4",
+      "domain": "powertrain",
+      "title": "林道の周回を 43.2 km 走って電池が残るか (2 人 + 荷)",
+      "params": {
+        "distance": {
+          "value": 43.199999999999996,
+          "unit": "km"
+        },
+        "grade_low": {
+          "value": 4.165,
+          "unit": "%"
+        },
+        "grade_high": {
+          "value": 8.33,
+          "unit": "%"
+        },
+        "speed_low": {
+          "value": 2.1599999999999997,
+          "unit": "km/h"
+        },
+        "speed_high": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "distance_from": "Q54 10 h x Q50 4.32 km/h (no stops at the top speed: an assumption of this load case); grades and speeds from Q13 and Q50, not the catalog's forest loop",
+        "soc_start": {
+          "value": 100.0,
+          "unit": "%"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q54",
+        "Q13",
+        "Q50",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "soc_end",
+        "op": ">",
+        "limit": {
+          "value": 0.0,
+          "unit": "%"
+        },
+        "basis": "P4: charge is left at the end of Q54 43.2 km (Q54 10 h x Q50 4.32 km/h (no stops at the top speed: an assumption of this load case); grades and speeds from Q13 and Q50, not the catalog's forest loop)",
+        "requirement_keys": [
+          "Q54"
+        ]
+      },
+      "tolerance_rel": 0.1
+    },
+    {
+      "load_case_id": "R1-step12.7",
+      "test_id": "R1",
+      "domain": "strength",
+      "title": "段差 12.7 mm を2 人 + 荷で越えるときの前輪の力をフレームに",
+      "params": {
+        "step_height": {
+          "value": 12.7,
+          "unit": "mm"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q15",
+        "Q30",
+        "Q40",
+        "Q61"
+      ],
+      "criterion": {
+        "quantity": "max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 184.0,
+          "unit": "MPa"
+        },
+        "basis": "yield 276 MPa (アルミ合金 A6061-T6, not checked) / Q61 1.5",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.15
+    },
+    {
+      "load_case_id": "R3-78840km-A",
+      "test_id": "R3",
+      "domain": "strength",
+      "title": "ISO 8608 の A 級の悪路を 4.32 km/h で 78840 km 走ったときの溶接の疲労 (2 人 + 荷)",
+      "params": {
+        "distance": {
+          "value": 78840.0,
+          "unit": "km"
+        },
+        "road_class": "A",
+        "speed": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q90",
+        "Q12",
+        "Q50",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "fatigue_damage",
+        "op": "<",
+        "limit": {
+          "value": 1.0,
+          "unit": "1"
+        },
+        "basis": "Miner's rule: the welds last Q90 78840 km while the damage stays below 1",
+        "requirement_keys": [
+          "Q90"
+        ]
+      },
+      "tolerance_rel": 0.5
+    },
+    {
+      "test_id": "R8",
+      "domain": "strength",
+      "tolerance_rel": 0.05,
+      "load_case_id": "R8-free",
+      "title": "どの部品も、枠まで繋がっている (横 0.049 g・前後 0.082 g・下 1 g を全部の部品と乗員に、2 人 + 荷)",
+      "params": {
+        "load_kind": "inertia",
+        "accel_vertical": {
+          "value": 1.0,
+          "unit": "g"
+        },
+        "accel_lateral": {
+          "value": 0.049,
+          "unit": "g"
+        },
+        "accel_longitudinal": {
+          "value": 0.082,
+          "unit": "g"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q75",
+        "Q76",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "free_parts",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "every part with carried_by reaches a frame member through parts its box touches (load_path: a part joined to nothing is a free rigid body, found by fe.precheck.rigid_body_check)",
+        "requirement_keys": [
+          "Q75",
+          "Q76"
+        ]
+      }
+    },
+    {
+      "test_id": "R8",
+      "domain": "strength",
+      "tolerance_rel": 0.3,
+      "load_case_id": "R8-stress",
+      "title": "部品と乗員の重さと加速度 (横 0.049 g・前後 0.082 g・下 1 g) で、各部材の応力をその材料の許しと比べる (2 人 + 荷)",
+      "params": {
+        "load_kind": "inertia",
+        "accel_vertical": {
+          "value": 1.0,
+          "unit": "g"
+        },
+        "accel_lateral": {
+          "value": 0.049,
+          "unit": "g"
+        },
+        "accel_longitudinal": {
+          "value": 0.082,
+          "unit": "g"
+        },
+        "loading": "two_cargo",
+        "safety_factor": {
+          "value": 1.5,
+          "unit": "1"
+        }
+      },
+      "requirement_keys": [
+        "Q75",
+        "Q76",
+        "Q61",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "max_utilisation",
+        "op": "<=",
+        "limit": {
+          "value": 1.0,
+          "unit": "1"
+        },
+        "basis": "each member's von Mises stress over its own material's yield / Q61 1.5 (largest of these ratios): アルミ合金 A6061-T6 276 MPa (44 members, not checked). Tolerance 0.3: as R7, HIRAKU's choice for the gap between a hand calculation and the frame's analysis (no source)",
+        "requirement_keys": [
+          "Q61"
+        ]
+      }
+    },
+    {
+      "load_case_id": "N1-4.32kmh",
+      "test_id": "N1",
+      "domain": "nvh",
+      "title": "固有振動数と、4.32 km/h での車輪とモーターの回る速さ (2 人 + 荷)",
+      "params": {
+        "speed": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q50",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "first_frame_mode",
+        "op": ">=",
+        "limit": {
+          "value": 2.864788975654115,
+          "unit": "Hz"
+        },
+        "basis": "フレームのいちばん低い固有振動数を、Q50 4.32 km/h での車輪の回転 (2.39 Hz) より 20% 上に離す (幅は HIRAKU の仮定で、一般の目安としては確かめていない。路面の凹凸の加振は入れていない)",
+        "requirement_keys": [
+          "Q50"
+        ]
+      },
+      "tolerance_rel": 0.15
+    },
+    {
+      "load_case_id": "T1-35C",
+      "test_id": "T1",
+      "domain": "thermal",
+      "title": "気温 35 ℃ で林道の周回を 43.2 km 走ったときの電池の温度 (2 人 + 荷)",
+      "params": {
+        "distance": {
+          "value": 43.199999999999996,
+          "unit": "km"
+        },
+        "grade_low": {
+          "value": 4.165,
+          "unit": "%"
+        },
+        "grade_high": {
+          "value": 8.33,
+          "unit": "%"
+        },
+        "speed_low": {
+          "value": 2.1599999999999997,
+          "unit": "km/h"
+        },
+        "speed_high": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "distance_from": "Q54 10 h x Q50 4.32 km/h (no stops at the top speed: an assumption of this load case); grades and speeds from Q13 and Q50, not the catalog's forest loop",
+        "ambient_temperature": {
+          "value": 35.0,
+          "unit": "degC"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q19",
+        "Q54",
+        "Q13",
+        "Q50",
+        "Q40"
+      ],
+      "tolerance_rel": 0.15
+    },
+    {
+      "load_case_id": "T2-35C-motor",
+      "test_id": "T2",
+      "domain": "thermal",
+      "title": "気温 35 ℃ で林道の周回を 43.2 km 走ったときのモーターの温度 (2 人 + 荷)",
+      "params": {
+        "distance": {
+          "value": 43.199999999999996,
+          "unit": "km"
+        },
+        "grade_low": {
+          "value": 4.165,
+          "unit": "%"
+        },
+        "grade_high": {
+          "value": 8.33,
+          "unit": "%"
+        },
+        "speed_low": {
+          "value": 2.1599999999999997,
+          "unit": "km/h"
+        },
+        "speed_high": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "distance_from": "Q54 10 h x Q50 4.32 km/h (no stops at the top speed: an assumption of this load case); grades and speeds from Q13 and Q50, not the catalog's forest loop",
+        "ambient_temperature": {
+          "value": 35.0,
+          "unit": "degC"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q19",
+        "Q54",
+        "Q13",
+        "Q50",
+        "Q40"
+      ],
+      "tolerance_rel": 0.15
+    },
+    {
+      "load_case_id": "T2-35C-controller",
+      "test_id": "T2",
+      "domain": "thermal",
+      "title": "気温 35 ℃ で林道の周回を 43.2 km 走ったときの制御器の温度 (2 人 + 荷)",
+      "params": {
+        "distance": {
+          "value": 43.199999999999996,
+          "unit": "km"
+        },
+        "grade_low": {
+          "value": 4.165,
+          "unit": "%"
+        },
+        "grade_high": {
+          "value": 8.33,
+          "unit": "%"
+        },
+        "speed_low": {
+          "value": 2.1599999999999997,
+          "unit": "km/h"
+        },
+        "speed_high": {
+          "value": 4.319999999999999,
+          "unit": "km/h"
+        },
+        "distance_from": "Q54 10 h x Q50 4.32 km/h (no stops at the top speed: an assumption of this load case); grades and speeds from Q13 and Q50, not the catalog's forest loop",
+        "ambient_temperature": {
+          "value": 35.0,
+          "unit": "degC"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q19",
+        "Q54",
+        "Q13",
+        "Q50",
+        "Q40"
+      ],
+      "tolerance_rel": 0.15
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-interference",
+      "title": "止まっているときの干渉 (座席を滑りの両端に動かしたときも)",
+      "criterion": {
+        "quantity": "interference_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: no two bodies overlap at rest, the driver's seat at either end of its slide too, beyond what the rule allows (welded joints, bolted mounts up to MOUNT_MM, the rest TOUCH_MM: k4_geometry.model.allowance)"
+      }
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-motion",
+      "title": "車輪が上下しハンドルを切ったときの干渉",
+      "criterion": {
+        "quantity": "motion_interference_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: through the wheels' travel and the steering's range nothing of a corner meets what it is not mounted to"
+      }
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-joints",
+      "title": "つながりが形の上で触れているか (つながる点 at_mm が両方の形の上、つながりの無い部品が無い)",
+      "criterion": {
+        "quantity": "joint_gap_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 mm: the program management's figure; wires and hoses not counted), says where (at_mm) on both shapes within 2 mm, and no part is joined to nothing"
+      }
+    },
+    {
+      "load_case_id": "H5-order",
+      "test_id": "H5",
+      "domain": "assembly",
+      "title": "どの部品も、どこかの向きから入れられるか",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q82",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "blocked_parts",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H5: every part of the design goes in, along some direction in some order (none shut in by what is there before it); the steps without the hands' way and out of reach (steps_without_tool_clearance, steps_out_of_reach) are shown in the results, not judged: the assembly tool's hands' way is its own rule with no source"
+      },
+      "tolerance_rel": 0.05
+    },
+    {
+      "load_case_id": "S2-speed1.2mps",
+      "test_id": "S2",
+      "domain": "handling",
+      "title": "旋回での転倒: 満載で定常円を回り、内側の輪が浮く横の加速度を見る",
+      "params": {
+        "loading": "two_cargo",
+        "speed": {
+          "value": 1.2,
+          "unit": "m/s"
+        },
+        "lateral_accel": {
+          "value": 0.049,
+          "unit": "g"
+        },
+        "mu": {
+          "value": 0.5,
+          "unit": "1"
+        },
+        "direction": "both"
+      },
+      "requirement_keys": [
+        "Q75",
+        "Q50",
+        "Q11",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "tip_lateral_accel",
+        "op": ">=",
+        "limit": {
+          "value": 0.049,
+          "unit": "g"
+        },
+        "basis": "Q75 0.049 g",
+        "requirement_keys": [
+          "Q75"
+        ]
+      },
+      "tolerance_rel": 0.15,
+      "written_by": "claude",
+      "basis": "満載 (two_cargo、Q40 の荷で重心が最も高い) で、最高速度 Q50 の定常円を回る。内側の輪が浮く (転倒の始まり) 横の加速度が、要件の横の加速度 Q75 以上であること。床の摩擦は Q11。Q75 の basis は回転半径 3 m を使うが、Q58 の値は 12 m で、Q75 は厳しい側の値 (確かめていない点として残す)。余裕の係数は要件に無いので掛けない (前提)。",
+      "limit_from": {
+        "expr": "Q75",
+        "unit": "g",
+        "refs": {
+          "Q75": "Q75"
+        }
+      }
+    },
+    {
+      "load_case_id": "C2-speed1.2mps",
+      "test_id": "C2",
+      "domain": "crash",
+      "title": "満載で最高速度 (歩く速さ) のまま人の脚に当たったときの力",
+      "params": {
+        "speed": {
+          "value": 1.2,
+          "unit": "m/s"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q50",
+        "Q62",
+        "Q34",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "max_contact_force",
+        "op": "<=",
+        "limit": {
+          "value": 130.0,
+          "unit": "N"
+        },
+        "basis": "Q62 130 N",
+        "requirement_keys": [
+          "Q62"
+        ]
+      },
+      "tolerance_rel": 0.15,
+      "written_by": "claude",
+      "basis": "速さは Q50 の最高速度 (歩く速さ、Pudu BellaBot)。満載 (two_cargo、Q40 の荷を載せた組) がいちばん重く、当たる力が大きい側。限度は Q62 (ISO/TS 15066 の体のモデルの準静的な力の表を載せた論文の、部位ごとの値の最小 130 N、産業ロボットからの借用で配膳ロボの規格値ではない)。Q34 で客の子どもがいるので最小の値をとる。止まらずに当たる (ブレーキなし) とみるのは前提 (出典なし)",
+      "limit_from": {
+        "expr": "Q62",
+        "unit": "N",
+        "refs": {
+          "Q62": "Q62"
+        }
+      }
+    },
+    {
+      "load_case_id": "F3-a0.082g",
+      "test_id": "F3",
+      "domain": "aero",
+      "title": "加減速と旋回で、トレーの飲み物の液面がこぼれる角まで傾かないか",
+      "params": {
+        "loading": "two_cargo",
+        "a_x": {
+          "value": 0.082,
+          "unit": "g"
+        },
+        "a_y": {
+          "value": 0.049,
+          "unit": "g"
+        },
+        "speed": {
+          "value": 1.2,
+          "unit": "m/s"
+        },
+        "accel_time": {
+          "value": 3,
+          "unit": "s"
+        },
+        "cargo_height_above_shelf": {
+          "value": 150,
+          "unit": "mm"
+        },
+        "combine": "both"
+      },
+      "requirement_keys": [
+        "Q42",
+        "Q76",
+        "Q75",
+        "Q50",
+        "Q51",
+        "Q41",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "liquid_surface_tilt",
+        "op": "<=",
+        "limit": {
+          "value": 5.0,
+          "unit": "deg"
+        },
+        "basis": "Q42 5 deg",
+        "requirement_keys": [
+          "Q42"
+        ]
+      },
+      "tolerance_rel": 0.15,
+      "written_by": "claude",
+      "basis": "前後の加速度 a_x は Q76 (Q50 と Q52 の停止距離から)、横の加速度 a_y は Q75 (Q50 と Q58 の旋回から)、速さは Q50、加速の時間は Q51、荷の高さは Q41 から写した。荷は満載 (Q40) の two_cargo。液面は、トレーにかかる水平の加速度の合わせた大きさと重力の比の角だけ傾くとみる (準静的。揺れ (スロッシング) の重なりと、車体のピッチ・ロールによるトレーの傾きは前提として入れていない。入れるかは解析のツールで決める)。限度は Q42 (こぼれまでの余裕角、ヒアリングの例の答え、出典なし)。combine both は、ブレーキと旋回が同時に起きる組を前提として含める",
+      "limit_from": {
+        "expr": "Q42",
+        "unit": "deg",
+        "refs": {
+          "Q42": "Q42"
+        }
+      }
+    },
+    {
+      "load_case_id": "R6-speed1.2mps",
+      "test_id": "R6",
+      "domain": "strength",
+      "title": "床の凹凸で揺れる電池の取付",
+      "params": {
+        "part": "battery",
+        "road_class": "A",
+        "speed": {
+          "value": 1.2,
+          "unit": "m/s"
+        },
+        "distance": {
+          "value": 78840,
+          "unit": "km"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q12",
+        "Q50",
+        "Q90",
+        "Q61",
+        "Q73"
+      ],
+      "criterion": {
+        "quantity": "battery_mount_max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 184.0,
+          "unit": "MPa"
+        },
+        "basis": "yield 276 MPa / Q61 1.5 (materials al6061: not checked)",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.15,
+      "written_by": "claude",
+      "basis": "揺れの元は床の凹凸 Q12 (ISO 8608 クラス A とみる前提) を Q50 の 1.2 m/s で走ること、走る距離は Q90。電池の取付の金具と、それを受ける骨組みの応力を見る。電池の振動の大きさ (加速度・周波数) は要件に無く、Q73 の UN 38.3 の振動試験の値もこの実行では確かめていないので使わない。限度は A6061-T6 の降伏 (確かめていない値) を Q61 で割る",
+      "limit_from": {
+        "expr": "yield / Q61",
+        "unit": "MPa",
+        "refs": {
+          "yield": "materials.al6061.yield_MPa",
+          "Q61": "Q61"
+        }
+      }
+    },
+    {
+      "load_case_id": "R2-step12.7mm",
+      "test_id": "R2",
+      "domain": "strength",
+      "title": "満載で敷居の段差を最高速度で越える衝撃",
+      "params": {
+        "step_height": {
+          "value": 12.7,
+          "unit": "mm"
+        },
+        "speed": {
+          "value": 1.2,
+          "unit": "m/s"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q15",
+        "Q50",
+        "Q40",
+        "Q61"
+      ],
+      "criterion": {
+        "quantity": "max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 184.0,
+          "unit": "MPa"
+        },
+        "basis": "yield 276 MPa / Q61 1.5 (materials al6061: not checked)",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.15,
+      "written_by": "claude",
+      "basis": "段差の高さは Q15 (Servi Plus の敷居 12.7 mm)、当たる速さは Q50 (最高速度 1.2 m/s。Q04 の 10 km/h は屋外の車の既定でこの製品の速さを超えるので使わない)、積みは Q40 の満載 (two_cargo)。どの輪が段差に当たるかはツールの既定に任せる (前提)。限度は骨組みのアルミ A6061-T6 の降伏 (確かめていない値) を Q61 の安全率で割る",
+      "limit_from": {
+        "expr": "yield / Q61",
+        "unit": "MPa",
+        "refs": {
+          "yield": "materials.al6061.yield_MPa",
+          "Q61": "Q61"
+        }
+      }
+    }
+  ],
+  "agents": [
+    {
+      "agent_id": "lead",
+      "role": "lead",
+      "prop": "binder"
+    },
+    {
+      "agent_id": "designer",
+      "role": "designer",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "packager",
+      "role": "packager",
+      "prop": "spanner"
+    },
+    {
+      "agent_id": "cae.handling",
+      "role": "cae",
+      "domain": "handling",
+      "prop": "steering_wheel"
+    },
+    {
+      "agent_id": "cae.powertrain",
+      "role": "cae",
+      "domain": "powertrain",
+      "prop": "battery"
+    },
+    {
+      "agent_id": "cae.strength",
+      "role": "cae",
+      "domain": "strength",
+      "prop": "i_beam"
+    },
+    {
+      "agent_id": "cae.nvh",
+      "role": "cae",
+      "domain": "nvh",
+      "prop": "tuning_fork"
+    },
+    {
+      "agent_id": "cae.thermal",
+      "role": "cae",
+      "domain": "thermal",
+      "prop": "thermometer"
+    },
+    {
+      "agent_id": "cae.crash",
+      "role": "cae",
+      "domain": "crash",
+      "prop": "crash_target"
+    },
+    {
+      "agent_id": "cae.aero",
+      "role": "cae",
+      "domain": "aero",
+      "prop": "windsock"
+    }
+  ],
+  "speed_class": "walk",
+  "driver": "claude_code_plugin",
+  "status": "stopped",
+  "cost_usd": null,
+  "design_versions": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "stop_reason": "まとめ役が、判定の付いていない分野を残して止まりました (止めるのを 3 回断ったあと、上限で終了)。まだ判定の無い (OK にできない試験の残る) 分野があるので終われません。動力: 段 1 (軽い計算): P4-43.2km (予測と比べた結果 cmp-0027 の不一致 (-84 %) の原因 cause-0005 がまだ解けていない。原因を書き、その結果と一致する予測を記録し直して compare で比べて予想通りになると基準の判定が付く。合う式が無いときは、そう報告して設計役に渡す); 段 2 (車の動き): P2-grade8.33 (top_speed を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く); 段 2 (車の動き): P3-accel4.32 (time_to_speed を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く) / 空力: 段 1 (軽い計算): F3-a0.082g (解析 ana-0024 (liquid_surface_tilt_quasistatic) の liquid_surface_tilt が 5.457 deg で、基準 ≤ 5 deg を超えている。原因を書き、その結果と一致する予測を記録し直して compare で比べて予想通りになると基準の判定が付く。合う式が無いときは、そう報告して設計役に渡す) / 衝突: 段 1 (軽い計算): C2-speed1.2mps (予測と比べた結果 cmp-0035 の不一致 (+42 %) の原因 cause-0009 がまだ解けていない、解析 ana-0028 (person_contact_two_mass) の max_contact_force が 1790 N で、基準 ≤ 130 N を超えている。原因を書き、その結果と一致する予測を記録し直して compare で比べて予想通りになると基準の判定が付く。合う式が無いときは、そう報告して設計役に渡す) / 強度信頼性: 段 1 (軽い計算): R6-speed1.2mps (battery_mount_max_stress を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く); 段 1 (軽い計算): R6-g3 (battery_mount_max_stress を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く); 段 3 (重い計算): R3-78840km-A (fatigue_damage を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く); R2-step12.7mm (棚に R2 を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、check_tool で試してから make_tool で棚に入れ、max_stress を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く) / 操安: 段 2 (車の動き): S1-tilt-two_cargo (tilt_angle を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く); 段 2 (車の動き): S4-brake35 (stopping_distance を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く); S6-turn (turning_radius_wheel を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く)。 軽い段から順に (段 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算) 確かめ、NG が出たら次の段の前に設計役が直します。"
+}

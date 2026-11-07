@@ -1,0 +1,435 @@
+{
+  "design_version": 5,
+  "agent": "lead",
+  "domains": [
+    {
+      "domain": "handling",
+      "state": "pending",
+      "line": "まだ判定していない / まだ判定していない / まだ判定していない / S2 tip_lateral_accel 0.4123 g ≥ 0.049 g (余裕 742 %)",
+      "verdict_ids": [
+        "ver-0019"
+      ],
+      "effects": [],
+      "assumptions": [
+        "m・h・t は formula_inputs (v5、k2_tests.dlc_inputs) から写した",
+        "a_y は荷重条件 S2-speed1.2mps の params.lateral_accel (Q75)。予測の量 a_y_lift は a_y によらない",
+        "剤体で、後と前のキャスター (y ±200 mm) ではなく、重心の横の駆動輪 (トレッド 500 mm) の線のまわりに倒れるとみる",
+        "steady cornering",
+        "rigid suspension and tyres",
+        "centre of gravity on the centre line",
+        "g = 9.80665 m/s^2",
+        "式のほかの出力 (予測にしていないもの): W_inner 317 N"
+      ],
+      "differences": []
+    },
+    {
+      "domain": "powertrain",
+      "state": "pending",
+      "line": "P1-step12.7 は判定していない (理由: 段差 12.7 mm を2 人 + 荷で越える) が、required_mu_push 0.939108 (ana-0018) / まだ判定していない / まだ判定していない / まだ判定していない: 予測と比べた結果 cmp-0027 の不一致 (-84 %) の原因 cause-0005 がまだ解けていない",
+      "verdict_ids": [],
+      "effects": [],
+      "assumptions": [],
+      "differences": [
+        {
+          "comparison_id": "cmp-0026",
+          "diff_rel": 1.334546735962766,
+          "cause_id": "cause-0004"
+        },
+        {
+          "comparison_id": "cmp-0027",
+          "diff_rel": -0.835930414067435,
+          "cause_id": "cause-0005"
+        }
+      ]
+    },
+    {
+      "domain": "aero",
+      "state": "pending",
+      "line": "まだ判定していない: 解析 ana-0024 (liquid_surface_tilt_quasistatic) の liquid_surface_tilt が 5.457 deg で、基準 ≤ 5 deg を超えている",
+      "verdict_ids": [],
+      "effects": [],
+      "assumptions": [],
+      "differences": [
+        {
+          "comparison_id": "cmp-0032",
+          "diff_rel": 0.16401177494104022,
+          "cause_id": "cause-0007"
+        }
+      ]
+    },
+    {
+      "domain": "crash",
+      "state": "pending",
+      "line": "まだ判定していない: 予測と比べた結果 cmp-0035 の不一致 (+42 %) の原因 cause-0009 がまだ解けていない、解析 ana-0028 (person_contact_two_mass) の max_contact_force が 1790 N で、基準 ≤ 130 N を超えている",
+      "verdict_ids": [],
+      "effects": [],
+      "assumptions": [],
+      "differences": [
+        {
+          "comparison_id": "cmp-0033",
+          "diff_rel": 0.4221437781950951,
+          "cause_id": "cause-0008"
+        },
+        {
+          "comparison_id": "cmp-0035",
+          "diff_rel": 0.4221437781950951,
+          "cause_id": "cause-0009"
+        }
+      ]
+    },
+    {
+      "domain": "strength",
+      "state": "pending",
+      "line": "R1 max_stress 12.71 MPa ≤ 184 MPa (余裕 93 % 安全側の予測で) / まだ判定していない / R8 free_parts 0 ≤ 0 (余裕 0) / R8 max_utilisation 0.01839 ≤ 1 (余裕 98 % 道を手計算で確かめ、ツールの値で) / まだ判定していない / まだ判定していない / まだ判定していない",
+      "verdict_ids": [
+        "ver-0018",
+        "ver-0015",
+        "ver-0017"
+      ],
+      "effects": [
+        {
+          "name": "bending_vertical (B_side_l_f)",
+          "value": 5.083543652051262,
+          "unit": "MPa",
+          "share": 0.606091845154055
+        },
+        {
+          "name": "torsion (B_side_l_f)",
+          "value": 1.4900028784593162,
+          "unit": "MPa",
+          "share": 0.17764745533872986
+        },
+        {
+          "name": "bending_sideways (B_side_l_f)",
+          "value": 1.2489421747203315,
+          "unit": "MPa",
+          "share": 0.148906691666062
+        }
+      ],
+      "assumptions": [
+        "formula_inputs に読む手順が無いので、入力は次から写した: P は上流 P1-step12.7 の解析 ana-0018 の front_wheel_force (caster_fl、cmp-0020 で予想通りの解析)",
+        "L は design_summary.member_length.B_side_l_f、断面 b・h・t は design_summary.rail_section (tube30)、E は design_summary.loadings.two_cargo.rail_joint.E",
+        "前のキャスターの節 B_FL にかかる前輪の力を、駆動輪の節 B_ML で固定した片持ちの B_side_l_f の先にかけるとみる",
+        "柱 P_FL から B_FL に下りる棚の重さ (前輪の力と逆向き) と、B_front が隣の角へ渡す分は入れない (どちらも曲げを小さくする向き)",
+        "横の曲げ・ねじり・軸の力は入れない (上下の曲げだけ)",
+        "Euler-Bernoulli beam: linear elastic, small deflection, no shear deformation",
+        "rectangular tube bent about the axis across its width (stress at the top and bottom faces)",
+        "self-weight not included unless it is the load",
+        "fully fixed at one end",
+        "式のほかの出力 (予測にしていないもの): max_moment 2.493e+04 N*mm、max_displacement 0.1984 mm",
+        "触れている所を部材からたどって、届かない部品を数える (carried_by は見ない)",
+        "入力は formula_inputs (load_path.free_inputs) から写した",
+        "触れている所はどれも 6 方向に硬い (1 か所で触れれば、その部品は止まる)",
+        "max_utilisation の式 load_path.frame_utilisation はこの設計 (はしご形のレールが無い) に断られたので、手計算は力の道の確かめにする"
+      ],
+      "differences": [
+        {
+          "comparison_id": "cmp-0028",
+          "diff_rel": -0.44485200846452566,
+          "cause_id": "cause-0006"
+        },
+        {
+          "comparison_id": "cmp-0023",
+          "diff_rel": 1.0,
+          "cause_id": "cause-0002"
+        }
+      ]
+    },
+    {
+      "domain": "nvh",
+      "state": "green",
+      "line": "N1 first_frame_mode 29.29 Hz ≥ 2.865 Hz (余裕 922 %)",
+      "verdict_ids": [
+        "ver-0016"
+      ],
+      "effects": [],
+      "assumptions": [
+        "入力は formula_inputs (analysis.n1_twist) から写した",
+        "いちばん低い揺れは、はしご形のねじれ (左右のレールが逆に動く)",
+        "ねじれの角は前後に直線とみる (レイリー法。高めに出る)",
+        "部品の重さは載せている節に等分",
+        "the twist angle varies linearly along x about the roll inertia's centroid (a Rayleigh upper bound)",
+        "rails and cross members twist (Bredt), joints rigid; the rails' opposite bending is left out",
+        "the weights sit on the frame nodes that carry them; the suspension springs are vertical",
+        "式のほかの出力 (予測にしていないもの): spring_share 0 1"
+      ],
+      "differences": []
+    },
+    {
+      "domain": "thermal",
+      "state": "pending",
+      "line": "まだ判定していない試験: なし",
+      "verdict_ids": [],
+      "effects": [],
+      "assumptions": [],
+      "differences": []
+    }
+  ],
+  "unchecked": [
+    {
+      "item": "Q03 使う頻度・年数",
+      "source": "assumption"
+    },
+    {
+      "item": "Q11 路面・床と摩擦係数",
+      "source": "assumption: the friction coefficient between the wheel and a dry indoor floor (tile, wood, carpet), 0.5, HIRAKU's own value, not read in any source. The floors themselves are the ones of the JARI robot stability test facility's course, p.1, https://img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check (that page lists the surfaces, not a coefficient)"
+    },
+    {
+      "item": "Q12 路面の粗さ (ISO 8608 のクラス)",
+      "source": "assumption: an indoor floor (tile, wood, carpet) is taken as ISO 8608 class A, the smoothest class; not read in any source for floors (ISO 8608 is for roads). It is only the input the fatigue builder needs"
+    },
+    {
+      "item": "Q13 縦の坂",
+      "source": "バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), 第19条, https://laws.e-gov.go.jp/api/1/lawdata/418CO0000000379; read 2026-11-03 in a source check. 製品の定格は 5 度以下 (Pudu BellaBot), https://www.pudurobotics.com/en/products/bellabot (this part not checked in this repository)"
+    },
+    {
+      "item": "Q17 曲がり",
+      "source": "assumption"
+    },
+    {
+      "item": "Q19 気温 (範囲の高い端)",
+      "source": "assumption (indoor, 5 to 35 degC; the makers publish no operating temperature)"
+    },
+    {
+      "item": "Q20 水・ほこり (IP)",
+      "source": "assumption (a sample answer: drinks may splash on a restaurant robot)"
+    },
+    {
+      "item": "Q21 荷台の固定点 1 か所が受けられる力の下限",
+      "source": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors"
+    },
+    {
+      "item": "Q22 電線の電流を確かめるときの周りの温度",
+      "source": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https://objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high"
+    },
+    {
+      "item": "Q23 束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https://objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)"
+    },
+    {
+      "item": "Q24 回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked"
+    },
+    {
+      "item": "Q26 束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read"
+    },
+    {
+      "item": "Q27 配線を支える点どうしの間隔の上限",
+      "source": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)"
+    },
+    {
+      "item": "Q28 板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)"
+    },
+    {
+      "item": "Q34 弱い人がいるか",
+      "source": "assumption"
+    },
+    {
+      "item": "Q39 電池の端子から、最初に回路を守る器具までの電線の長さの上限",
+      "source": "assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06, https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines). The longest of these is taken; a road-vehicle value was not checked"
+    },
+    {
+      "item": "Q41 荷の位置",
+      "source": "assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity above the shelf it stands on, 150 mm (a cup or a plate on a tray); the demo vehicle's cargo is 150 mm above its deck as well. The shelf's own height is the design's, not this value"
+    },
+    {
+      "item": "Q42 液体のこぼれまでの余裕角",
+      "source": "assumption (a sample answer: a full cup spills at about 5 degrees of tilt)"
+    },
+    {
+      "item": "Q51 加速",
+      "source": "assumption (a sample answer: 3 seconds from standing to 1.2 m/s, gentle for guests)"
+    },
+    {
+      "item": "Q53 止まっていられる坂",
+      "source": "assumption: the robot stays still on the steepest slope it is allowed to drive on, the 1/12 (= 8.33 %) of Q13 (バリアフリー法施行令 第19条, read 2026-11-03 in a source check); that parking uses the same slope is HIRAKU's choice"
+    },
+    {
+      "item": "Q58 最小回転半径の上限",
+      "source": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https://laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https://www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https://www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked"
+    },
+    {
+      "item": "Q59 荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction"
+    },
+    {
+      "item": "Q60 静的に倒れない限界",
+      "source": "assumption (満載で 10 度。製品の登坂の定格は 5 度以下、JARI の走行路は 10 度)"
+    },
+    {
+      "item": "Q61 安全率 (降伏に対して)",
+      "source": "assumption"
+    },
+    {
+      "item": "Q72 なぞる規格",
+      "source": "ISO 13482 の要旨 https://www.iso.org/standard/53820.html. Secondary: seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository"
+    },
+    {
+      "item": "Q74 電池の電圧",
+      "source": "assumption (a sample answer: a 24 V battery pack)"
+    },
+    {
+      "item": "Q75 横の加速度",
+      "source": "computed: v^2 / (R g) = (1.2 m/s)^2 / (3 m x 9.80665 m/s^2) = 0.049 g, the sideways acceleration of the tightest turn the file allows (Q50 1.2 m/s, Q58 3 m). That the design's inertia loads use it is HIRAKU's choice (assumption); the vehicle's value is not borrowed"
+    },
+    {
+      "item": "Q80 材料と接合",
+      "source": "assumption"
+    },
+    {
+      "item": "Q82 出荷の形",
+      "source": "assumption"
+    },
+    {
+      "item": "Q90 走行距離 (疲労)",
+      "source": "computed: Q03 10 h a day for 5 years, at Q50 1.2 m/s (4.32 km/h) with the robot never standing still: 43.2 km x 365 x 5 = 78 840 km (an upper bound; HIRAKU's choice). The hours and the years are Q03's assumption"
+    },
+    {
+      "item": "Q91 運転時間",
+      "source": "assumption"
+    },
+    {
+      "item": "material al6061",
+      "source": "A6061-T6 の一般的な値 (確かめていない)"
+    }
+  ],
+  "next": [
+    {
+      "domain": "crash",
+      "change": "当たる面に柔らかい覆いを付け、接触のばねを小さくする",
+      "reason": "解析 ana-0028 の接触の力が、人との接触の限度を大きく超えている。最高速度は要件なので、速さではなく覆いで下げる"
+    },
+    {
+      "domain": "aero",
+      "change": "ブレーキと旋回が同時に起きないように走らせ方を決めるか、旋回の速さを下げる (前後と横の加速度は要件から来るので、人と相談する)",
+      "reason": "解析 ana-0024 で、ブレーキと旋回を同時にした液面の傾きが限度を超え、ブレーキだけ (cmp-0029) と旋回だけ (cmp-0030) は予想通りだった"
+    },
+    {
+      "domain": "thermal",
+      "change": "電池・モーター・制御器の許す最高温度を要件に足し、基準つきの荷重条件を書く",
+      "reason": "T1・T2 の 3 つは予想通りだが、限度にあたる要件が無く判定が付かない"
+    },
+    {
+      "domain": "powertrain",
+      "change": "加速と減速・補機・電池の損失を入れた電力量の式を足して P4 を予測し直す",
+      "reason": "P4 の不一致 cmp-0026・cmp-0027 は、予測が解析より楽な側に外れ、安全側にできない"
+    },
+    {
+      "domain": "assembly",
+      "change": "力のかかる角パイプの T・L の継ぎ手にガセットを付けるかを検討する (助言)",
+      "reason": "rule_check の助言で、骨組みの継ぎ手 40 か所に当たった",
+      "rule_id": "WD-05"
+    }
+  ],
+  "summary": "v5 (型が無いので write_design で書いた設計。v1 の系の点検 SY-01・SY-03・SY-08・SY-09 の当たりを v2〜v5 で直し、v5 の rule_check の当たりは 0)。組み立て: OK (ver-0011〜ver-0014)。音振: OK (ver-0016)。強度信頼性: R8-free OK (ver-0015)、R8-stress OK (ver-0017)、R1-step12.7 OK (ver-0018、不一致 cmp-0028 は安全側 cause-0006)。R2・R3・R6 は未判定。操安: S2-speed1.2mps OK (ver-0019)。S1・S4 は HK5 に止められて未判定、S6 は判定なし。動力: P1 は基準が無く判定なし、P4 は不一致 cmp-0027 の原因 cause-0005 が解けず未判定、P2・P3 は未判定。熱: T1・T2 の 3 つは予想通り (cmp-0019・cmp-0024・cmp-0025) だが、荷重条件に基準が無く判定なし。液体のこぼれ: F3 は不一致 cmp-0032 (cause-0007) で未判定。解析 ana-0024 は限度を超えている。人との接触: C2 は不一致 cmp-0035 (cause-0009) で未判定。解析 ana-0028 は限度を大きく超えている。",
+  "issues": [
+    {
+      "kind": "missing_formula",
+      "what": "加速と減速・補機・電池の損失を入れた電力量の K0 の式が無く、予測が解析より楽な側に外れて不一致が解けない",
+      "where": "P4-43.2km",
+      "record_ids": [
+        "cmp-0026",
+        "cmp-0027",
+        "cause-0004",
+        "cause-0005"
+      ],
+      "workaround": "判定なしのまま残した。ends_case を付けようとしたが、原因の記録は書き換えられないと断られた"
+    },
+    {
+      "kind": "missing_formula",
+      "what": "6 輪 (駆動 2・キャスター 4) で重さを分けて 1 輪の力を出す式が無く、キャスターを押す力の予測が解析と合わない",
+      "where": "P1-step12.7",
+      "record_ids": [
+        "cmp-0022",
+        "cause-0003"
+      ],
+      "workaround": "P1 は基準が無いので判定なし。R1 には予想通りの段の角までの距離 (cmp-0020) を使った"
+    },
+    {
+      "kind": "missing_formula",
+      "what": "前後と横の加速度を合わせた液面の傾きの K0 の式が無く、ブレーキと旋回を同時にした組の予測を作れない",
+      "where": "F3-a0.082g",
+      "record_ids": [
+        "cmp-0032",
+        "cause-0007",
+        "ana-0024"
+      ],
+      "workaround": "ツールは役が make_tool で作った。判定なしのまま残した。原因の記録に ends_case を後から付けられなかった"
+    },
+    {
+      "kind": "missing_formula",
+      "what": "2 つの質量とばねで当たる最大の力の K0 の式が無い。力の道の確かめは予想通りでも、判定のツールが unsupported_load を出さないので tool_decides を断られる",
+      "where": "C2-speed1.2mps",
+      "record_ids": [
+        "cmp-0034",
+        "cmp-0035",
+        "cause-0009",
+        "ana-0027",
+        "ana-0028"
+      ],
+      "workaround": "ツールは役が make_tool で作った。判定なしのまま残した"
+    },
+    {
+      "kind": "missing_formula",
+      "what": "部品の質量と加速度の倍率から力を出す K0 の式が無く、電池の取付と段差の衝撃の予測の入力を作れない",
+      "where": "R6-g3・R6-speed1.2mps・R2-step12.7mm",
+      "record_ids": [],
+      "workaround": "R6 はツール part_mount_static を作り、倍率 3 g を出典の無い仮定として R6-g3 を書いたが、予測を記録できず止まった。R2 は手を付けていない"
+    },
+    {
+      "kind": "assumed_value",
+      "what": "R6 の振動の倍率 3 g は出典が無い仮定",
+      "where": "R6-g3",
+      "workaround": "basis に仮定と書いた"
+    },
+    {
+      "kind": "assumed_value",
+      "what": "型が無いので、動力・熱・疲労の設計の変数 (motor_peak_power・battery_capacity・熱容量・熱抵抗・fatigue_fat_class など) に範囲が無く、どれも確かめていない見当の値",
+      "where": "設計 v3・v4",
+      "workaround": "各変数の basis に確かめていないと書いた"
+    },
+    {
+      "kind": "missing_tool",
+      "what": "その場で旋回する (かじを切る輪の無い) 設計に合う最小回転半径の式とツールが無い。比べた結果が無いので record_cause が書けず、判定なしで閉じられない",
+      "where": "S6-turn",
+      "workaround": "閉じないまま残した"
+    },
+    {
+      "kind": "other",
+      "what": "S4 の荷重条件 (builder) の速さが 35 km/h で、このロボットの最高速度 Q50 と合っていない",
+      "where": "S4-brake35",
+      "workaround": "予測 pred-0035 まで。解析は HK5 に止められた"
+    },
+    {
+      "kind": "other",
+      "what": "T1・T2 の荷重条件 (builder) に基準 (criterion) が無く、要件にも電池・モーター・制御器の温度の上限が無いので、予想通りでも判定が付かない",
+      "where": "T1-35C・T2-35C-motor・T2-35C-controller",
+      "record_ids": [
+        "cmp-0019",
+        "cmp-0024",
+        "cmp-0025"
+      ],
+      "workaround": "基準つきの荷重条件は書かなかった"
+    },
+    {
+      "kind": "unclear_instruction",
+      "what": "write_load_case で書いた荷重条件と、P4・T1・T2・S6・R3 の段 (stage) が null なのに、HK5 は P4・C2・F3 を段 1 の残りとして段 2 の解析を止める。どの段かが一覧から読めない",
+      "where": "HK5 / overview の stage",
+      "workaround": "段 2・段 3 は回さずに終えた"
+    },
+    {
+      "kind": "other",
+      "what": "組み立ての試験 H2・H4・G2 は荷重条件が無く、役の道具では試験の中身 (判定の量・向き・限度の要件) を読めないので書けない",
+      "where": "H2・H4・G2",
+      "workaround": "書かずに残した"
+    },
+    {
+      "kind": "unclear_instruction",
+      "what": "系の点検 SY-08・SY-09 が受ける電力の carries の名前が設計役から分からず、check_design も系の点検を走らせないので、直しに 2 回 (v4・v5) かかった",
+      "where": "rule_check SY-08・SY-09",
+      "workaround": "v5 で power と electric の両方の名前を並べて通した"
+    }
+  ]
+}

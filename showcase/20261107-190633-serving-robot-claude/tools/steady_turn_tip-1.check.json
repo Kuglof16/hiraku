@@ -1,0 +1,35 @@
+{
+ "name": "steady_turn_tip",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "steady_turn_tip",
+  "title": "旋回での転倒: 定常円の横加速度で、合力が接地点の多角形の外へ出る (内側の輪が浮く) 横加速度 (剛体)",
+  "domain": "handling",
+  "base": "K0",
+  "tests": [
+   "S2"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "rigid rectangle 1000 x 500 mm, centre of gravity 600 mm high, four corner supports",
+    "quantity": "tip_lateral_accel",
+    "expected": 0.416667,
+    "got": 0.41666666666666663,
+    "unit": "g",
+    "tolerance_rel": 0.0001,
+    "pass": true,
+    "source": "closed form: the rigid vehicle's rollover threshold a_y/g = t / (2 h) (static stability factor), T. D. Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 9; t = 500 mm, h = 600 mm worked out by hand"
+   }
+  ],
+  "formulas": [
+   "lane_change.inner_wheel_load"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T10:36:14+00:00",
+ "reason": "S2 (旋回での転倒) の荷重条件 S2-speed1.2mps を解けるツールが棚に無い (list_tools(test_id=S2) が空)。6 つの剛い支えの接地点の多角形から、内側が浮く横加速度を出す。"
+}
