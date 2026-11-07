@@ -68,6 +68,19 @@ class JointWallFormulaTest(unittest.TestCase):
         self.assertGreater(out["sigma_open_end"], out["sigma"])
         self.assertEqual(joint_wall(dict(DEMO, M=1.0e5))["sigma_open_end"], joint_wall(dict(DEMO, M=1.0e5))["sigma"])
 
+    def test_open_end_with_gussets(self):
+        # v5's rail-end L joints with gusset_ends 1 (gusset_leg 80, rail 45 x 80 x 4.5, cross member 40 x 60 x 2.3):
+        # the spread over the gussets stops at the rail's free end (it gave NaN past it before)
+        v = dict(DEMO, b=45.0, h=80.0, t=4.5, b_c=40.0, h_c=60.0, t_c=2.3, M=133580.0, open_end=1.0)
+        bare, gusset = joint_wall(dict(v, leg=0.0)), joint_wall(dict(v, leg=80.0))
+        for out in (bare, gusset):
+            self.assertTrue(all(math.isfinite(x) for x in out.values()), out)
+        self.assertLess(gusset["sigma_open_end"], bare["sigma_open_end"])  # the gussets spread the load
+        self.assertGreater(gusset["sigma_open_end"], gusset["sigma"])  # the free edge still bounds it from above
+        # the plate is linear: the free-edge case scales with the moment
+        self.assertAlmostEqual(joint_wall(dict(v, leg=80.0, M=2 * v["M"]))["sigma_open_end"],
+                               2 * gusset["sigma_open_end"], places=6)
+
     def test_record_and_refusals(self):
         reg = Registry(all_formulas())
         f = reg.get("frame_static.joint_wall_bending")
