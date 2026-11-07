@@ -144,11 +144,16 @@ offroad-4w:
       # the user's set o2, v5 fixed (2026-11-07; the analysis department's studies/lere sets.py RECSb40w14sb60h8o2,
       # claude/analysis-lere-ec2 9e563567: RECb40 + the roll bar's rear stays + the roll bar 1400 wide, 200 mm back and the
       # side bars 60.5 x 3.2 at 800 mm); the design department's generator gives the same design as the set's JSON (72
-      # nodes, 92 members, 239 parts, sections and 787.48 kg compared before the seats' mount brackets, 2026-11-07)
+      # nodes, 92 members, 239 parts, sections and 787.48 kg compared before the seats' mount brackets, 2026-11-07).
+      # o2 meets itself 12 times (the braces through the deck, the load and the rear axle's gussets, the front posts and
+      # legs through 120 mm gussets): the gussets 80 mm, the braces' feet 150 mm inboard (tower_brace_y), and the deck
+      # and the load narrowed by the generator to stay clear of the braces (narrow_deck_for_braces: 553 -> 430 mm)
+      # leave none (the design department, 2026-11-07). The driver's place back where o2 was computed: the seat and the
+      # battery at -1170 mm (C1), the steering at -646 mm and the pedals at -527 mm (H3)
       changes:
         rail_t: {value: 4.5, unit: mm}
         rail_b: {value: 45, unit: mm}
-        gusset_leg: {value: 120, unit: mm}
+        gusset_leg: {value: 80, unit: mm}
         gusset_thickness: {value: 4.5, unit: mm}
         gusset_ends: {value: 1, unit: '1'}
         cross_h: {value: 60, unit: mm}
@@ -158,6 +163,11 @@ offroad-4w:
         tower_brace_b: {value: 35, unit: mm}
         tower_brace_t: {value: 4.5, unit: mm}
         tower_brace_at: {value: 0.5, unit: '1'}
+        tower_brace_y: {value: 150, unit: mm}
+        seat_x: {value: -1170, unit: mm}
+        battery_x: {value: -1170, unit: mm}
+        steering_x: {value: -646, unit: mm}
+        pedal_x: {value: -527, unit: mm}
         mount_plate_t: {value: 9, unit: mm}
         mount_weld_leg: {value: 6.3, unit: mm}
         # the roll bar's rear stays (42.7 x 2.3, the defaults; the foot at 0.3 of the way from the roll bar's foot to the

@@ -1361,7 +1361,8 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
             raise DesignGenError(f"tower_brace_t ({v['tower_brace_t']:g} mm) must be less than half of tower_brace_b "
                                  f"({v['tower_brace_b']:g} mm)")
         brace = frame.section(*rect_tube(v["tower_brace_b"], v["tower_brace_b"], v["tower_brace_t"]))
-        build_tower_braces(frame, v, rail_y, brace)
+        braces = build_tower_braces(frame, v, rail_y, brace)
+        narrow_deck_for_braces(lay, frame, braces, v["tower_brace_b"])
     # joint reinforcement last, so that a design's other parts come first as in the design without it
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
@@ -1654,6 +1655,42 @@ def build_tower_braces(frame: Frame, v: dict, rail_y: float, section: str) -> li
             raise DesignGenError(f"the tower brace's foot: {e}") from None
         out.append(frame.member(f"tower_brace_{side}B", foot, top, section))
     return out
+
+
+def narrow_deck_for_braces(lay: Layout, frame: Frame, braces: list[str], width: float) -> float | None:
+    """The deck and the load narrowed (about the centre line) so that the tower braces, which run inboard from the posts
+    down to the rear axle's cross member, stay DECK_TOWER_GAP_MM outside them from the deck's bottom to the load's top
+    (as the deck stands DECK_TOWER_GAP_MM inside the posts). At a height z the brace's tube (`width`, inclined in the
+    y-z plane) reaches across |y| from its centre line by width / 2 / sin(its angle from the horizontal); its lowest
+    point in that height range comes farthest inboard. The deck's mass follows its new size (plate_mass); the load
+    keeps its mass. Returns the new width (mm), None when nothing changed."""
+    deck, cargo = lay.part("deck"), lay.part("cargo")
+    (dx, _, dz), (lx, _, lz) = deck["box"]["center_mm"], deck["box"]["size_mm"]
+    z_lo = float(dz) - float(lz) / 2.0
+    cz, cs = cargo["box"]["center_mm"][2], cargo["box"]["size_mm"][2]
+    z_hi = float(cz) + float(cs) / 2.0
+    x_lo, x_hi = float(dx) - float(lx) / 2.0, float(dx) + float(lx) / 2.0
+    half = float(deck["box"]["size_mm"][1]) / 2.0
+    for bid in braces:
+        m = next(x for x in frame.members if x["id"] == bid)
+        a, b = (np.asarray(frame.nodes[m[k]], float) for k in ("node_a", "node_b"))
+        if max(a[0], b[0]) < x_lo or min(a[0], b[0]) > x_hi or abs(b[2] - a[2]) < 1e-9:
+            continue
+        sin = abs(b[2] - a[2]) / float(np.linalg.norm(b - a))
+        reach = width / 2.0 / max(sin, 1e-6)
+        for z in (z_lo, z_hi):  # the brace is straight: its |y| over the height range is least at one end of it
+            s = min(max((z - a[2]) / (b[2] - a[2]), 0.0), 1.0)
+            y = abs(a[1] + s * (b[1] - a[1]))
+            half = min(half, y - reach - DECK_TOWER_GAP_MM)
+    if half >= float(deck["box"]["size_mm"][1]) / 2.0 - 1e-9:
+        return None
+    if half <= 0.0:
+        raise DesignGenError("the tower braces leave no room for the deck between them")
+    w = float(2.0 * half)
+    deck["box"]["size_mm"][1] = w
+    deck["mass_kg"] = plate_mass(deck["box"]["size_mm"])
+    cargo["box"]["size_mm"][1] = w
+    return w
 
 
 BATTERY_IDS = ("battery", "battery2")  # the packs' part ids (battery_split of them)
