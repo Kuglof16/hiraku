@@ -129,6 +129,21 @@ class BrokenChainTest(unittest.TestCase):
         self.assertIn("connects_to に", msg)
         self.assertIn("(carries: torque) を足してください", msg)
 
+    def test_the_power_chain_hit_names_the_links_that_do_not_say_power(self):
+        # battery -> fuse -> controller -> motor joined, but the links carry nothing (what a designer writes first)
+        d = vehicle()
+        for p in d["parts"]:
+            if p["id"] in ("battery", "fuse1", "controller"):
+                for x in p["connects_to"]:
+                    if x.get("carries") == "power" and x["to"] in ("fuse1", "controller", "motor"):
+                        x.pop("carries")
+        rec08, rec09 = check("SY-08", d), check("SY-09", d)
+        self.assertIn("battery と fuse1 (carries なし)", rec08["hits"][0]["message"])
+        self.assertIn("carries: power に直してください", rec08["hits"][0]["message"])
+        self.assertIn("carries なし", rec09["hits"][0]["message"])  # the fuse is on the path, over links that say nothing
+        self.assertIn("carries: power に直してください", rec09["hits"][0]["message"])
+        self.assertTrue(check("SY-08", vehicle())["pass"] and check("SY-09", vehicle())["pass"])  # said right: they pass
+
     def test_no_rack(self):
         rec = check("SY-02", without(vehicle(), "rack"))
         self.assertEqual(hit_ids(rec), ["support:FL", "support:FR"])
