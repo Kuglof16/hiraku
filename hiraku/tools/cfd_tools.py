@@ -181,6 +181,12 @@ def _hand_inputs(store: Any, design: Record, version: int) -> tuple[Record, str,
     except ValueError as e:
         hand["f2"] = {}
         notes.append(f"F2 の手計算の既定値を出せませんでした: {e}")
+    f2 = _case_of(store, version, "F2")
+    if f2:
+        if f2.get("criterion"):
+            hand["f2"]["criterion"] = criterion(f2, "N")
+        if "speed" in f2.get("params", {}):
+            hand["f2"]["speed_ms"] = to_unit(f2["params"]["speed"], "m/s", "speed")
     if p4:
         try:
             p, calc = p4["params"], p4_calc(design, p4)
