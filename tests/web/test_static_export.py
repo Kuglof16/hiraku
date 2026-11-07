@@ -199,6 +199,11 @@ class ExportTest(unittest.TestCase):
         self.assertEqual(first["run"], RUN_ID)
         self.assertIn("newest", first["why"])
         self.assertEqual(self.got["first"], first)
+        # a run named by --default-run: taken as it is, without the hearing (opened as it ended, on ④)
+        plain = next(r for r in self.got["runs"] if r != RUN_ID and r != "sample")
+        named = ex.first_run(ex.list_runs(self.tmp / "none-runs", self.saved, plain), self.saved, plain)
+        self.assertEqual(named["run"], plain)
+        self.assertIn("--default-run", named["why"])
         # without such a run: none (the page opens on the run list)
         root = self.tmp / "plain-only"
         saved = make_saved(root)
