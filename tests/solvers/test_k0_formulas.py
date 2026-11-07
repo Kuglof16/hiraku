@@ -154,6 +154,11 @@ class FormulaLedgerTest(unittest.TestCase):
         cross_m = 7850e-9 * (40 * 40 - 35.4 * 35.4) * 700
         deck = next(p["mass_kg"] for p in design["parts"] if p["id"] == "deck")  # between the rear towers: narrower
         by_hand = (deck / 6 + 150 / 6) * g * 400 + cross_m / 2 * g * 400 + rail_w * 400 * 200
+        # the rear tower leans back 2 mm (its top LBm at x - 2: kit/mounts, a3699a13): overhang_moment counts the post
+        # (both ends on the rail's line) over its 2 mm behind the axle at 1 mm, and half of the arm LBm-LBd (one end on
+        # the line) at LBm, 2 mm behind
+        tower_w = 7850e-9 * (30 * 30 - 25.4 * 25.4) * g  # 30 x 30 x 2.3, N/mm
+        by_hand += tower_w * 2 * 1 + tower_w * math.hypot(2.0, 78.8) / 2 * 2
         self.assertAlmostEqual(ins["M_oh"], by_hand, places=6)
         self.assertEqual(overhang_moment(design, "LA") > ins["M_oh"], True)  # more lies behind the front axle
         # with no offset and no overhang the formula is the traction bending plus the push
