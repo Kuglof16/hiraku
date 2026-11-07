@@ -62,7 +62,7 @@ def crossable_inputs(depth_records: Record | list[Record] | None) -> list[Record
         d = rec.get("crossable_depth_mm")
         rows = "、".join(f"{r['depth_mm']:g} mm: " + ("浸からない" if not r["reached"] else "、".join(names.get(n.split("_")[0], n) for n in r["reached"]) + " が浸かる") for r in rec.get("table", []))
         label = rec.get("label", "渡れる水深 (計算)") + (f" {speed:g} km/h" if speed else "")
-        out.append({"label": label, "value": f"{d:g} mm" if d is not None else str(rec.get("said", "")), "source": f"{rec.get('definition', '')}。{rows}。実験と比べていない"})
+        out.append({"label": label, "value": f"{d:g} mm" if d is not None else str(rec.get("said", "")), "source": f"{rec.get('definition', '')}。{rows}"})
     return out
 
 
@@ -167,9 +167,7 @@ def build(args: argparse.Namespace) -> Record:
         if rec.get("design_version") not in (None, design.get("design_version")):
             raise ValueError(f"the depth record is of design v{rec.get('design_version')}, the design given is v{design.get('design_version')}")
     inputs = crossable_inputs(depth_records) + inputs
-    notes = [statement + "。",
-             "波の大きさは実験と比べていない。音速の設定を変えると、車が受ける力積はまだ動く。力の値としては読まない。",
-             "水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",
+    notes = ["水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",
              "床下の水の深さ: " + str(under.get("depth_definition", "")),
              "水が届いた床下の列: " + str(under.get("reach_definition", ""))]
     return {"field": "water", "title": "冠水路を渡る水", "statement": statement,

@@ -1,7 +1,8 @@
 // Aerodynamics, the CFD variant of the aero field (viewer/src/aero_cfd.py, data key aero_cfd, モデル switch K2 / CFD):
 // the opaque vehicle on a dark background, streamlines of the computed mean field coloured by speed or Cp, and lights
-// that run only along the stored polylines, each point reached at its stored travel time. The page always says how far
-// the accuracy has been checked (D.status). Loaded after js/aero.js: this file adds the variant to its field.
+// that run only along the stored polylines, each point reached at its stored travel time. How far the accuracy has been
+// checked (D.status) stays in the data and the README, not on the page (the owner's decision, 11/7). Loaded after js/aero.js:
+// this file adds the variant to its field.
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 (function (HV) {
@@ -12,7 +13,8 @@ HV.fields = HV.fields || {};
     const field = HV.fields.aero;
     if (field) {   // a page without js/aero.js has no aero field, and this variant stays out of it
       const k2 = field.init;
-      field.variants = [{ key: 'aero', label: 'K2' }, { key: 'aero_cfd', label: 'CFD', always: true }];
+      // lazy: the first view of the aero page does not ask for a record that may not exist (a missing script is an error on the page)
+      field.variants = [{ key: 'aero', label: 'K2' }, { key: 'aero_cfd', label: 'CFD', always: true, lazy: true }];
       field.init = function (D, ctx) { return D.model === 'cfd' ? cfd(D, ctx) : k2.call(this, D, ctx); };
     }
     return start.apply(this, args);
@@ -206,8 +208,7 @@ HV.fields = HV.fields || {};
       setTime() { if (ctx.partMode === 'field') paintParts(); },
       timeText() { const r = row(); return `横風の角度 ${yawText(r.yaw_deg)}   Cd ${HV.fmt(r.Cd)}   CdA ${HV.fmt(r.CdA_m2)} m²   Cy ${HV.fmt(r.Cy)}   Cl ${HV.fmt(r.Cl)}`; },
       hud() {
-        return [`検証: ${D.status.text}`,
-                `色: ${S.by === 'speed' ? '空気の速さ' : '圧力係数 Cp'}   線 ${S.lines ? S.lines.shown : 0} 本は計算した平均の流れをたどった線、光はその上だけを動く`];
+        return [`色: ${S.by === 'speed' ? '空気の速さ' : '圧力係数 Cp'}   線 ${S.lines ? S.lines.shown : 0} 本は計算した平均の流れをたどった線、光はその上だけを動く`];
       },
       contour: specOf,
       plot() {
@@ -232,8 +233,6 @@ HV.fields = HV.fields || {};
           '</table><div class="muted">ゆれ: 平均の区間を 4 つに分けたときの Fx の差。力は車の座標、回転の中心は前後の軸の中央・左右の中央・地面</div></details>';
       },
       panel(div) {
-        const h = document.createElement('h3'); h.textContent = '検証'; div.appendChild(h);
-        const st = document.createElement('div'); st.id = 'cfdstatus'; st.textContent = D.status.text; st.title = D.status.source; st.style.fontWeight = '600'; div.appendChild(st);
         const h1 = document.createElement('h3'); h1.textContent = '横風の角度'; div.appendChild(h1);
         const ys = document.createElement('div'); ys.className = 'row'; ys.id = 'cfdyaws';
         D.yaws.forEach((y, i) => { const b = document.createElement('button'); b.textContent = yawText(y.yaw_deg) + (y.speed_ms > 0 ? '' : ' 止まった車'); b.onclick = () => setYaw(i); ys.appendChild(b); });

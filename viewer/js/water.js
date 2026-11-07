@@ -1,6 +1,6 @@
 // The flooded road (viewer/src/water.py, data key water): a replay of the stored water record, no calculation on the page.
 // The vehicle stays where it is on the page and the road and the water move past it (the camera follows the vehicle). The vehicle is
-// opaque. The page always says that this is for showing and not a judgement of what can be crossed (D.statement).
+// opaque. What a judgement on it covers (D.statement) stays in the data and the README, not on the page (the owner's decision, 11/7).
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 (function (HV) {
@@ -96,7 +96,7 @@ HV.fields = HV.fields || {};
         setScale(v) { points.material.size = +v; },
         setTime(i) { show(i); if (ctx.partMode === 'field') paintParts(); },
         timeText(i) { const r = D.records[i]; return `時刻 ${r.t.toFixed(2)} 秒   床下の水の深さ 平均 ${r.depth_mean_mm.toFixed(0)} mm   水が届いた床下の列 ${r.reached_pct.toFixed(0)} %`; },
-        hud() { return [D.statement, '水面は粒子の体積から求めた高さ、点は飛ぶ水の粒子の一部。波の大きさは実験と比べていない']; },
+        hud() { return ['水面は粒子の体積から求めた高さ、点は飛ぶ水の粒子の一部']; },
         contour: () => null,
         plot() {
           const mk = () => [{ x: rec().t, label: `${rec().t.toFixed(2)} 秒`, col: '#555', w: 2 }];
@@ -112,8 +112,6 @@ HV.fields = HV.fields || {};
           return `<b>${HV.esc(D.frame.member_ids[m])}</b> ${HV.esc(D.frame.member_names[m])}<br>水の中では形だけ`;
         },
         panel(div) {
-          const h = document.createElement('h3'); h.textContent = 'この計算について'; div.appendChild(h);
-          const st = document.createElement('div'); st.id = 'waterstatement'; st.textContent = D.statement; st.style.fontWeight = '600'; div.appendChild(st);
           const h1 = document.createElement('h3'); h1.textContent = '通過の間の最大'; div.appendChild(h1);
           const u = D.underfloor;
           for (const line of [`床下の水の深さの平均 ${u.max_depth_mean_mm.toFixed(0)} mm`, `水が届いた床下の列 ${u.max_reached_pct.toFixed(0)} %`, `いちばん低い部品 ${u.lowest_part_mm.toFixed(0)} mm`, `水のいちばん高い所 ${D.top_of_water_m.toFixed(2)} m`]) {
