@@ -1,0 +1,35 @@
+{
+ "name": "part_mount_static",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "part_mount_static",
+  "title": "部品の取付: 部品の重さ x 倍率を載る節にかけ、その節に着く部材の最大の応力 (K1 の骨組、支えはピン)",
+  "domain": "strength",
+  "base": "K1",
+  "tests": [
+   "R6"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "100 kg x 1 g at mid-span of a 400 mm rect tube 40 x 80 x 2 mm, pinned ends",
+    "quantity": "battery_mount_max_stress",
+    "expected": 10.064846871749959,
+    "got": 10.064846871748806,
+    "unit": "MPa",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form for a simply supported beam with a centre point load, M = P L / 4, sigma = M (h / 2) / I, I = (b h^3 - (b - 2t)(h - 2t)^3) / 12 (textbook beam tables)"
+   }
+  ],
+  "formulas": [
+   "frame_static.simple_beam_center_load"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T10:39:24+00:00",
+ "reason": "R6 (電池の取付の振動) を解けるツールが棚に無い。電池の重さに倍率をかけた準静的な荷重を、電池の載る節にかけ、K1 の骨組でその節に着く部材の応力 (battery_mount_max_stress) を出す"
+}

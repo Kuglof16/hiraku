@@ -1,0 +1,49 @@
+{
+ "name": "drag_force_steady",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "drag_force_steady",
+  "title": "一定の速さで受ける空気抵抗の力と、それに使う動力 (無風)",
+  "domain": "aero",
+  "base": "K0",
+  "tests": [
+   "F2"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "C_d 1, A 1 m^2, rho 1.2 kg/m^3, 36 km/h (10 m/s), still air",
+    "quantity": "drag_force",
+    "expected": 60.0,
+    "got": 60.0,
+    "unit": "N",
+    "tolerance_rel": 1e-09,
+    "pass": true,
+    "source": "closed form F = 1/2 rho C_d A v^2 (textbook fluid mechanics, dynamic pressure 1/2 rho v^2 = 60 Pa at 10 m/s), worked out by hand",
+    "case_ja": "C_d 1、A 1 m²、空気の密度 1.2 kg/m³、36 km/h (10 m/s)、無風",
+    "source_ja": "閉じた式 F = 1/2 ρ C_d A v² (流体力学の教科書)、手で計算"
+   },
+   {
+    "case": "same, power to push through the air",
+    "quantity": "drag_power",
+    "expected": 600.0,
+    "got": 600.0,
+    "unit": "W",
+    "tolerance_rel": 1e-09,
+    "pass": true,
+    "source": "closed form P = F v (textbook mechanics), 60 N x 10 m/s, worked out by hand",
+    "case_ja": "同じ条件で、空気を押しのけるのに使う動力",
+    "source_ja": "閉じた式 P = F v (力学の教科書)、手で計算"
+   }
+  ],
+  "formulas": [
+   "drag.force"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T09:34:10+00:00",
+ "reason": "F2 (最高速度で受ける空気抵抗の力) を解析できるツールが棚に無い (list_tools(test_id=F2) が空)。crosswind は F1 だけ。"
+}

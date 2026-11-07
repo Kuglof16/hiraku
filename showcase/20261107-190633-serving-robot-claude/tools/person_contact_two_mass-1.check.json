@@ -1,0 +1,56 @@
+{
+ "name": "person_contact_two_mass",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "person_contact_two_mass",
+  "title": "人との接触: ロボットと人の体の部位を 2 つの質量とみて、体のばねで当たる力を時間で解く",
+  "domain": "crash",
+  "base": "K0",
+  "tests": [
+   "C2"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "2 kg robot at 1 m/s meets 2 kg body through 0.4 N/mm",
+    "quantity": "max_contact_force",
+    "expected": 20.0,
+    "got": 19.999999999999744,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form of the undamped impact of two masses through a linear spring (energy balance 1/2 mu v^2 = 1/2 k x^2, mu = m1 m2 / (m1 + m2), F = k x = v sqrt(mu k)), worked out by hand: m1 = m2 = 2 kg, mu = 1 kg, k = 400 N/m, v = 1 m/s"
+   },
+   {
+    "case": "same, peak compression",
+    "quantity": "max_compression",
+    "expected": 50.0,
+    "got": 49.99999999999937,
+    "unit": "mm",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form of the undamped impact of two masses through a linear spring (energy balance 1/2 mu v^2 = 1/2 k x^2, mu = m1 m2 / (m1 + m2), F = k x = v sqrt(mu k)), worked out by hand: m1 = m2 = 2 kg, mu = 1 kg, k = 400 N/m, v = 1 m/s"
+   },
+   {
+    "case": "same, contact time pi sqrt(mu / k)",
+    "quantity": "contact_time",
+    "expected": 0.15707963267948966,
+    "got": 0.15707963267948966,
+    "unit": "s",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form of the undamped impact of two masses through a linear spring (energy balance 1/2 mu v^2 = 1/2 k x^2, mu = m1 m2 / (m1 + m2), F = k x = v sqrt(mu k)), worked out by hand: m1 = m2 = 2 kg, mu = 1 kg, k = 400 N/m, v = 1 m/s; half period pi sqrt(mu/k)"
+   }
+  ],
+  "formulas": [
+   "crash.linear_spring",
+   "crash.mean_deceleration"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T10:37:43+00:00",
+ "reason": "C2 人との接触 (C2-speed1.2mps) を解けるツールが棚に無い。棚の crash と crash_beam は壁への正面衝突のツールで、人の体の部位を質量とばねで見ていない"
+}

@@ -1,0 +1,55 @@
+{
+ "name": "liquid_surface_tilt_quasistatic",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "liquid_surface_tilt_quasistatic",
+  "title": "トレーの飲み物の液面の傾き (準静的: 水平の加速度と重力の合力に液面が直交する)",
+  "domain": "aero",
+  "base": "K0",
+  "tests": [
+   "F3"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "1 g fore-aft, no turning",
+    "quantity": "liquid_surface_tilt",
+    "expected": 45.0,
+    "got": 45.0,
+    "unit": "deg",
+    "tolerance_rel": 1e-06,
+    "pass": true,
+    "source": "closed form for a liquid in a container under uniform horizontal acceleration a: tan(theta) = a / g (rigid-body motion of a fluid, e.g. F. M. White, Fluid Mechanics, section 'rigid-body motion: uniform linear acceleration')"
+   },
+   {
+    "case": "0.6 g braking with 0.8 g turning at once (resultant 1 g)",
+    "quantity": "liquid_surface_tilt",
+    "expected": 45.0,
+    "got": 45.0,
+    "unit": "deg",
+    "tolerance_rel": 1e-06,
+    "pass": true,
+    "source": "closed form for a liquid in a container under uniform horizontal acceleration a: tan(theta) = a / g (rigid-body motion of a fluid, e.g. F. M. White, Fluid Mechanics, section 'rigid-body motion: uniform linear acceleration'); the horizontal components add as a vector"
+   },
+   {
+    "case": "no acceleration",
+    "quantity": "liquid_surface_tilt_level",
+    "expected": 0.0,
+    "got": 0.0,
+    "unit": "deg",
+    "tolerance_rel": 1e-06,
+    "pass": true,
+    "source": "a liquid at rest has a level surface (hydrostatics)"
+   }
+  ],
+  "formulas": [
+   "tilt.slide_angle"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T10:36:10+00:00",
+ "reason": "F3 (液体のこぼれ) を解けるツールが棚に無い (空力は横風の crosswind だけ)。液面の傾きを、準静的に、水平の加速度と重力の合力に液面が直交するとみて出す"
+}
