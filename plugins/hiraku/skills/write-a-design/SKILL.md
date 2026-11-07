@@ -1,11 +1,11 @@
 ---
 name: write-a-design
-description: 合う設計の型が無い製品で、設計役 (designer) が設計そのもの (節点・部材・断面・材料・部品・支え) を書き、check_design で確かめ、write_design で版にし、通らなかった試験に答えて次の版を edit_design (変える所だけ) で作る手順。型の版 1 を下書きにする方法と、check_design の断りの直し方
+description: 合う設計の型が無い製品で、設計役 (designer) が設計そのもの (節点・部材・断面・材料・部品・支え) を書き、check_design で確かめ、write_design で版にし、通らなかった試験に答えて次の版を edit_design (変える所だけ) で作る手順。型のv1 を下書きにする方法と、check_design の断りの直し方
 ---
 
 # 設計そのものを書く
 
-この手順は、型 (`get_context` の `archetypes`) が無いか、要件に合う型が無いときだけのもの。合う型があれば、今までどおり `propose_design` で版 1 を作り、`revise_design` で直す。
+この手順は、型 (`get_context` の `archetypes`) が無いか、要件に合う型が無いときだけのもの。合う型があれば、今までどおり `propose_design` でv1 を作り、`revise_design` で直す。
 
 どちらの道でも、数値はツールが計算する。あなたが選ぶのは形と入力 (座標・断面・材料・部品の質量) で、結果の数 (質量の和・干渉の数・応力) は書かずに、ツールの答えと記録から読む。
 
@@ -27,13 +27,13 @@ description: 合う設計の型が無い製品で、設計役 (designer) が設�
 - 骨組みは部材で書く。骨組みを囲む大きな箱の部品 (`kind: frame` など) は置かない。箱が部材と部品の全部に重なり、干渉の数が増える (試しでは箱 1 つで 26 件)。
 - 全部の部材が、部材をたどって支えの `frame_node` に届くようにする。ばらばらの部材や、支えにつながらない棚があると、骨組みの解析が解けない。
 
-## 2. 型の版 1 を下書きにする
+## 2. 型のv1 を下書きにする
 
 型が製品に合わず、それでも形の近い型があるとき (例: 介護ベッドの骨組みを台車に):
 
-1. 下書きに使う型で `propose_design` を呼び、版 1 を作る (要件から座標が出る)。
+1. 下書きに使う型で `propose_design` を呼び、v1 を作る (要件から座標が出る)。
 2. `get_context(sections=["design"])` で要約を見て、`design_part` (`nodes`・`members`・`parts`・`supports`・`sections`・`materials`・`variables`) と `offset`・`limit` で中身を少しずつ読む。
-3. 要る所を変えた設計の全体を、`write_design` (`based_on` に型の名前) で版 2 として出す。版 2 は直しの 1 回 (round) に数える。
+3. 要る所を変えた設計の全体を、`write_design` (`based_on` に型の名前) でv2 として出す。v2 は直しの 1 回 (round) に数える。
 
 - モジュールに分かれた型 (ladder_4w) の版の上では `write_design` は使えない (断られる)。その型を変えるときは、モジュールの設計役が `revise_design` で提案する。
 - 型が 1 つも無い製品 (`archetypes` が空) では、この下書きは使えない。要件から書く。
@@ -64,7 +64,7 @@ description: 合う設計の型が無い製品で、設計役 (designer) が設�
 
 `write_design(design, reason)` を 1 回呼ぶ。`reason` には、どの要件からその形・寸法にしたかを書く。下書きに型を使ったら `based_on`。
 
-- 版 1: 試験の荷重条件と担当の役が決まる。答えの `load_cases` を、まとめ役に 1 行で返す。
+- v1: 試験の荷重条件と担当の役が決まる。答えの `load_cases` を、まとめ役に 1 行で返す。
 - 断られたら、文の問題を全部直して呼び直す。
 
 ## 5. 直す (次の版)

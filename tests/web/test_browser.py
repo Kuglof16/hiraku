@@ -986,6 +986,51 @@ class BrowserReplayTest(unittest.TestCase):
             server.server_close()
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_a_product_with_no_kind_of_design_can_start(self):
+        """A product no kind of design suits (electric-guitar) settles and can start: the bar says that
+        Claude writes the design itself (server design_way "written"), not that it cannot run, and the
+        run list's lead says such products can start too."""
+        import yaml
+
+        from hiraku.webserve.launch import REPO_DIR, Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        want = yaml.safe_load((REPO_DIR / "data" / "requirements" / "products" / "electric-guitar.yaml").read_text(encoding="utf-8"))["want"]
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, "20261107-120000-guitar-fake", 20.0),
+                       reader=fake_reader, wait_s=20, demo_runs_file=tmp / "no-demo-runs.yaml")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            page.goto(f"{base}/?new=1")
+            page.wait_for_selector("#draftbar")
+            page.fill("#view-intake textarea", want)
+            page.click("#view-intake button:has-text('送る')")
+            page.wait_for_selector("#intake-host .in-ask-top")
+            page.click(".tab[data-tab='A5']")
+            page.click("#draftbar button[data-draft-ask='defaults']")
+            page.wait_for_selector("#draftbar button[data-start='scripted']")
+            bar = page.text_content("#draftbar")
+            self.assertIn("要件がそろいました", bar)
+            self.assertNotIn("走らせられません", bar)
+            self.assertIn("Claude が設計そのもの (骨組み・部品・支え) を書いて進めます", page.text_content("#draftbar [data-why='written']"))
+            self.assertIn("設計を作る前で止まります", page.text_content("#draftbar [data-why='scripted-written']"))
+            self.assertFalse(page.is_disabled("#draftbar button[data-start='scripted']"))
+            page.goto(f"{base}/")
+            page.wait_for_selector("#runlist .lead")
+            self.assertIn("決まった設計の型が無いものでも、Claude が設計そのものを書いて始められます", page.text_content("#runlist .lead"))
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
         """On a run this screen started and still going, a file given to A5 lands in the run's
         knowledge/ with a request in its inbox/ (the run turns it into events), and A5 says so."""

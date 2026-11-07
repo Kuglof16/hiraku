@@ -41,6 +41,9 @@ def design_key(design: dict, *extra: Any) -> str:
     parts, and `extra` (element size, weld strips)."""
     frame = {k: v for k, v in design.items() if k != "parts"}
     frame["gussets"] = [p for p in design.get("parts", []) if p.get("kind") == "gusset"]
+    brackets = [p for p in design.get("parts", []) if p.get("kind") == "bracket" and p.get("joint")]
+    if brackets:  # the suspension mount brackets are meshed as plates too (brackets.py)
+        frame["mount_brackets"] = brackets
     text = json.dumps([frame, list(extra)], sort_keys=True, default=str, ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 

@@ -284,7 +284,7 @@ START_RUN_SCHEMA: Record = {
     "type": "object", "additionalProperties": False, "required": ["requirements_file"],
     "properties": {
         "requirements_file": {"type": "string", "description": "要件のファイル (例 data/requirements/offroad-4w.yaml、ファイル名だけでもよい)"},
-        "design_file": {"type": "string", "description": "最初の設計のファイル (無ければ要件の design_file、それも無ければ設計役が版 1 を作る)"},
+        "design_file": {"type": "string", "description": "最初の設計のファイル (無ければ要件の design_file、それも無ければ設計役が v1 を作る)"},
     },
 }
 OPEN_RUN_SCHEMA: Record = {

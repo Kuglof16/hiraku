@@ -1,6 +1,6 @@
 # HIRAKU
 
-作りたいもの (たとえば、林道を走れる小さな車) の条件を渡すと、Claude のエージェントたちが、分野ごとに「手計算で結果を予測する → CAE (コンピューターでの解析) で計算する → 予測と照らし合わせる」を進め、合わない所の設計を直していくアプリです。
+作りたいもの (たとえば、林道を走れる小さな車) の条件を渡すと、Claude のエージェントたちが、分野ごとに「手計算で結果を予測する → CAE (コンピューターでの解析) で解析する → 予測と比べる → 判定する」を進め、NG の所の設計を直していくアプリです。
 計算の様子は、3D の画面で見られます。使うのは Windows の PC と Python 3.12 で、Claude を呼ばない「台本の運転」なら API キーは要りません。
 
 HIRAKU: Claude agents predict each result by hand calculation before running the CAE analysis, check one against the other, and revise the design.
@@ -50,31 +50,35 @@ Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作ってい
 
 ## 保存した実行を見る
 
-画面は、開くとまず、リポジトリの `showcase/` に保存した実行を再生します。何も計算せず、無料です。
+画面を開くと、まず一覧「HIRAKU でできること」が出ます (`?list=1` も同じ一覧)。「まずはこれ」の「見る」を押すと、リポジトリの `showcase/` に保存した実行のうちいちばん新しいもの (Claude Code のプラグインで回し、v7 で終わった `20261105-160725-offroad-4w`) を再生します。何も計算せず、無料です。
 
-- `showcase/` には 4 つの実行と、動画の N10 の場面の記録 (`n10/`) があります。何も選ばないと、いちばん新しい実行 (Claude Code のプラグインで回し、v7 で終わった `20261105-160725-offroad-4w`) が開きます。
-- ほかの実行は、URL に `?run=<実行の名前>` を付けて開きます。一覧は `?list=1` です。最初のページ「HIRAKU でできること」の「まずはこれ」の「見る」でも開けます。
-- それぞれの実行の中身と、見る順のおすすめは [showcase/README.md](showcase/README.md) にあります。
+- 再生は長いので、下の時間の棒を右端まで送ると、終わったときの判定 (④ 解析結果) と組み立て (⑤ 組み立て) が見られます。棒の横の「1×」を押すと、速さが 0.5× から 8× まで変わります。
+- `showcase/` には 4 つの実行と、動画の N10 の場面の記録 (`n10/`) があります。ほかの実行は、一覧の「記録を見る」か、URL の `?run=<実行の名前>` で開きます。実行ごとの中身と見る順のおすすめは [showcase/README.md](showcase/README.md)。
+- 終わった実行で、合わないように見える所:
+  - 記録の最後の「まだ確かめていない 45」は、要件の値のうち出典を確かめていない (仮定を含む) ものの数です。
+  - この実行で選んだ分野は、強度信頼性と組み立てだけです。P1 (段差越え) は R1 に力を渡すために回した「参考 (判定しない)」なので、④ の動力は「選んでいない」と出ます。
+  - ⑤ の手順ごとの「工具」「手」の × は、見せるだけで判定に入りません (手と工具の通り道の決まりに出典が無いため。`hiraku/catalog/builders/analysis.py` の `H5_HANDS_NOTE`)。
+  - 上の「費用 不明」は、プラグインの実行では使った額が HIRAKU に届かないためです (下の「Claude Code のプラグインで回す」)。
 
 ## 台本の運転
 
 「台本の運転」は、Claude を呼ばずに、決まった順にツールを呼んで、設計を試験して直すところまでを再現する運転です。無料で、API キーは要りません。
 
 1. 画面の最初のページ「HIRAKU でできること」を開きます。
-2. まず短いもの: 「デモ」の「要件の書き間違いを見つける」の行の「再現する」を押します (cm と mm の書き間違いを、手計算と解析の食い違いから見つけて直す流れです)。本格的なものは、「小さなオフロード車の 11 の試験」の行の「再現する」です。
-3. 押すと、ボタンが押せなくなり、画面が作業台に変わるまで **数十秒 (長くて 1 分ほど)** 何も変わりません。使うツールの確認をしている時間で、止まっているわけではありません。その間にもう一度押さないでください。
-4. 作業台に変わると、実行が進みます。かかった時間 (この PC で測った値。PC やほかの仕事で変わります):
-   - 「要件の書き間違いを見つける」: 約 40 秒
+2. まず短いもの: 「デモ」の「要件の書き間違いを見つける」の行の「再現する」を押します (cm と mm の書き間違いを、手計算と解析の不一致から見つけて直す流れです)。本格的なものは、「小さなオフロード車の 11 の試験」の行の「再現する」です。
+3. 押すと、ボタンが押せなくなり、画面が「③ 解析」に変わるまで **十数秒から 1 分ほど** 何も変わりません。使うツールの確認をしている時間で、止まっているわけではありません。その間にもう一度押さないでください。
+4. 「③ 解析」に変わると、実行が進みます。かかった時間 (この PC で測った値。PC やほかの仕事で変わります):
+   - 「要件の書き間違いを見つける」: 約 50 秒 (押してから 1 分ほど)
    - 「小さなオフロード車の 11 の試験」: 約 9 分 (526 秒。試験を同時に回していたときの値)
 
    途中で止めたいときは、上の「■ 止める」を押します。
 5. 見る所:
    - 画面の上の「vN・繰り返し a / b 回」: 設計の v (v1、v2 …) と、直して確かめ直した回数 (b は上限) です。
-   - 作業台の右のカード: いま確かめている試験の、手計算の予測・CAE の結果・その差と判定です。
+   - 「③ 解析」の右のカード: いま確かめている試験の、手計算の予測・CAE の結果・その差と判定です。
    - 左の「記録」: 実行の中で起きたことが、順に並びます。
    - 画面の下の「hooks」の並び: 実行の途中で、順番を守らせるために止めた回数が出ます (たとえば「HK1 予測が先」)。
    - ④「解析結果」のタブ: 分野ごとの判定のタイルが並びます。タイルを押すと、その分野の解析をタブの中で再生します。
-   - 右上の「見せる / 作業台」: 「見せる」は 3D を大きく見せる表示、「作業台」は作業の様子を見る表示です。
+   - 3D の右上の「大きく見る」のボタン: 3D を画面いっぱいにします。もう一度押すか Esc で戻ります (URL の `?present=1` でも同じ)。
 
    「小さなオフロード車の 11 の試験」は、NG の所を 4 回直して、v5 で全部 OK になります (画面の行の説明)。
 6. 終わった実行は、一覧の「記録を見る」に並び、「見る」でいつでも再生できます (古いものは「この PC の記録」を開くと出ます)。
@@ -122,9 +126,9 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
 
 ### Claude Code のプラグインで回す
 
-自分の Claude Code (自分のサインインの枠) で回す道です。API キーは要りません。リポジトリのフォルダで、次のようにします。
+自分の Claude Code (自分のサインインの枠) で回す道です。API キーは要りません。コマンドはリポジトリのフォルダで打ちます (Claude Code だけは、どのフォルダから起こしてもかまいません)。
 
-1. 「動かし方」の手順 3 まで済ませます (`.venv` が要ります)。
+1. 「動かし方」の手順 3 まで済ませます (`.venv` が要ります)。そのうえで、窓で `python --version` が動くことを確かめます。プラグインの MCP サーバーと hooks は PATH の `python` で起き、そこから HIRAKU の Python に切り替えます。切り替え先は、環境変数 `HIRAKU_PYTHON` があればそれ、無ければリポジトリの `.venv` です (`plugins/hiraku/scripts/hiraku_cli.py` の冒頭)。PATH に `python` が無いと、`/mcp` でつながりません。
 2. 先にキー無しで確かめます (40 秒ほど。Claude を呼ばない台本の運転です)。
 
    ```
@@ -137,7 +141,7 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
    claude --plugin-dir <リポジトリ>/plugins/hiraku --allowedTools "mcp__plugin_hiraku_hiraku"
    ```
 
-4. Claude Code の中で `/mcp` を打ち、hiraku のサーバーがつながっているか見ます。つながっていたら、`/hiraku:run offroad-4w-n12.yaml` を打ちます (最初の `start_run` は 30〜60 秒かかります)。
+4. Claude Code の中で `/mcp` を打ち、hiraku のサーバーがつながっているか見ます。つながっていたら、`/hiraku:run offroad-4w-n12.yaml` を打ちます (ファイル名だけなら `data/requirements/` から探します。最初の `start_run` は 30〜60 秒かかります)。
 5. 実行の様子は、同じリポジトリのフォルダで `.venv\Scripts\python -m hiraku.webserve` を起こして、画面で見ます (画面は `./runs` を見るので、リポジトリのフォルダから起こします)。
 
 プラグインはコピーせず、リポジトリの中から読ませます。くわしくは [plugins/hiraku/README.md](plugins/hiraku/README.md)。この道で回して v7 で終わった実行が `showcase/20261105-160725-offroad-4w` です。
@@ -148,14 +152,15 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
 |---|---|
 | 分野 | 何を確かめるかの区分: 操安・動力・空力・衝突・強度信頼性・音振・熱 の 7 つ (これとは別に、組み立てと人への当たりを見る) |
 | 試験 | 分野ごとの 1 つの確かめ。P1 (段差越え)・R1 (骨組みの強度)・N1 (振動)・H1 (ハンドルを切ったときの干渉)・H3 (乗る人の体格)・P3 (発進と加速) のように、頭の字は分野 (S 操安・P 動力・F 空力・C 衝突・R 強度信頼性・N 音振・T 熱・H 組み立てと人) |
-| 荷重条件 | 試験 1 つぶんの条件: 何をかけ、何を基準にし、予測と解析の差をどこまで許すか |
+| 荷重条件 | 試験 1 つぶんの条件: 何をかけ、何を基準にし、予測と解析の差をどこまで予想通りとするか |
 | 手計算 (予測) | 式で先に結果を出すこと。式は K0 の中にある |
 | CAE | コンピューターで物の動きや強さを計算する解析。HIRAKU の中のツールが計算する |
-| 判定 | 手計算の予測と CAE の結果を、許す幅の中で比べ、基準があれば OK か NG かを出すこと。食い違ったら原因を書くまで先へ進めない |
+| 判定 | 手計算の予測と CAE の結果を比べ、基準があれば OK か NG かを出すこと。不一致なら原因を書くまで先へ進めない |
 | v・繰り返し | 設計の v (v1、v2 …)。NG のとき、設計を直して次の設計を作って確かめ直す。その回数が繰り返し |
-| 赤・緑 | 判定が NG か OK か (画面の色) |
+| 予想通り・不一致 | 手計算の予測と CAE の結果を比べた答え。差が許す幅の中なら予想通り、外なら不一致 |
+| OK・NG | 基準に対する判定 |
 | ツール | CAE のツール (解析のプログラム)。答えの分かっている例と合ってから使う |
-| hooks | 実行の途中で、順番を守らせるために止める決まり (HK1〜HK6)。たとえば「予測が先」「食い違いは原因が先」 |
+| hooks | 実行の途中で、順番を守らせるために止める決まり (HK1〜HK6)。たとえば「予測が先」「不一致は原因が先」 |
 | 台本の運転 / Claude の運転 | 決まった順にツールを呼ぶ運転 (Claude を呼ばない) / Claude が自分で考えて進める運転 (API キーが要る) |
 | 役 | エージェントの役目: まとめ役・設計役 (設計がモジュールに分かれているときは、モジュールごとの設計役)・パッケージ役・分野ごとの CAE 役 |
 | K0〜K5 | 解析の土台: K0 手計算の式・K1 梁と板の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度 |
@@ -170,7 +175,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 .venv\Scripts\python -m unittest
 ```
 
-`tests/` の下の `def test_` は 248 ファイルに 2,882 行あります (2026-11-06 の grep の数。回った数ではありません)。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照らし合わせ・重い試験)。
+試験の数は、下の「試験の数」にあります。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照らし合わせ・重い試験)。
 
 板とソリッドの大きなモデルを速く解く道 (任意。Windows と Linux だけ。無ければ SciPy の SuperLU で解く):
 
@@ -187,14 +192,27 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 ## いま動くもの
 
-- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 11 の試験 (段差越え P1・強度 R1・レールの継ぎ目の局所の応力 R1s・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「手計算で予測 → 解析 → 判定」で回す流れ。基準のある試験は OK か NG かまで出す (P1 は基準が無く、予測との照らし合わせまで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で OK か NG かを出す
-- 設計役が設計の変数を変えて次の設計を作る (`revise_design`)。v ごとに何が赤で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
-- 解析のツール 26 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 17 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 9 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`))。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 17 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 9 つには付かない)。感度の試験があるのは frame_static だけ
+- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 11 の試験 (段差越え P1・強度 R1・レールの継ぎ目の局所の応力 R1s・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「予測 → 解析 → 比べる → 判定」で回す流れ。基準のある試験は OK か NG かまで出す (P1 は基準が無く、予測と比べるまで)。予測の無い解析は hooks が止め、不一致は原因を書くまで先へ進めない。説明できて安全側と判断できる不一致は、不利な方の値で OK か NG かを出す
+- 設計役が設計の変数を変えて次の設計を作る (`revise_design`)。v ごとに何が NG で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
+- 解析のツール 27 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 17 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 10 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`)。数は `hiraku.solvers.builtin_tools()` の長さ、2026-11-06)。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 17 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 10 には付かない)。感度の試験があるのは frame_static だけ
 - 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
-- 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
+- 実行の記録 (`runs/<id>/events.jsonl`) を再生する画面「③ 解析」(3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
 - 画面から実行を始める口。一覧「HIRAKU でできること」の行ごとに、走らせ方を選ぶ: 「見る」(記録を再生する。無料)、「再現する」(決まった手順の運転。無料、Claude を呼ばない)、「実行する」(Claude で新しく実行する。Anthropic の API キーが要り、行ごとの費用の上限で止まる)。「試す」は、その依頼の文を入れた依頼の画面を開く。「自分で頼む」で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。「実行する」は、HIRAKU を起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
 
 まだのもの: 20 試験ぶんを全部まとめて回すこと、実行の最後の報告 (`write_report`) を読む画面。
+
+## 主張と確かめる場所
+
+`showcase/` の 4 つの実行のうち、Claude が回したのは `20261105-160725-offroad-4w`・`20261105-094333-offroad-4w`・`20261105-091217-offroad-4w` (どれも Claude Code のプラグイン。`project.json` の `driver` が `claude_code_plugin`)。`20261105-150416-offroad-4w-scripted` は台本の運転です (`driver` が `scripted`。Claude を呼ばない)。下の表では実行を名前の真ん中 (160725 など) で書き、seq は `events.jsonl` の event の番号です。
+
+| 主張 | 記録 (`showcase/`) | コード | 試験 |
+|---|---|---|---|
+| 解析の前に、手計算で予測する | 160725 (Claude): R4-rops の予測 pred-0029〜0032 (seq 261〜264) のあとに、解析 ana-0022 (seq 266) | `hiraku/tools/rules.py` の `check_analyze` (HK1)、`hiraku/tools/functions.py` の `_gate` | `tests/tools/test_functions.py` の `test_hk1_analyze_needs_a_prediction_of_this_load_case` |
+| hooks が実行を止める | Claude の 3 つの実行で止めたのは HK3・HK5・HK6 (`hook.denied`) と HK4 (終わりを断る `hook.blocked_stop`)。160725 では HK5 が seq 260・436、HK4 が seq 276・277、HK3 が seq 953。「予測が無い」の HK1 で止めた例は、Claude の実行の記録には無い。台本の 150416 は、わざと予測の前に `analyze` を呼んで HK1 を見せる (seq 50。`data/catalog/scripted.yaml` の `show_hk1`) | `hiraku/tools/rules.py`、`hiraku/agent/hooks.py`、`plugins/hiraku/hooks/hooks.json` | `tests/agent/test_hooks.py` の `test_hk1_denial_is_recorded_and_explained`、`tests/agent/test_plugin_path.py` の `test_hk1_deny_as_the_sdk_hook_and_recorded_by_the_server` |
+| Claude が実行の中でツールを書き、確かめてから使った | 160725: `tools/rops_pushover-1.py` と `tools/rops_pushover-1.check.json`。`tool.checked` (seq 265、cae.strength、使える) のあと、ana-0022 (seq 266) で使った。094333 の `tools/` にも 2 つ | `hiraku/tools/functions.py` の `check_tool`・`make_tool`、HK2 (`rules.py`) | `tests/tools/test_tool_template.py` の `test_the_example_passes_check_tool` |
+| 設計を、解析の結果から v1 → v7 と直した | 160725: `design.created` が 7 つ (v7 は seq 966)。v7 の `module_changes` は、v6 の R1-step100 の NG (ver-0077、シェルの解析 ana-0083) に答えて `rail_t` を 2.3 → 3.2 mm にした。v ごとの NG は [showcase/README.md](showcase/README.md) | `hiraku/tools/functions.py` の `revise_design`・`build_version`、`hiraku/designgen/` | `tests/tools/test_functions.py` の `test_revise_design_builds_the_load_cases_again_for_the_new_version` |
+| CAE の役は、作るものに合わせて決まる | 160725: 選んだ分野は強度信頼性と組み立て (`domains.picked`、seq 1)、CAE 役は `cae.strength` だけ (`project.json` の `agents`)。保存した実行はどれもオフロードの車で、ほかの製品の記録は `showcase/` に無い | `hiraku/intake/domains.py` の `pick_domains`、`hiraku/catalog/project.py` の `agents_for` | `tests/intake/test_domains.py` の `test_which_domains` (ギターは強度信頼性と音振、介護ベッドは 5 分野) |
+| 数はツールが出す | 160725 の `report.json`: 分野ごとの数はコードが記録から入れ、Claude が書いたのは `summary` と `next` だけ | `hiraku/agent/prompts.py` の `COMMON_RULES`、`hiraku/tools/report.py` の `unknown_numbers` (記録に無い数のある報告を断る) | `tests/tools/test_report.py` の `test_numbers_with_units_must_be_recorded` |
 
 ## 中身
 
@@ -226,8 +244,8 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
   3. `record_prediction` で手計算の予測を記録する。
   4. `analyze` で解析する。
   5. `compare` で予測と比べて判定する。
-  6. 食い違ったら `record_cause` に原因と直し方を書き、予測を記録し直してやり直す。
-- 赤の分野が残り、直す回数 (`round_limit`) も残っていれば、まとめ役が設計役に渡す。新しい v では、全部の荷重条件をやり直す (`LEAD_PROMPT` の 4、`hiraku/agent/hooks.py` の `next_step`)。
+  6. 不一致なら `record_cause` に原因と直し方を書き、予測を記録し直してやり直す。
+- NG の分野が残り、直す回数 (`round_limit`) も残っていれば、まとめ役が設計役に渡す。新しい v では、全部の荷重条件をやり直す (`LEAD_PROMPT` の 4、`hiraku/agent/hooks.py` の `next_step`)。
 - 使える組み込みのツールは `Agent` と `Skill` だけ。`permission_mode="dontAsk"` で、名前を並べたツールのほかは止まる (`hiraku/agent/runner.py` の `build_options`)。
 - この PC の CLAUDE.md・設定・hooks は読まない (`setting_sources=[]`)。MCP サーバーは `hiraku` だけ (`strict_mcp_config=True`) (同)。
 
@@ -236,28 +254,28 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK_RULES`、`docs/contract.md`)。中身は `hiraku/tools/rules.py`、SDK への組み込みは `hiraku/agent/hooks.py`、Claude Code のプラグインでのつなぎは [plugins/hiraku/hooks/hooks.json](plugins/hiraku/hooks/hooks.json)。
 
 なぜ要ったか:
-- 予測を解析のあとに書けば、結果に合わせた予測になる。手計算で先に予測し、それと照らし合わせるのが確かめの芯なので、順番をプロンプトに頼まずに止める (HK1)。
+- 予測を解析のあとに書けば、結果に合わせた予測になる。手計算で先に予測し、それと比べるのが確かめの芯なので、順番をプロンプトに頼まずに止める (HK1)。
 - 判定がそろう前に終わらせない (HK4)。ただし数え方も要った: 2026-11-03 01:31 の本物の運転 (API キー) で、まとめ役が役を後ろで走らせたまま「報告を待ちます」と番を終えるたびに HK4 が数え、3 回で上限に達して、役がまだ動いている 71 秒で打ち切られた。役が走っている間は数えないようにした。
-- レイアウトや軽い計算で直しが要る v に重い有限要素を回すと、時間が無駄になり、数も動く。軽い段から確かめ、赤が出たらそこで設計を直す順番にした (HK5、作者の決まり)。
+- レイアウトや軽い計算で直しが要る v に重い有限要素を回すと、時間が無駄になり、数も動く。軽い段から確かめ、NG が出たらそこで設計を直す順番にした (HK5、作者の決まり)。
 
 | ID | hook | 止めるもの・守らせるもの |
 |---|---|---|
 | HK1 | PreToolUse | 同じ v・同じ荷重条件の予測が無い `analyze` を止める (`rules.py` の `check_analyze`) |
 | HK2 | PreToolUse | 答えの分かっている例に通っていないツールの `analyze` を止める (同) |
-| HK3 | PreToolUse | 原因の書かれていない食い違いがある分野では、`analyze` と `compare` を止める (`rules.py` の `_h3`) |
+| HK3 | PreToolUse | 原因の書かれていない不一致がある分野では、`analyze` と `compare` を止める (`rules.py` の `_h3`) |
 | HK4 | Stop / SubagentStop | 選んだ分野に判定の無いものが残っている間は、終わらせない。止めた回数には上限がある (まとめ役 3 回、役ごとに 2 回。`hooks.py` の `MAX_STOP_BLOCKS`・`MAX_SUBAGENT_STOP_BLOCKS`) |
-| HK5 | PreToolUse | 軽い計算から確かめる。その v で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) のツールで確かめる荷重条件に赤か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
+| HK5 | PreToolUse | 軽い計算から確かめる。その v で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) のツールで確かめる荷重条件に NG か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
 | HK6 | PreToolUse | 設計がモジュールに分かれているとき、`revise_design` は module を付けて、そのモジュールの設計役だけが、自分のモジュールの中だけを変える提案として出す。レイアウトの変数・空間・取付点を変えるのはパッケージ役の `build_version` だけ (`rules.py` の HK6) |
 
 - 止めたときは `hook.denied` か `hook.blocked_stop` の event を出す。理由の文には「足りないもの」と「次に呼ぶもの」を書き、それが Claude に返る (`hooks.py`、`rules.py` の冒頭)。
 - ツールの関数も、同じ確かめをもう一度する。だから hook を通らずに呼んでも、規則は抜けない (`rules.py` の冒頭、`hiraku/tools/functions.py` の `_gate`)。
-- PostToolUse では、次にすることを `additionalContext` で渡す。`analyze` のあとは `compare` を、食い違ったあとは `record_cause` を促す (`hooks.py` の `next_step`)。
+- PostToolUse では、次にすることを `additionalContext` で渡す。`analyze` のあとは `compare` を、不一致のあとは `record_cause` を促す (`hooks.py` の `next_step`)。
 - 止めるボタンを押すと、実行のフォルダに `stop.request` ができる。そのあとはツールの呼び出しを全部止め、終わる (`hooks.py` の `pre_tool_use`・`stop`)。
 - SubagentStart と SubagentStop では `agent.started` と `agent.stopped` を出す (`hooks.py`)。
 
 ### MCP のツール (`hiraku/tools/`)
 
-サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>` (`hiraku/tools/mcp.py`、`docs/contract.md`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。
+サーバーの名前は `hiraku`。ツールの名前は、API キーの道では `mcp__hiraku__<名前>`、プラグインの道では `mcp__plugin_hiraku_hiraku__<名前>` (`hiraku/agent/hooks.py` の `PREFIX`・`PLUGIN_PREFIX`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。プラグインの道には、ほかに `start_run` (実行を始める)・`open_run` (走っている実行を開き直す)・`wait_for_roles` (役が終わるのを待つ) がある (`hiraku/agent/plugin.py` の `OWN_TOOLS`)。
 
 - 読むツール
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
@@ -266,8 +284,8 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 - 予測・解析・判定
   - `record_prediction`: 式と入力と前提を選ぶ。値は K0 が計算する。
   - `analyze`: 全部の解析のツールをこの 1 つから呼ぶ。
-  - `compare`: 予測と解析を比べる。一致して基準があれば、OK か NG かも出す。
-  - `record_cause`: 食い違いの原因と直し方を書く。分野の止まりがこれで解ける。
+  - `compare`: 予測と解析を比べる。予想通りで基準があれば、OK か NG かも出す。
+  - `record_cause`: 不一致の原因と直し方を書く。分野の止まりがこれで解ける。
 - 設計 (設計役だけ)
   - `propose_design`: v0 から最初の v (v1) を作る。
   - `revise_design`: 設計の変数を変えて、次の設計を作る。モジュールに分かれた設計では、module をつけて提案として記録する (v は作らない)。
@@ -283,20 +301,21 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - `ask_user`: 足りない要件をまとめて 1 回聞く。
   - `import_knowledge`: 渡されたファイルを規則にする。
   - `rule_check`: 規則を設計の部品に当てる。
+  - `find_tradeoffs`: 設計の変数を動かすと、1 つの結果は良くなり別の結果は悪くなる組を、感度の記録 (K5) から探す。
 
 ### Skills と plugin (`plugins/hiraku/`)
 
 - ローカルの plugin `hiraku` が 1 つある (`plugins/hiraku/.claude-plugin/plugin.json`)。実行で読む skill はこの plugin のものだけ (`runner.py` の `plugins`・`skills`、`roles.py` の `plugin_skills`)。
 - skill は 4 つ。
   - `take-the-request`: まとめ役が依頼を受ける手順。分野を選び、要件を聞き、ナレッジを規則にし、規則を当てる。途中で届く伝言の受け方も書いてある (`plugins/hiraku/skills/take-the-request/SKILL.md`)。
-  - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 判定 (OK か NG) まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
-  - `find-the-cause`: 食い違ったときに原因を探し、`record_cause` に書く手順 (`.../find-the-cause/SKILL.md`)。
-  - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの設計役が、赤の荷重条件を読んで自分のモジュールの直しを提案し、直せないものをパッケージ役に渡す手順 (`.../revise-a-module/SKILL.md`)。
+  - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 比べる → 判定 (OK か NG) まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
+  - `find-the-cause`: 不一致のときに原因を探し、`record_cause` に書く手順 (`.../find-the-cause/SKILL.md`)。
+  - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの設計役が、NG の荷重条件を読んで自分のモジュールの直しを提案し、直せないものをパッケージ役に渡す手順 (`.../revise-a-module/SKILL.md`)。
 
 ### 台本の運転と Claude の運転
 
 - 台本の運転 (`--scripted`) は Claude を呼ばない。同じツールの関数と hooks の規則を、決まった順に呼ぶ。順は `data/catalog/scripted.yaml` と試験ごとの作り方にある (`hiraku/agent/scripted.py` の冒頭、`hiraku/__main__.py`)。
-  - 台本は原因を調べられない。原因を書くのは、台本が名指しした食い違いのときだけ。ほかの食い違いが出たら実行を止める (`scripted.py` の冒頭)。
+  - 台本は原因を調べられない。原因を書くのは、台本が名指しした不一致のときだけ。ほかの不一致が出たら実行を止める (`scripted.py` の冒頭)。
   - 費用は 0 と出す (`__main__.py` の `_print_end`)。
 - Claude の運転は、その窓の環境変数 `ANTHROPIC_API_KEY` を要る。無ければ、実行のフォルダを作る前に止まる (`runner.py` の `require_api_key`、`__main__.py`)。
   - 費用の上限は、要件のファイルの `cost_limit_usd` から取る。`--budget` で変えられる (`runner.py` の `build_options`、`__main__.py`)。
@@ -310,10 +329,8 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### 数がどこから出るか
 
-- 役のプロンプトには「数値は全部、ツールが出す。自分で計算した数を入力にも文にも書かない。単位の換算もしない」とある (`prompts.py` の `COMMON_RULES`)。
 - 予測の値は K0 が計算し、Claude は式と入力を選ぶだけ (`docs/contract.md` の、1 つの数字を信用して判定するまでの節、`mcp.py` の `record_prediction` の説明)。
 - 予測と解析の差を許す幅は荷重条件に入っていて、モデルは決めない。OK と NG はツールの中でだけ作る (`docs/contract.md`)。
-- 報告の数はコードが記録から入れる。Claude が書くのは `summary` と `next` だけ (`docs/contract.md`、`mcp.py` の `write_report` の説明)。
 - Claude が実行の中で作ったツールは、答えの分かっている例に全部通ったときだけ棚に入る (`mcp.py` の `make_tool` の説明、`docs/contract.md`)。
 
 ## どう作ったか
@@ -348,7 +365,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `tests/` の下の `def test_` は、248 ファイルに 2,882 行ある (2026-11-06 の grep の数。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
+  - `git grep "def test_" -- "tests/**/*.py"` は 2,969 行、`git grep -c` で 255 ファイル (2026-11-06。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
@@ -416,7 +433,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 | 介護ベッドのアクチュエーターの定格 4000 N、動かす割合 10 %、連続 120 s、6 mm/s、3000 rpm | カタログの種類の値 | `hiraku/designgen/care_bed.py` (P5・T3) |
 | 介護ベッドの疲労 (FAT 71、傾き 3、折れ点 1e7。使用の回数の損傷は折れ点のあとの傾きを 2·m − 1 にする)、1 回の使用で 2 ストローク、1 日の使用を 1 時間に集める | 傾き 3 と折れ点は Hobbacher 2016 (IIW) の形 (確かめていない)。2·m − 1 は下の「確かめた値」の表。FAT 71 と使い方は仮定 | `hiraku/solvers/k0_handcalc/library_bed.py` (R3・T3) |
 | 介護ベッドの寸法 (床・キャスター・板)、質量 (アクチュエーター 2.5 kg・制御器 1.5 kg・ヘッドボード 5 kg・キャスター 0.8 kg)、材料 (STKR400・STKM13A・SS400) | 仮定、出典なし | `hiraku/designgen/care_bed.py` |
-| 介護ベッドの手計算とツールの照らし合わせの許す幅 (S1 2 %、R5 20 %、P5 20 %、T3 10 %、R3 50 %) | HIRAKU の選び | `hiraku/catalog/builders/product_care_bed.py` |
+| 介護ベッドの手計算とツールを比べるときの許す幅 (S1 2 %、R5 20 %、P5 20 %、T3 10 %、R3 50 %) | HIRAKU の選び | `hiraku/catalog/builders/product_care_bed.py` |
 | ナレッジの規則の値 (ボルトの縁端距離 1.2 d0、すみ肉溶接の長さ 30 mm か 6 倍、中空断面の b/t・h/t ≤ 35、固定の締結具の公差の式、1 人で持てる 23 kg、腰幅と座面の奥行き、指の隙間 25 mm、60 V、電池 55 ℃、角パイプの厚さ 1.6 mm から) | EN 1993-1-8・ASME Y14.5・NIOSH の持ち上げの式 (Waters ほか 1993)・AIST 1991-92・ISO 13854・UN R100・EVE LF50K の仕様書・JIS G 3466。出典のある規則には、読んだ日か「確かめていない」を書いた (試験で確かめる)。確かめたのは、縁端距離 1.2 d0 (EN 1993-1-8 の表 3.3)、溶接の長さ 30 mm か 6 倍 (同 4.5.1(2)、有効長さの規定)、角形の中空断面の ≤ 35 (同 表 7.8)、丸パイプの 10 ≤ d0/t0 ≤ 50 (同 表 7.1)、23 kg (NIOSH Pub. 94-110 に再録の Waters ほか 1993 の 6.2)、指の隙間 25 mm (ISO 13854 の表 1)、電池 55 ℃ (LF50K)、60 V (UN R100 の 2.17。R100 の言葉は "High Voltage" (直流 60 V を超える))、腰幅 391 mm と座面の奥行き 406 mm (AIST 1991-92 の J2・J6 の表、2026-11-03 に読んだ。`human.yaml`)。確かめていないのは、公差の式 (ASME を読めず二次の出典だけ)、厚さ 1.6 mm (JIS の改正案だけ読めた) | `data/knowledge/*.yaml` |
 | 板金の曲げの内側の半径 ≥ 板厚 (SM-01)、穴の中心から縁 ≥ 板厚の 2 倍 (SM-02)、鋼どうしのねじのかみ合い ≥ 呼び径 (FS-02) | 設計の手引きの目安。出典を 1 つに決めて読んでいない (仮定) | `data/knowledge/sheet-metal.yaml`・`fasteners.yaml` |
 | 部品が骨組みに止まっているとみなす距離 500 mm (SY-10) | HIRAKU の選び (仮の値、出典なし) | `data/knowledge/systems.yaml`、`hiraku/intake/systems.py` |

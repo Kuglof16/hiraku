@@ -52,7 +52,7 @@ ENDED: dict[str, set[str]] = {}
 # requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
 # the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
 BEHIND_RED: set[str] = set()
-LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
+LOWER_RED = "低い段の NG が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5; contract 98669325)
 # Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
 # has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
 # qa.run_tests' 3600 s per-class timeout.
@@ -153,9 +153,8 @@ class _ScriptedRunTests:
     def test_mvp_scripted_run_goes_through(self):
         # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done.
         # Requirements in ENDED stop not_judged with only their ended load cases left (ends_case).
-        # A run with load cases past the limit (load_case_id ending -beyond, whose verdicts are meant to
-        # fail) does not end done: it stops at round_limit, or not_judged while a load case is left
-        # without a verdict. A *.claude.yaml file is a scene only Claude can run (no tool or scripted
+        # A run with load cases past the limit (load_case_id ending -beyond) ends done, or stops at
+        # round_limit, or not_judged while a load case is left without a verdict. A *.claude.yaml file is a scene only Claude can run (no tool or scripted
         # step for its load cases): the scripted run says so and stops not_judged.
         name, run, proc = self.REQ.name, self.run_dir, self.proc
         with self._where():
@@ -180,8 +179,11 @@ class _ScriptedRunTests:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 self._only_ended_left(run, project, ENDED[name])
             elif any(lc["load_case_id"].endswith("-beyond") for lc in project["load_cases"]):
-                self.assertEqual(project["status"], "stopped", why)
-                self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
+                # done is allowed too: a -beyond case without a criterion (only fed to another case) leaves
+                # nothing unjudged (design 41c164e6), and the contract does not forbid done here
+                if project["status"] != "done":
+                    self.assertEqual(project["status"], "stopped", why)
+                    self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
             else:
                 self.assertEqual(project["status"], "done", why)
 
@@ -460,6 +462,16 @@ else:
             self.skipTest("no tool with needs_mesh yet (analysis dept)")
 
 
+# Showcase runs recorded with older code, and the checks of today's rules they are let off, by name
+# (統括部's decision: say which record skips which check, and run every other check). showcase/README.md
+# lists the same.
+OLD_CODE_SKIPS = {
+    "20261104-011628-care-bed": {
+        "HK4_no_stop_before_judged": "11/4 のコードの記録。今の判定の決まりでは音振は判定なしのまま",
+    },
+}
+
+
 class SavedRuns(unittest.TestCase):
     """The example runs committed under showcase/<run_id>/. runs/ is local and not
     committed, so it is not checked here (python -m qa.check_run --all does that by hand).
@@ -472,5 +484,10 @@ class SavedRuns(unittest.TestCase):
         if not runs:
             self.skipTest(f"no runs under {layout.SHOWCASE_DIR.as_posix()}/ yet")
         for run in runs:
+            skips = OLD_CODE_SKIPS.get(run.name, {})
             with self.subTest(run=run.name):
-                self.assertEqual([e for e in _errors(run) if "files.missing" not in e], [])
+                found = [f for f in cr.check_run(run) if f.level == "error" and f.rule != "files.missing"]
+                self.assertEqual([str(f) for f in found if f.rule not in skips], [])
+                # a named skip must still be needed: a check that no longer fails is taken off the list
+                self.assertEqual(sorted(set(skips) - {f.rule for f in found}), [],
+                                 f"{run.name}: OLD_CODE_SKIPS names checks that pass now")

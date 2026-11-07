@@ -100,6 +100,11 @@ SCREENS = (
     Screen("A2 (ペット・動画)", f"?run={DOMAINS}&tab=A2&live=0&pace=0&t=1e6&present=1&video=1", wait=f"{READY} && document.querySelector('.a2-pets .ipet canvas')"),
     Screen("報告", f"cut.html?cut=n17&run={REPORT_RUN}&t=8.7"),
     Screen("ツールの棚", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6"),
+    # the shelf's 材質 view (js/materials.js, the repository's material cards): a card whose values were
+    # all read, and one with values not read (the orange rows); and with ?dev=1 (the ids, the file)
+    Screen("材質 (読んで確かめた)", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6&material=a6061_t6", wait=f"{READY} && document.querySelector('.mt-detail')"),
+    Screen("材質 (読んでいない値)", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6&material=ss400", wait=f"{READY} && document.querySelector('.mt-detail')"),
+    Screen("材質 (dev)", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6&material=hdpe&dev=1", wait=f"{READY} && document.querySelector('.mt-detail')"),
     Screen("組み立て", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6"),
     Screen("作業台 (接合)", f"?run={JOINTS}&tab=bench&pace=0&t=1e6&on=joints"),  # joints: the toggle 接合 on, its legend
     Screen("組み立て (接合)", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6&on=joints"),  # joints: A7's own 接合 switch and legend

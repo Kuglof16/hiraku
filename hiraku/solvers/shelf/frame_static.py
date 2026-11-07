@@ -26,10 +26,13 @@ from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
 from ..k1_frame.surface import surface_field
 from . import fixtures, hot_spots, scene
-from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, mesh_of, on_board, param_list,
-                   param_value, result)
+from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, mesh_of,
+                   on_board, param_list, param_value, plate_parts, result)
 
 CLOSED_FORM_TOL = 1e-3
+# R9 サスペンション取付: the corners a load case covers (mounts_r9 writes "supports", an axle's; "support" one corner)
+R9_SUPPORTS = Param("supports", None, "R9: comma-separated corner support ids the load case covers, e.g. \"RL,RR\"")
+R9_SUPPORT = Param("support", None, "R9: one corner support id (the load case of one corner)")
 STEP_HEIGHT = Param("step_height", "mm", "height of the step the step_supports climb (without it: the vehicle at rest)")
 STEP_SUPPORTS = Param("step_supports", None, "comma-separated support ids on the step, e.g. \"FL,FR\" "
                       "(without it: the front-most supports)")
@@ -223,8 +226,11 @@ class FrameStatic(BuiltinTool):
     title = "フレームの静的 (3D の梁)"
     domain = "strength"
     base = "K1"
-    tests = ["R1"]
+    tests = ["R1", "R9"]
     formulas = [
+        "mount_bracket.pin",
+        "mount_bracket.pin_shear",
+        "mount_bracket.pin_bearing",
         "frame_static.rail_joint_stress",
         "frame_static.rail_joint_stress_closed",
         "frame_static.rail_step_bending",
@@ -237,8 +243,10 @@ class FrameStatic(BuiltinTool):
         "mass_props.static_wheel_loads",
         PATH_FORMULA,
     ]
-    load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
+    load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS, R9_SUPPORTS, R9_SUPPORT)
     predicts = (
+        Predicts("bolt_utilisation", "mount_bracket.pin", "u",
+                 "R9 pins: the same formulas from K2's mount forces (the tool and the prediction agree by construction)"),
         Predicts("max_stress", "frame_static.rail_joint_stress", "sigma", JOINT_INPUTS),
         Predicts("max_stress", "frame_static.rail_step_bending", "sigma", STEP_BENDING),
         Predicts("max_stress", "frame_static.rail_bending", "sigma", "one rail as a simply supported beam, one wheel force"),
@@ -263,6 +271,8 @@ class FrameStatic(BuiltinTool):
         outer surface is added as a field with one value per mesh element.
         """
         design = on_board(design, load_case)
+        if load_case.get("test_id") == "R9":  # the pins of the suspension mounts (r9_bolt_outputs)
+            return r9_bolt_outputs(design, load_case, params.get("upstream_analyses"))
         g = g_factor(load_case)
         up = upstream_ground_forces(params.get("upstream_analyses"), design)
         step = param_value(load_case, "step_height", "mm")
@@ -283,16 +293,89 @@ class FrameStatic(BuiltinTool):
             add_frames(out, beam_frames(design, series))
         mesh, why = mesh_of(design, params)
         if mesh is not None:
-            plates = frozenset(p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset")
+            plates = plate_parts(design)
             out["fields"].append(surface_field(res["model"], mesh, plates=plates))
-            if plates & set(mesh["element_member"]):
+            on = plates & set(mesh["element_member"])
+            kind = {q["id"]: q.get("kind") for q in design.get("parts", [])}
+            if any(kind.get(p) == "gusset" for p in on):
                 out["effects"].append({"name": "the gusset plates on the mesh are drawn at 0: the beam model carries "
                                                "them as mass only"})
+            if any(kind.get(p) == "bracket" for p in on):
+                out["effects"].append({"name": "the mount brackets' plates on the mesh are drawn at 0: the beam model "
+                                               "carries them as mass only"})
         elif why:
             out["effects"].append({"name": why})
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out
+
+
+def r9_supports(load_case: Record) -> list[str]:
+    """The corners an R9 load case covers: params.supports (comma-separated, an axle's: mounts_r9) or params.support."""
+    sids = param_list(load_case, "supports") or param_list(load_case, "support")
+    if not sids:
+        raise LoadCaseError("an R9 load case names its corners in params.supports (or one in params.support)")
+    return sids
+
+
+R9_BOLT_ASSUMPTIONS = [
+    "R9 (pins): K2's mount forces (the force the body receives) through the hand formulas of the pin (mount_bracket."
+    "pin_shear, pin_bearing; k0_handcalc.bracket_inputs): no model of the pin or the plates; the largest |F| of each "
+    "upstream analysis, the worst utilisation over them",
+    "R9 (pins): bolt_utilisation is the larger of bolt_shear_utilisation and bolt_bearing_utilisation (mount_bracket."
+    "pin): one criterion per load case",
+]
+
+
+def r9_bolt_outputs(design: Record, load_case: Record, upstream: dict | None) -> Record:
+    """frame_static's record for an R9 pin load case: bolt_utilisation (and the shear and bearing utilisations) at each
+    place '<support>.<mount>' of the load case's corners ('<quantity>.<support>.<mount>'), '<quantity>' the worst of
+    them (its where the place); hot_spots one row per place for the criterion's quantity."""
+    from ..k0_handcalc import library_bracket as lb
+    from ..k0_handcalc.bracket_inputs import NoForces, bracket_inputs
+
+    qs = (lb.BOLT_QUANTITY, "bolt_shear_utilisation", "bolt_bearing_utilisation")
+    per: dict[tuple[str, str], Record] = {}
+    used: list[str] = []
+    assumptions = list(R9_BOLT_ASSUMPTIONS)
+    for sid in r9_supports(load_case):
+        try:
+            got = bracket_inputs(design, sid, upstream)
+        except NoForces as e:
+            raise LoadCaseError(str(e)) from None
+        used = list(dict.fromkeys(used + got["used"]))
+        assumptions += [a for a in got["assumptions"] if a not in assumptions]
+        for m, p in got["points"].items():
+            for q in qs:
+                if q in p["worst"]:
+                    per[(q, f"{sid}.{m}")] = dict(p["worst"][q], bracket=p["bracket"])
+    results, effects = [], []
+    for q in qs:
+        rows = {w: v for (qq, w), v in per.items() if qq == q}
+        for w, v in sorted(rows.items()):
+            results.append(result(f"{q}.{w}", v["utilisation"], "1", w))
+        if rows:
+            w, v = max(rows.items(), key=lambda kv: kv[1]["utilisation"])
+            results.insert(len(results) - len(rows), result(q, v["utilisation"], "1", w))
+    for (q, w), v in sorted(per.items()):
+        if q == lb.BOLT_QUANTITY:
+            effects.append({"name": f"{q} at {w} ({v['bracket'] or 'no bracket part'}): {v['load_case_id']} t "
+                                    f"{v['t_s']:.3f} s, F {[round(x, 1) for x in v['F_N']]} N", "value": v["utilisation"],
+                            "unit": "1"})
+    lost, said = lost_load_outputs()  # the path check reads unsupported_load on the analysis that decides
+    results.append(lost)
+    effects.append(said)
+    out = {"results": results, "fields": [], "effects": effects, "assumptions": assumptions}
+    crit = (load_case or {}).get("criterion") or {}
+    if crit.get("quantity") in qs and crit.get("op") in ("<=", "<"):
+        limit = float(crit["limit"]["value"])
+        rows = [hot_spots.row(w, q, v["utilisation"], limit, unit="1",
+                              note=f"{v['bracket'] or 'no bracket part'}: {v['load_case_id']} t {v['t_s']:.3f} s")
+                for (q, w), v in per.items() if q == crit["quantity"]]
+        if rows:
+            out["hot_spots"] = hot_spots.top(rows)
+    out["effects"].append({"name": "R9 pins: upstream analyses used: " + ", ".join(used)})
+    return out
 
 
 def beam_hot_spots(tool, load_case: Record, per_member: dict[str, float]) -> list[Record] | None:

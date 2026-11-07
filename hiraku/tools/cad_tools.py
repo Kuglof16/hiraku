@@ -97,7 +97,7 @@ def export_step(ctx: Any, args: Record) -> Record:
     try:
         design = store.design(v)
     except StoreError:
-        raise ToolError(f"設計の版 {v} はありません (今は版 {store.design_version} まで)") from None
+        raise ToolError(f"設計のv{v} はありません (今はv{store.design_version} まで)") from None
     rel = args.get("path")
     if rel is None:
         p = run_path(ctx, f"{CAD_DIR}/design_v{v}.step", must_exist=False)

@@ -193,8 +193,9 @@ class CornersTest(unittest.TestCase):
         # the H5 count: the parts less the occupants' bodies, the cargo, the roll bar's part and the brackets
         # (welded, in place with the frame): 43 of the first v1 and the bulkhead, and each corner's suspension
         # box now 8 parts (two legs and a cross tube of the lower arm, two legs of the upper arm, the damper and
-        # two ball joints; kit/arms.py): 44 + 4 x 7; and the brake pedal's pushrod (kit/joints.py)
-        self.assertEqual(len(seq) - len(attach), 73)
+        # two ball joints; kit/arms.py): 44 + 4 x 7; and the brake pedal's pushrod (kit/joints.py); and each seat's
+        # back and head restraint (ladder_4w): + 4
+        self.assertEqual(len(seq) - len(attach), 77)
         fl = ids.index("corner:FL")
         group = sorted(["caliper_FL", "knuckle_FL", "tie_rod_FL", "wheel_FL", *arm_ids("FL")])
         self.assertEqual(sorted(ids[fl - len(group):fl]), group)

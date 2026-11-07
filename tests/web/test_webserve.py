@@ -446,6 +446,47 @@ class LayoutTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
+class MaterialsTest(unittest.TestCase):
+    """GET /api/materials: the material cards (data/materials/cards/<id>.json) as they are."""
+
+    def serve(self, materials_dir):
+        s = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None, launcher=False, materials_dir=materials_dir)
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        self.addCleanup(s.server_close)
+        self.addCleanup(s.shutdown)
+        with urllib.request.urlopen(f"http://127.0.0.1:{s.server_address[1]}/api/materials", timeout=10) as r:
+            self.assertTrue(r.headers["Content-Type"].startswith("application/json"))
+            return json.loads(r.read())
+
+    def test_the_repository_cards_as_they_are(self):
+        from hiraku import contract
+        from hiraku.webserve.materials import CARDS_DIR
+
+        files = sorted(CARDS_DIR.glob("*.json"))
+        got = self.serve(CARDS_DIR)
+        self.assertEqual(got["skipped"], [])
+        self.assertEqual(len(got["cards"]), len(files))
+        self.assertGreaterEqual(len(files), 4)
+        self.assertEqual([c["id"] for c in got["cards"]], [p.stem for p in files])
+        for card, path in zip(got["cards"], files):
+            self.assertEqual(card, json.loads(path.read_text(encoding="utf-8")), path.name)
+            self.assertEqual(contract.errors("material_card", card), [])
+
+    def test_a_file_that_is_not_a_card_is_left_out_and_named(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        good = {"id": "steel_a", "name": "steel A (shape example)", "category": "steel",
+                "properties": {"yield_MPa": {"value": 245.0, "kind": "standard_minimum", "source": "shape example", "checked": False}}}
+        (tmp / "steel_a.json").write_text(json.dumps(good), encoding="utf-8")
+        (tmp / "other_name.json").write_text(json.dumps(good), encoding="utf-8")  # not named by its id
+        (tmp / "broken.json").write_text("{", encoding="utf-8")
+        (tmp / "no_props.json").write_text(json.dumps({**good, "id": "no_props", "properties": {}}), encoding="utf-8")
+        got = self.serve(tmp)
+        self.assertEqual(got["cards"], [good])
+        self.assertEqual(sorted(s["file"] for s in got["skipped"]), ["broken.json", "no_props.json", "other_name.json"])
+        self.assertEqual(self.serve(tmp / "absent"), {"cards": [], "skipped": []})
+
+
 class PetsTest(unittest.TestCase):
     def test_pets_script_is_served_as_it_is_or_404(self):
         """GET /pets/pet3d.js passes the given pets file through as JavaScript; without it, 404."""
@@ -1001,7 +1042,7 @@ class LaunchTest(unittest.TestCase):
         self.assertIn("Q30", half["next"])
         answers = {"Q30": "two_cargo", "Q40": 150, "Q50": 40, "Q70": "私有地だけ"}
         status, done = post("/api/request/answer", {"draft": first["draft"], "answers": answers})
-        self.assertEqual((status, done["ready"], done["scripted_plan"], done["designable"]), (200, True, True, True))
+        self.assertEqual((status, done["ready"], done["scripted_plan"], done["designable"], done["design_way"]), (200, True, True, True, "archetype"))
         folder = self.runs / "_requests" / done["request_id"]
         self.assertTrue((folder / "requirements.yaml").is_file() and (folder / "intake.json").is_file())
         self.assertEqual(post("/api/launch", {"request": "../evil", "mode": "scripted"})[0], 400)
@@ -1012,17 +1053,50 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertTrue(bad["error"])
 
-    def test_a_request_with_no_kind_of_design_is_refused(self):
-        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, self.RUN, 1.0), reader=fake_reader,
+    def test_a_request_with_no_kind_of_design_starts(self):
+        """A product no kind of design suits is not refused (docs/contract.md Claude が書く設計): its
+        design is written by Claude. Started directly, and from A1/A2 over HTTP (electric-guitar: no
+        archetype suits its flags), the answer saying design_way "written"."""
+        import yaml
+
+        from hiraku.designgen import archetypes
+        from hiraku.webserve.launch import REPO_DIR
+
+        product = yaml.safe_load((REPO_DIR / "data" / "requirements" / "products" / "electric-guitar.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(archetypes(product.get("flags") or {}), [])  # (the product this test needs: none suits it)
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, self.RUN, 1.0)
+
+        def command(req, mode, runs, intake_events=None):
+            seen.append(Path(req))
+            return fake(req, mode, runs)
+
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20,
                        demo_runs_file=self.demo_file)
-        folder = lau.requests_dir / "20261103-120000-guitar"
-        folder.mkdir(parents=True)
-        (folder / "requirements.yaml").write_text("product: guitar\nflags: {}\n", encoding="utf-8")
-        (folder / "intake.json").write_text("[]", encoding="utf-8")
-        with self.assertRaises(LaunchError) as cm:
-            lau.start(None, "scripted", "20261103-120000-guitar")
-        self.assertEqual(cm.exception.status, 422)
-        self.assertIn("設計の作り方がまだ無い", str(cm.exception))
+        self.launchers = [*getattr(self, "launchers", []), lau]
+        server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.servers.append(server)
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        status, first = self.call(base, "/api/request", {"want": product["want"], "product": "electric-guitar"})
+        self.assertEqual(status, 200)
+        status, done = self.call(base, "/api/request/answer", {"draft": first["draft"], "answers": {}, "useDefaults": True})
+        self.assertEqual((status, done["ready"], done["designable"], done["design_way"], done["archetypes"]), (200, True, True, "written", []))
+        status, out = self.post(base, {"request": done["request_id"], "mode": "scripted"})  # not 422
+        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, f"_requests/{done['request_id']}"))
+        self.assertEqual(seen, [self.runs / "_requests" / done["request_id"] / "requirements.yaml"])
+
+    def test_a_request_with_a_kind_of_design_says_so(self):
+        import yaml
+
+        from hiraku.webserve.launch import REPO_DIR, design_way
+
+        self.assertEqual(design_way({}), {"design_way": "written", "archetypes": []})
+        self.assertEqual(design_way(None), {"design_way": "written", "archetypes": []})
+        flags = yaml.safe_load((REPO_DIR / "data" / "requirements" / "products" / "serving-robot.yaml").read_text(encoding="utf-8"))["flags"]
+        got = design_way(flags)
+        self.assertEqual(got["design_way"], "archetype")
+        self.assertIn("ladder_4w", got["archetypes"])
 
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})

@@ -47,8 +47,10 @@ class CatalogTest(unittest.TestCase):
     def test_the_video_file_has_the_demo_values(self):
         video = load_requirements(REQUIREMENTS.with_name("offroad-4w-video.yaml"))
         self.assertEqual(contract.errors("requirements_file", video), [])
-        self.assertEqual({k: v for k, v in video.items() if k not in ("tests", "beyond")},
+        # the video's own: more tests, the cases past the limit and the drive records for the screen (N07, the rollover)
+        self.assertEqual({k: v for k, v in video.items() if k not in ("tests", "beyond", "drive")},
                          {k: v for k, v in self.req.items() if k != "tests"})
+        self.assertEqual(video["drive"], ["S1", "S3"])
         self.assertLess(set(self.req["tests"]), set(video["tests"]))
 
     def test_vehicle_tests_follow_the_flags(self):
@@ -105,7 +107,8 @@ class CatalogTest(unittest.TestCase):
 
     def test_design_must_carry_the_requirements_load(self):
         cases = [
-            (example_design(), "needs 2 occupant parts"),
+            # no occupant parts: no people required (hiraku.contract.loading), but the cargo still is
+            (example_design(), "Q40 = 150 kg in total, the design has 0 kg"),
             (loaded_design(person_kg=70.0), "Q33 = 76.6 kg"),
             (loaded_design(cargo_kg=100.0), "Q40 = 150 kg"),
         ]

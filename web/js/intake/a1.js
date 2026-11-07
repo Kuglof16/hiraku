@@ -9,9 +9,14 @@ const GLOW_S = 0.5; // seconds the glow of a newly lit card lasts
 export const REPLY_STEP_S = 0.5; // with a playback time, the domains answer one after another, this many seconds apart
 const PLACEHOLDER = "作りたいものを書いてください。例: 林道を走れる小さな 2 人乗りの電動車";
 
+/** The text with each short bracketed part kept on one line ("(4 輪、最高 40 km/h、積載 150 kg)" is not broken in the middle). */
+export function keepBrackets(text) {
+  return String(text).split(/([(（][^()（）]{1,40}[)）])/).map((s, i) => (i % 2 ? h("span", { class: "in-nobreak" }, s) : s));
+}
+
 function bubble(msg) {
   if (msg.who === "note") return h("div", { class: "in-note" }, msg.text);
-  return h("div", { class: `in-msg ${msg.who}` }, h("div", { class: "in-who" }, msg.who === "user" ? "あなた" : "HIRAKU"), h("p", {}, msg.text));
+  return h("div", { class: `in-msg ${msg.who}` }, h("div", { class: "in-who" }, msg.who === "user" ? "あなた" : "HIRAKU"), h("p", {}, ...keepBrackets(msg.text)));
 }
 
 function composer(api, ui) {
@@ -135,8 +140,8 @@ export function renderA1(el, m, api, ui) {
   const waitN = cards.filter((c) => c.state === "wait").length;
   const decided = !!m.domains && !m.domainsFromProject;
   const headline = draftN ? { title: "HIRAKU が、何を調べるか考えています", note: `候補 ${draftN} / 7 (製品の性質から。選ぶのはこれから)` }
-    : decided && !waitN ? { title: "HIRAKU が調べることを選びました", note: `${lit} 個を調べ${offN ? `、${offN} 個は今回は見ません` : ""}` }
-    : m.domains && !waitN ? { title: "調べることは、決まっている内容からです", note: `7 つのうち ${lit} 個` }
+    : decided && !waitN ? { title: "HIRAKU が調べることを選びました", note: offN ? `${lit} 個を調べ、${offN} 個はこの依頼では調べない分野です` : `${lit} 個を調べます` }
+    : m.domains && !waitN ? { title: "この記録で調べる分野", note: `7 つのうち ${lit} 個` }
     : { title: "HIRAKU が、何を調べるか考えています", note: lit ? `${lit} / 7` : "" };
   const review = reviewLine(m);
   // the lead's own pet beside the headline (ui.petSlots "lead"; the host mounts role lead): working while the choice is being made
