@@ -1,6 +1,7 @@
 import copy
 import json
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from hiraku.agent.scripted import ScriptError, _reader, has_plan, load_plan, resolve, run_scripted
@@ -484,16 +485,17 @@ class ScriptedUnexpectedMismatchTest(RunCase, unittest.TestCase):
     # plan's second prediction mismatches too, which the plan has no cause for.
     step_factor = 1.5
 
-    def test_stops_without_inventing_a_cause(self):
-        self.assertEqual(run_scripted(self.ctx), "stopped")
-        self.assertIn("the plan has none for it", self.ctx.project["stop_reason"])
+    def test_survey_lists_the_uncaused_mismatch_and_goes_on(self):
+        # SURVEY BRANCH ONLY: the uncaused mismatch is listed and given a placeholder cause, the run goes on
+        run_scripted(self.ctx)
         p1 = comparisons(self.ctx, "P1-step100")
-        self.assertEqual([c["status"] for c in p1], ["mismatch", "mismatch"])
+        self.assertEqual([c["status"] for c in p1[:2]], ["mismatch", "mismatch"])
         self.assertIsNotNone(cause_of(self.ctx, p1[0]))  # the plan's
-        self.assertIsNone(cause_of(self.ctx, p1[1]))  # nobody worked this one out
-        self.assertEqual(len(self.ctx.store.records("cause")), 1)
-        self.assertEqual(comparisons(self.ctx, "R1-step100"), [])
-        self.assert_events_fit()
+        self.assertIsNotNone(cause_of(self.ctx, p1[1]))  # the survey's placeholder
+        rows = [json.loads(line) for line in
+                (Path(self.ctx.store.path) / "survey_mismatches.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertIn(p1[1]["comparison_id"], [r["comparison_id"] for r in rows])
+        self.assertNotIn("the plan has none for it", self.ctx.project.get("stop_reason") or "")
 
 
 class ScriptedUnusableToolTest(RunCase, unittest.TestCase):

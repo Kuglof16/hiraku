@@ -268,10 +268,31 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         if hit is None and expected_for(expected, cmp) is not None:
             hit = cmp
             continue
-        _say(ctx, agent, lc, f"{cmp['quantity']} を予測と比べると不一致でした (差 {cmp['diff_rel'] * 100:.1f} %)。"
-                             f"台本にこの不一致の原因は書かれていないので、ここで止めます")
-        raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (the plan has none for it)")
+        # SURVEY BRANCH ONLY (never for main): an uncaused mismatch is written to <run>/survey_mismatches.jsonl,
+        # recorded with a placeholder cause that ends the load case, and the run goes on, so one run lists them all
+        _survey_mismatch(ctx, lc, agent, tool, cmp)
     return hit
+
+
+def _survey_mismatch(ctx: RunContext, lc: Record, agent: str, tool: str, cmp: Record) -> None:
+    pred = ctx.prediction(cmp["prediction_id"])
+    row = {"design_version": ctx.version, "load_case_id": lc["load_case_id"], "tool": tool,
+           "comparison_id": cmp["comparison_id"], "prediction_id": cmp["prediction_id"],
+           "analysis_id": cmp["analysis_id"], "quantity": cmp["quantity"], "formula_id": pred.get("formula_id"),
+           "predicted": cmp["predicted"], "analyzed": cmp["analyzed"], "diff_rel": cmp["diff_rel"],
+           "tolerance_rel": cmp["tolerance_rel"],
+           "side": "high" if cmp["predicted"]["value"] > cmp["analyzed"]["value"] else "low"}
+    with (Path(ctx.store.path) / "survey_mismatches.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    _say(ctx, agent, lc, f"[調べ用] {cmp['quantity']} の不一致 (差 {cmp['diff_rel'] * 100:+.1f} %) は台本に原因が無いので、"
+                         f"記録して次へ進みます")
+    try:
+        record_cause(ctx, {"comparison_id": cmp["comparison_id"],
+                           "cause": "[survey branch] the plan has no cause for this mismatch; listed in survey_mismatches.jsonl",
+                           "fix": "[survey branch] the cause is written into the plan from this record", "ends_case": True},
+                     agent)
+    except Exception as e:  # noqa: BLE001 - the survey stops as before, with the reason
+        raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (survey: record_cause refused: {e})") from None
 
 
 def expected_for(expected: Any, cmp: Record) -> Record | None:
