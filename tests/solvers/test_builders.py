@@ -372,6 +372,9 @@ class N1HopTest(unittest.TestCase):
         self.assertEqual(em["quantity"], self.lc["criterion"]["quantity"])
         self.assertTrue(em["tool_decides"] and em["tool_decides_reason"] and em["cause"] and em["fix"] and em["source"])
         self.assertNotIn("safe_side", em)
+        # the path check first, so tool_decides can let the shell decide (functions.path_check)
+        self.assertEqual((plan["predictions"][0]["formula_id"], plan["predictions"][0]["quantity"]),
+                         ("load_path.free_parts", "unsupported_load"))
         for p in plan["predictions"]:
             self.assertIn(p["formula_id"], TOOLS["modal_shell"].formulas)
 

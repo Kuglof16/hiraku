@@ -33,6 +33,7 @@ from . import fixtures
 from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, mesh_of, on_board, \
     param_value, result, run_param
 from .frame_shell import same_mesh
+from .frame_static import PATH_FORMULA, PATH_PREDICTS, lost_load_outputs
 from .modal import FIELD_MODES, FLEX_LIMIT
 
 # 20 mm: the demo frame's shell in a few seconds; 10 mm (the version's mesh) in about a minute (measured on the
@@ -105,7 +106,7 @@ class ModalShell(BuiltinTool):
     base = "K1"
     tests = ["N1"]
     formulas = ["modal.spring_mass", "modal.quarter_car", "modal.ladder_twist_mode", "modal.simple_beam_first_mode",
-                "modal.rotation_excitation", "modal.beam_frame_mode"]
+                "modal.rotation_excitation", "modal.beam_frame_mode", PATH_FORMULA]
     load_case_params = (
         Param("speed", "km/h", "driving speed for the wheel and motor rotation frequencies "
               "(without it: the design variable max_speed)"),
@@ -126,6 +127,7 @@ class ModalShell(BuiltinTool):
         Predicts("first_frame_involving_mode", "modal.beam_frame_mode", "f",
                  "suspension linkage only: the beam model's first frame mode (k1_frame.modal; no linkage, no roll bar "
                  "share), no hand estimate"),
+        PATH_PREDICTS,
     )
     needs_mesh = True
 
@@ -277,6 +279,11 @@ class ModalShell(BuiltinTool):
         else:
             assumptions = [MASS_ASSUMPTION, SPRING_ASSUMPTION.format(k=smodal.HOLD_STIFFNESS),
                            EIGEN_ASSUMPTION.format(s=smodal.SIGMA_HZ), KIND_ASSUMPTION.format(f=FLEX_LIMIT)]
+        # the path check reads unsupported_load on the analysis that decides: every part's mass goes on its
+        # carried_by nodes or its support's wheel centre (k1_shell.modal; a node no member uses is refused)
+        lost, said = lost_load_outputs()
+        results.append(lost)
+        effects.append(said)
         timings = {f"shell_modal_{k[:-2]}": float(val) for k, val in r["timings"].items() if k.endswith("_s")}
         return {"results": results, "fields": fields, "effects": effects, "assumptions": assumptions,
                 "timings_s": timings}

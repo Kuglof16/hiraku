@@ -177,6 +177,7 @@ class LinkageToolRecordTest(unittest.TestCase):
         for q in ("first_frame_mode", "first_body_mode", "mode_1", "mode_12", "first_wheel_hop_mode",
                   "first_frame_involving_mode"):
             self.assertIn(q, got)
+        self.assertEqual(got["unsupported_load"]["value"], 0.0)  # the path check reads it on the deciding analysis
         # the roll bar's mode (as in the saved record, there mode 4 at 6.417 Hz) and the effect that names it
         self.assertAlmostEqual(got["first_frame_involving_mode"]["value"], got["first_rollbar_mode"]["value"], places=9)
         self.assertTrue(any(e["name"].startswith("first frame-involving mode (N1): mode ") and "(roll bar)" in e["name"]

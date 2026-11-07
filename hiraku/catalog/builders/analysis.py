@@ -1289,6 +1289,10 @@ R4_ROLLOVER_PLAN = {
                                 "押し) は値に届かないので、力の道を手計算で確かめたうえで、落ちる計算の値で決める"),
     },
 }
+
+# N1: the path check first (as R9 and C1), so its expected mismatch's tool_decides can let modal_shell decide
+# (functions.path_check reads unsupported_load on the deciding analysis)
+N1_PLAN["predictions"].insert(0, dict(_PATH_PREDICTION))
 from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E402  (H6: spray.py)
 from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)
