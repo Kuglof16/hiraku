@@ -2168,7 +2168,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     kindRow +
     (nButtons > 1
       ? `<div class="fields">${ct.variants
-          .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>`)
+          .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}" title="${esc(v.name)}">${esc(v.name)}</button>`).join("")}</div>`)
           .join("")}</div>`
       : "");
   const acts =
@@ -2311,8 +2311,13 @@ function fitOverlays() {
     }
     const f = lg.querySelector(".fields");
     const on = f?.querySelector("button.on");
-    if (f && on && f.dataset.shown !== on.dataset.variant) {
-      f.dataset.shown = on.dataset.variant;
+    // squeezed, the list keeps the height of the chosen button at least (52: app.css .squeeze's most), so it
+    // can be scrolled into sight whole (160725 at 1440 x 900: the list had 19 px for a 21 px button)
+    if (f) setStyle(f, "minHeight", on && lg.classList.contains("squeeze") ? `${Math.min(52, on.offsetHeight + 2)}px` : "");
+    // (again when the box's height changes: squeezed after the first scroll, the button was left out of sight)
+    const shownKey = on ? `${on.dataset.variant}:${f.clientHeight}` : "";
+    if (f && on && f.dataset.shown !== shownKey) {
+      f.dataset.shown = shownKey;
       if (f.scrollHeight > f.clientHeight) f.scrollTop = Math.max(0, on.offsetTop - f.offsetTop - (f.clientHeight - on.offsetHeight) / 2);
     }
   } else setStyle(lg, "maxHeight", "");
@@ -3052,9 +3057,10 @@ function drawNow() {
     const saysActivity = !chain.running && !Object.keys(s.running ?? {}).length && !["done", "stopped", "failed"].includes(s.status);
     const nowVerdict = saysActivity && s.activity ? Object.values(s.verdicts).find((v) => s.firstSeqOf[v.verdict_id] === s.activity.seq) : null;
     const justJudged = nowVerdict ? pathCheckedWhy(s, nowVerdict, formulaTitleOf) : null;
-    const nowHtml = markRecordWords(now) + (justJudged ? `<span class="now-why" data-role="why">${esc(justJudged.text)}</span>` : "");
+    // (the space before the why: the line's text and its tooltip read the same)
+    const nowHtml = markRecordWords(now) + (justJudged ? ` <span class="now-why" data-role="why">${esc(justJudged.text)}</span>` : "");
     if ($("now").innerHTML !== nowHtml) $("now").innerHTML = nowHtml;
-    $("now").title = now;
+    $("now").title = justJudged ? `${now} ${justJudged.text}` : now;   // the whole of what the line says
     $("now").hidden = !now;
     const scene = presentScene({ s, chain, contour, tab: view, toolTitle: (tool) => toolTitle(s, tool), formulaTitle: formulaTitleOf });
     document.body.dataset.presentScene = scene.key;
