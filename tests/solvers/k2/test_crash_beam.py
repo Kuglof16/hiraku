@@ -498,6 +498,178 @@ class Tool(unittest.TestCase):
         self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
 
 
+def _unit(v):
+    v = np.asarray(v, float)
+    return v / np.linalg.norm(v)
+
+
+def _angular_momentum(mesh, st):
+    """kg m^2/s about the origin: sum m x cross v (the positions at the step, the velocities at the half step before:
+    the pair the central differences keep) plus the nodes' spins J w."""
+    return (mesh.mass[:, None] * np.cross(st.x, st.v)).sum(axis=0) + (mesh.inertia[:, None] * st.w).sum(axis=0)
+
+
+class WallOfAnyNormal(unittest.TestCase):
+    """run_crash's wall_dir: the rigid plane p . d = wall with any unit direction d the frame moves into it (the
+    plane's normal is -d); the kernel's wall is x only, so the frame is turned to put d on x and back."""
+
+    def test_along_x_it_is_the_default_wall(self):
+        mesh = build_mesh(on_board(small_frame(), "two_cargo"))
+        a = sim.run_crash(mesh, 40.0 / 3.6, 5e-3, mu=0.3, hinge_lim=math.radians(60.0))
+        b = sim.run_crash(mesh, 0.0, 5e-3, mu=0.3, hinge_lim=math.radians(60.0), wall_dir=(1.0, 0.0, 0.0),
+                          velocity=(40.0 / 3.6, 0.0, 0.0))
+        self.assertEqual(b.speed, a.speed)
+        self.assertEqual(b.wall_x, a.wall_x)
+        np.testing.assert_array_equal(a.positions, b.positions)
+        np.testing.assert_array_equal(a.impulse, b.impulse)
+        np.testing.assert_array_equal(a.decel(), b.decel())
+        np.testing.assert_array_equal(a.final.R, b.final.R)
+
+    def test_tube_and_mass_into_an_inclined_plane(self):
+        """An elastic 40x40x2.3 steel tube 0.5 m long along d = (0.6, -0.48, 0.64) (|d| = 1), M = 2000 kg on its rear
+        node A, its front node B touching the plane p . d = B . d (normal -d); the frame moves at v_n = 1 m/s along d
+        and v_t = 0.7 m/s along t = d x z / |d x z| (in the plane), no friction.
+
+        Hand calculation (known.mass_on_spring's, along d): the front node meets the plane through the penalty spring
+        k_w = PENALTY m_B / dt^2 in series with the tube's E A / L; m = M + m_tube / 3. The normal force peaks at
+        v_n sqrt(k m) and lasts pi sqrt(m / k) (3 %, as along x). Without friction the plane's impulse is along -d only
+        (its parts along t and d x t: 1e-9 of it); the momentum change is the impulse (1e-9); the motion along t is
+        not touched (1e-9 of the momentum); an elastic impact: the whole mass leaves at -v_n along d (3 %: the tube
+        keeps some vibration)."""
+        d = np.array([0.6, -0.48, 0.64])
+        self.assertAlmostEqual(float(np.linalg.norm(d)), 1.0, places=12)
+        t = _unit(np.cross(d, [0.0, 0.0, 1.0]))
+        L_mm, M, vn, vt = 500.0, 2000.0, 1.0, 0.7
+        elastic = dict(known.STEEL, yield_MPa=1e9)
+        design = known.beam_design(L_mm, known.SQUARE, elastic,
+                                   [{"id": "mass", "name": "mass", "kind": "cargo", "mass_kg": M, "carried_by": ["A"],
+                                     "box": {"center_mm": [0.0, 0.0, 0.0], "size_mm": [10.0, 10.0, 10.0]}}])
+        design["nodes"][1]["xyz_mm"] = list(d * L_mm)
+        mesh = build_mesh(design)
+        dt = sim.time_step(mesh)
+        front = mesh.design_nodes["B"]
+        k_tube = mesh.prop[0, 0] / (L_mm / 1000.0)
+        k_wall = sim.PENALTY * mesh.mass[front] / dt ** 2
+        k = k_tube * k_wall / (k_tube + k_wall)
+        m = M + mesh.frame_mass / 3.0
+        t_c = math.pi * math.sqrt(m / k)
+        v0 = vn * d + vt * t
+        run = sim.run_crash(mesh, 0.0, 2.5 * t_c, wall_dir=d, velocity=v0, until_limit=True)
+        self.assertAlmostEqual(run.wall_x, float(mesh.x0[front] @ d), places=12)
+        self.assertAlmostEqual(run.speed, vn, places=12)
+        np.testing.assert_allclose(run.velocities[0], np.tile(v0, (mesh.n, 1)), rtol=0, atol=1e-15)
+        fn = -(run.impulse @ d) / run.chunk
+        self.assertAlmostEqual(fn.max() / (vn * math.sqrt(k * m)), 1.0, delta=3e-2)
+        on = np.nonzero(fn > 0.0)[0]
+        self.assertAlmostEqual((run.t[on[-1]] - run.t[on[0]] + run.chunk) / t_c, 1.0, delta=3e-2)
+        imp = run.impulse.sum(axis=0)
+        self.assertLess(abs(float(imp @ t)), 1e-9 * np.linalg.norm(imp))
+        self.assertLess(abs(float(imp @ np.cross(d, t))), 1e-9 * np.linalg.norm(imp))
+        dp = run.momentum[-1] - run.momentum[0]
+        np.testing.assert_allclose(dp, imp, rtol=0, atol=1e-9 * np.linalg.norm(imp))
+        Mt = run.total_mass
+        self.assertLess(abs(float(dp @ t)), 1e-9 * Mt * vt)
+        self.assertAlmostEqual(float(run.momentum[-1] @ d) / Mt / -vn, 1.0, delta=3e-2)
+        # the deceleration is along d: the plane's impulse along -d over the window / (M x window)
+        w = run.window_rows()
+        cum = np.concatenate([[0.0], np.cumsum(run.impulse @ d)])
+        kk = np.arange(len(cum))
+        np.testing.assert_allclose(run.decel(), -(cum - cum[np.maximum(kk - w, 0)]) / (Mt * w * run.chunk), rtol=1e-12)
+
+    def test_free_fall_with_gravity(self):
+        """No contact (the plane far below), gravity g: the momentum grows by M g t exactly (1e-9) and every node falls
+        g t^2 / 2 from rest (to the central differences' error, dt^2 terms: 1e-6 m)."""
+        mesh = build_mesh(on_board(small_frame(), "two_cargo"))
+        g = np.array([0.0, 0.0, -9.81])
+        run = sim.run_crash(mesh, 0.0, 5e-3, wall_dir=(0.0, 0.0, -1.0), wall=10.0, velocity=(0.0, 0.0, 0.0),
+                            gravity=g, until_limit=True)
+        T = float(run.t[-1])
+        self.assertAlmostEqual(T, 5e-3, delta=run.chunk)
+        np.testing.assert_allclose(run.momentum[-1] - run.momentum[0], run.total_mass * g * T, rtol=0,
+                                   atol=1e-9 * run.total_mass * 9.81 * T)
+        np.testing.assert_allclose(run.positions[-1] - mesh.x0, np.tile(0.5 * g * T * T, (mesh.n, 1)), atol=1e-6)
+        self.assertFalse(run.final.yielded.any())
+
+
+class Spin(unittest.TestCase):
+    """new_state's and run_crash's spin: the frame starts as a rigid body turning at omega (rad/s, design frame)
+    about a point (default its mass centre): every node's velocity v + omega x (x - c), every node's spin omega."""
+
+    def test_rigid_velocity_field_and_its_angular_momentum(self):
+        """Hand calculation: about the origin, L = M c x v + I_c omega + sum J omega, with I_c = sum m (|r|^2 1 - r r^T),
+        r = x - c (the point masses' inertia about the mass centre) and J the nodes' rotational inertias (1e-12)."""
+        mesh = build_mesh(on_board(small_frame(), "two_cargo"))
+        om, v0 = np.array([0.8, -1.5, 2.5]), np.array([1.0, 0.5, 0.0])
+        st = sim.new_state(mesh, v0, sim.time_step(mesh), spin=om)
+        M = float(mesh.mass.sum())
+        c = mesh.mass @ mesh.x0 / M
+        r = mesh.x0 - c
+        np.testing.assert_allclose(st.v, v0 + np.cross(om, r), rtol=0, atol=1e-14)
+        np.testing.assert_array_equal(st.w, np.tile(om, (mesh.n, 1)))
+        Ic = sum(mi * (float(ri @ ri) * np.eye(3) - np.outer(ri, ri)) for mi, ri in zip(mesh.mass, r))
+        L = M * np.cross(c, v0) + Ic @ om + float(mesh.inertia.sum()) * om
+        np.testing.assert_allclose(_angular_momentum(mesh, st), L, rtol=1e-12)
+        np.testing.assert_allclose(mesh.mass @ st.v, M * v0, rtol=0, atol=1e-12 * M * np.linalg.norm(v0))
+        # about a given point: that point moves at v0
+        k = mesh.design_nodes["LD"]
+        st2 = sim.new_state(mesh, v0, None, spin=om, about=mesh.x0[k])
+        np.testing.assert_allclose(st2.v[k], v0, rtol=0, atol=1e-15)
+
+    def test_a_spinning_free_frame_keeps_its_angular_momentum(self):
+        """The small frame (with its wheel nodes on links) turning at |omega| = 3.0 rad/s about a skew axis and moving,
+        free (no wall, no gravity), 4000 steps (about 35 ms): the internal forces and moments of the beams and links
+        balance, so the momentum (1e-12) and the angular momentum (sum m x cross v + J w, about the origin; 1e-9)
+        are kept. The spin is slow enough that nothing yields."""
+        mesh = build_mesh(on_board(small_frame(), "two_cargo"))
+        dt = sim.time_step(mesh)
+        om, v0 = np.array([0.8, -1.5, 2.5]), np.array([1.0, 0.5, 0.0])
+        st = sim.new_state(mesh, v0, dt, spin=om)
+        p0, L0 = mesh.mass @ st.v, _angular_momentum(mesh, st)
+        sim.advance(mesh, st, 4000, dt)
+        np.testing.assert_allclose(mesh.mass @ st.v, p0, rtol=0, atol=1e-12 * np.linalg.norm(p0))
+        np.testing.assert_allclose(_angular_momentum(mesh, st), L0, rtol=0, atol=1e-9 * np.linalg.norm(L0))
+        self.assertFalse(st.yielded.any())
+
+    def test_run_crash_takes_the_spin(self):
+        mesh = build_mesh(on_board(small_frame(), "two_cargo"))
+        om = np.array([0.0, 2.0, 0.0])
+        run = sim.run_crash(mesh, 0.0, 1e-3, wall_dir=(0.0, 0.0, -1.0), wall=10.0, velocity=(0.0, 0.0, 0.0), spin=om,
+                            until_limit=True)
+        c = mesh.mass @ mesh.x0 / mesh.mass.sum()
+        np.testing.assert_allclose(run.velocities[0], np.cross(om, mesh.x0 - c), rtol=0, atol=1e-14)
+        np.testing.assert_allclose(run.final.w.mean(axis=0), om, rtol=0, atol=2e-3)
+
+
+class BodyFrameMeasures(unittest.TestCase):
+    def test_rigid_fit_recovers_a_rigid_motion(self):
+        rng = np.random.default_rng(3)
+        a = rng.normal(size=(12, 3))
+        R = known_rotation(np.array([0.3, -1.1, 0.7]), 2.1)
+        t = np.array([0.4, -2.0, 1.5])
+        Rf, tf = measure.rigid_fit(a, a @ R.T + t)
+        np.testing.assert_allclose(Rf, R, atol=1e-12)
+        np.testing.assert_allclose(tf, t, atol=1e-12)
+
+    def test_segment_to_box_distance(self):
+        """A box 0.2 x 0.4 x 0.6 m at the origin: a segment along y at x = 0.3 (0.2 m off the +x face) is 0.2 m
+        away; one through the middle along z is inside, 0.1 m from the nearest face (-0.1); turned 90 deg about z
+        the box's x half size is 0.2, so the first segment is 0.1 m away."""
+        c, h = np.zeros(3), np.array([0.1, 0.2, 0.3])
+        self.assertAlmostEqual(measure.segment_box_distance(np.array([0.3, -1, 0.0]), np.array([0.3, 1, 0.0]), c, h),
+                               0.2, places=12)
+        self.assertAlmostEqual(measure.segment_box_distance(np.array([0.0, 0, -1.0]), np.array([0.0, 0, 1.0]), c, h),
+                               -0.1, places=12)
+        rz = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+        self.assertAlmostEqual(measure.segment_box_distance(np.array([0.3, -1, 0.0]), np.array([0.3, 1, 0.0]), c, h,
+                                                            rz), 0.1, places=12)
+
+
+def known_rotation(axis, angle):
+    k = _unit(axis)
+    K = np.array([[0.0, -k[2], k[1]], [k[2], 0.0, -k[0]], [-k[1], k[0], 0.0]])
+    return np.eye(3) + math.sin(angle) * K + (1.0 - math.cos(angle)) * K @ K
+
+
 class BandNote(unittest.TestCase):
     """break_band_note on hand-made runs: which members are at the edge, and whether a C1 verdict turns."""
 

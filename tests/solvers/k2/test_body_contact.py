@@ -138,6 +138,170 @@ class RigidBoxTest(unittest.TestCase):
         self.assertLess(abs(sim.v[0]), 0.01)
 
 
+def energy(sim, con=None) -> float:
+    """The vehicle's mechanical energy (J): the body's and the unsprung point masses' kinetic energy (their travel
+    rate in it, the wheels' spin left out), gravity's potential of every mass, the suspension springs' (preload s +
+    k_w s^2 / 2, the bump stops beyond the travel) and, with con, the contact springs' k d^2 / 2 (d below the ground
+    beyond the depth start() took)."""
+    r = sim.rotation()
+    p, v, w = np.array(sim.p), np.array(sim.v), np.array(sim.w)
+    g = np.array(sim.g)
+    m_s = float(sim.veh.m_s)
+    e = 0.5 * m_s * float(v @ v) + 0.5 * float(w @ np.array(sim.i_s) @ w) - m_s * float(g @ p)
+    for i in range(sim.n):
+        if not sim.dof[i]:
+            continue
+        gp = sim._path(i, sim.s[i])
+        c, dc = np.array(gp[:3]), np.array(gp[3:6])
+        vi = v + r @ (np.cross(w, c) + dc * sim.sd[i])
+        s = sim.s[i]
+        e += 0.5 * sim.mu_[i] * float(vi @ vi) - sim.mu_[i] * float(g @ (p + r @ c))
+        e += sim.preload[i] * s + 0.5 * sim.k_w[i] * s * s
+        for lim, beyond in ((sim.s_max[i], s > sim.s_max[i]), (sim.s_min[i], s < sim.s_min[i])):
+            if beyond:
+                e += 0.5 * sim.k_stop[i] * (s - lim) ** 2
+    if con is not None:
+        for i, d in enumerate(con.depth):
+            d0 = max([x for (j, _), x in con.d0.items() if j == i], default=0.0)
+            if d > d0:
+                e += 0.5 * con.k * (d - d0) ** 2
+    return e
+
+
+def free_energy_gain(sim, con, steps) -> float:
+    """The largest rise of the energy (J) over its value at the start, read at the steps at which no contact point
+    is under the ground (so no spring energy is in it), over `steps` steps."""
+    e0, worst = energy(sim), -math.inf
+    for _ in range(steps):
+        ext = con.ext()
+        sim.step(ctl(sim), ext, con.travel)
+        con.ext()
+        if not any(con.touch):
+            worst = max(worst, energy(sim) - e0)
+    return worst
+
+
+def sprung_box(dt):
+    """The check vehicle on springs (20 N/mm, 200 mm travel, 20 kg wheels) whose tyres never touch, with rings on the
+    wheels' outer faces (contact.wheel_face_points) and the body box's corners as its contact points."""
+    from hiraku.solvers.k2_vehicle.contact import wheel_face_points
+
+    d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, k_w=20.0, wheel_mass=20.0, travel=200.0,
+                   box_size=(2.0, 1.0, 0.6))
+    sim = Sim(build_vehicle(d), flat(), dt=dt)
+    sim.radius = [-100.0] * sim.n
+    c = [float(x) for x in sim.veh.cg_s]
+    corners = [ContactPoint(f"c{k}", "box", (c[0] + sx * 1.0, c[1] + sy * 0.5, c[2] + sz * 0.3))
+               for k, (sx, sy, sz) in enumerate((sx, sy, sz) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1))]
+    return sim, corners + wheel_face_points(d)
+
+
+# the time step for a stiff (paved) ground: HIRAKU's choice, from the drops below (the energy between contacts
+# never rises at any k up to 1e9 N/m)
+DT_STIFF = 1e-4
+
+
+class StiffGroundTest(unittest.TestCase):
+    """The contact on a stiff ground (up to 1e6 N/mm per point, a pavement): no energy made by the contact."""
+
+    def test_sliding_on_a_stiff_floor_stops_in_the_coulomb_distance(self):
+        """The box flat on its four bottom corners on a 1e5 N/mm floor, pushed to 5 m/s: it stops after
+        v^2 / (2 mu g) (Coulomb friction; at 1e3 N/mm RigidBoxTest checks the same)."""
+        mu, v0 = 0.8, 5.0
+        for k in (1e8, 1e9):
+            with self.subTest(k=k):
+                sim = box_sim(dt=DT_STIFF)
+                con = BodyContact(sim, box_points(sim), mu=mu, k=k)
+                place(sim, con, 0.0, 0.0, 0.0)
+                for _ in range(5000):
+                    sim.step(ctl(sim), con.ext())
+                x0 = sim.p[0]
+                sim.v = [v0, 0.0, sim.v[2]]
+                for _ in range(int(1.0 / DT_STIFF)):
+                    sim.step(ctl(sim), con.ext())
+                d_exp = v0 * v0 / (2.0 * mu * G0)
+                self.assertLess(abs((sim.p[0] - x0) - d_exp) / d_exp, 0.01)
+                self.assertLess(abs(sim.v[0]), 0.01)
+
+    @SLOW
+    def test_a_dropped_box_never_gains_energy(self):
+        """The rigid box dropped 0.2 m onto a corner (rolled 0.3, pitched 0.2 rad; friction 0.8, the damping on):
+        between its bounces (no point under the ground) its energy never rises over the start's, at every
+        stiffness from 1e3 to 1e6 N/mm with DT_STIFF."""
+        for k in (1e6, 1e7, 1e8, 1e9):
+            with self.subTest(k=k):
+                sim = box_sim(dt=DT_STIFF)
+                con = BodyContact(sim, box_points(sim), mu=0.8, k=k)
+                place(sim, con, 0.3, 0.2, 0.2)
+                gain = free_energy_gain(sim, con, int(1.5 / DT_STIFF))
+                self.assertLess(gain, 1e-3 * 500.0 * G0 * 0.2, f"k {k:g}: {gain:.3f} J")
+
+    @SLOW
+    def test_a_sprung_vehicle_landing_on_its_wheel_rings_never_gains_energy(self):
+        """The sprung check vehicle dropped 0.1 m rolled 50 deg onto the rings of its lower wheels (whose places
+        follow the wheels' travel): the rings' forces work on the travels too (BodyContact.travel into
+        Sim.step), so between the contacts its energy never rises over the start's, up to 1e6 N/mm."""
+        for k in (1e6, 1e8, 1e9):
+            with self.subTest(k=k):
+                sim, pts = sprung_box(DT_STIFF)
+                con = BodyContact(sim, pts, mu=0.8, k=k)
+                place(sim, con, math.radians(50.0), 0.05, 0.1)
+                gain = free_energy_gain(sim, con, int(1.0 / DT_STIFF))
+                self.assertLess(gain, 1e-3 * 600.0 * G0 * 0.1, f"k {k:g}: {gain:.3f} J")
+
+    def test_the_contact_step(self):
+        """contact_dt: the soil's step 0.25 ms, 1e4 N/mm's 0.1 ms, 3e4's 0.05 ms, the pavement's 0.025 ms; the drops'
+        DT_STIFF is no smaller than any of them (the drops hold at a larger step); the pavement is stiffer than the
+        soil."""
+        from hiraku.solvers.k2_vehicle.contact import K_CONTACT, K_PAVEMENT, contact_dt
+
+        self.assertEqual(contact_dt(K_CONTACT), 2.5e-4)
+        self.assertEqual(contact_dt(1e7), 1e-4)
+        self.assertEqual(contact_dt(3e7), 5e-5)
+        self.assertEqual(contact_dt(K_PAVEMENT), 2.5e-5)
+        self.assertGreater(K_PAVEMENT, K_CONTACT)
+        self.assertLessEqual(contact_dt(1e9), DT_STIFF)
+
+    def test_the_travel_force_of_a_wheel_point(self):
+        """Upright, a ring point pushed up by the ground: the force on its wheel's travel is F . d(point)/ds, the
+        travel moving the point straight up (box_design's plain spring), so the vertical force."""
+        sim, pts = sprung_box(1e-3)
+        ring = [p for p in pts if p.group == "wheel"]
+        con = BodyContact(sim, ring, mu=0.0, k=1e6, c=0.0)
+        con.ext()
+        low = min(p[2] for p in con.pos)
+        sim.p[2] += -0.01 - low  # the lowest ring points 10 mm under the ground
+        con.ext()
+        self.assertTrue(con.travel)
+        for j, q in con.travel.items():
+            fz = sum(con.force[i][2] for i, p in enumerate(ring) if p.wheel == sim.veh.corners[j].id)
+            self.assertAlmostEqual(q, fz, places=6)
+            self.assertAlmostEqual(fz, 1e6 * 0.01 * sum(1 for i, p in enumerate(ring)
+                                                         if p.wheel == sim.veh.corners[j].id and con.depth[i] > 1e-9),
+                                   places=3)
+
+    def test_start_takes_the_ground_at_a_point_already_under_it(self):
+        """A corner 20 mm under the ground when the contact starts: no force (start() gives no energy); 5 mm deeper
+        it is pushed for the 5 mm; raised out and lowered back to that place it is pushed for its 25 mm (the true
+        ground)."""
+        sim = box_sim()
+        sim.set_gravity([0.0, 0.0, 0.0])
+        con = BodyContact(sim, box_points(sim), mu=0.0, k=1e6, c=0.0)
+        place(sim, con, 0.3, 0.2, -0.02)
+        held = con.start()
+        self.assertEqual(len(held), 1)
+        self.assertEqual(con.ext(), [])
+        self.assertEqual(con.travel, {})
+        i = [p.name for p in con.points].index(held[0])
+        for dz, depth in ((-0.005, 0.005), (0.03, None), (-0.03, 0.025)):
+            sim.p[2] += dz
+            con.ext()
+            if depth is None:
+                self.assertFalse(con.touch[i])
+            else:
+                self.assertAlmostEqual(con.force[i][2], 1e6 * depth, places=6)
+
+
 class PlanesTest(unittest.TestCase):
     def test_box_slides_down_an_incline_at_g_sin_minus_mu_cos(self):
         """A Planes road inclined 20 deg about x (gravity vertical): the box on its four bottom corners

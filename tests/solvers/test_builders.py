@@ -324,17 +324,37 @@ class DragBuilderTest(unittest.TestCase):
 
 
 class RopsBuilderTest(unittest.TestCase):
-    """R4: no tool on the shelf and no plan (HIRAKU's Claude makes the tool in the run); the load case alone."""
+    """R4: one load case, R4-rollover, judged by K2's rollover_beam (the rollover on the tilt table with the frame as
+    beams); the hand calculation is the static push of OECD Code 4 (borrowed) after the path check."""
 
     @classmethod
     def setUpClass(cls):
         cls.rb = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))  # has the roll bar
-        cls.lc = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
+        cls.lcs = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
+        cls.lc = cls.lcs[0]
 
     def test_load_case_fits_the_contract(self):
-        contract.validate("load_case", self.lc)
-        self.assertEqual(self.lc["load_case_id"], "R4-rops")
+        for lc in self.lcs:
+            contract.validate("load_case", lc)
+        self.assertEqual(self.lc["load_case_id"], "R4-rollover")
         self.assertEqual(self.lc["domain"], CATALOG.test("R4")["domain"])
+
+    def test_two_grounds_soil_and_pavement(self):
+        """The user's decision: R4 on a soil (R4-rollover, contact.K_CONTACT) and a pavement (R4-rollover-pavement,
+        contact.K_PAVEMENT), the same otherwise; both grounds are HIRAKU's assumption and say so; both use the plan."""
+        from hiraku.solvers.k2_vehicle.contact import K_CONTACT, K_PAVEMENT
+
+        soil, pave = self.lcs
+        self.assertEqual([lc["load_case_id"] for lc in self.lcs], ["R4-rollover", "R4-rollover-pavement"])
+        self.assertEqual(soil["params"]["contact_stiffness"], {"value": K_CONTACT / 1000.0, "unit": "N/mm"})
+        self.assertEqual(pave["params"]["contact_stiffness"], {"value": K_PAVEMENT / 1000.0, "unit": "N/mm"})
+        self.assertEqual({k: v for k, v in soil["params"].items() if k != "contact_stiffness"},
+                         {k: v for k, v in pave["params"].items() if k != "contact_stiffness"})
+        self.assertEqual(soil["criterion"]["quantity"], pave["criterion"]["quantity"])
+        for lc, ground in ((soil, "土"), (pave, "舗装")):
+            self.assertTrue(lc["title"].startswith(ground + "の地面で"))
+            self.assertIn("地面の硬さは HIRAKU の仮定。土と舗装の 2 通り", lc["criterion"]["basis"])
+            self.assertIs(plan_for(lc), PLANS["R4-rollover"])
 
     def test_values_are_code_4_at_the_reference_mass(self):
         from hiraku.catalog.builders.analysis import R4_CODE4, R4_REFERENCE_MASS_KG
@@ -346,12 +366,18 @@ class RopsBuilderTest(unittest.TestCase):
         self.assertAlmostEqual(p["rear_fraction"]["value"], 1 / 6)
         self.assertEqual(p["loading"], "two_cargo")
         given = dict(CATALOG.test("R4"), params={"crush_force": {"value": 12, "unit": "kN"}})
-        self.assertEqual(BUILDERS["R4"](given, REQ, self.rb)["params"]["crush_force"], {"value": 12000.0, "unit": "N"})
+        self.assertEqual(BUILDERS["R4"](given, REQ, self.rb)[0]["params"]["crush_force"], {"value": 12000.0, "unit": "N"})
 
     def test_criterion_is_the_occupant_space(self):
         c = self.lc["criterion"]
         self.assertEqual((c["quantity"], c["op"], c["limit"]), ("rops_occupant_clearance", ">=", {"value": 0.0, "unit": "mm"}))
         self.assertIn("Code 4", c["basis"])
+        self.assertIn("rollover", c["basis"])
+        for text in (c["basis"], self.lc["title"]):
+            self.assertIn("HIRAKU 独自の計算の確かめ。規格の試験ではない", text)
+            self.assertNotIn("規格に基づく", text)
+        for s in ("ISO 3471", "ROHVA", "「HIRAKU の仮定」", "10 kN"):
+            self.assertIn(s, c["basis"])
         self.assertIn("Q31", self.lc["requirement_keys"])
 
     def test_requirement_keys_from_the_catalog_entry(self):
@@ -359,16 +385,36 @@ class RopsBuilderTest(unittest.TestCase):
         req = copy.deepcopy(REQ)
         req["requirements"].append({"key": "Q64", "name": "ROPS", "value": "あり", "source": "default", "trust": 1,
                                     "basis": "assumption (test)"})
-        lc = BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
+        lc = BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)[0]
         self.assertEqual(lc["requirement_keys"][:2], ["Q64", "Q31"])
         self.assertEqual(lc["criterion"]["requirement_keys"], ["Q64", "Q31"])
         req["requirements"][-1]["value"] = "なし"
         with self.assertRaisesRegex(BuildError, "Q64"):
             BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
 
-    def test_no_plan_and_no_shelf_tool(self):
+    def test_plan_by_load_case_with_rollover_beam_alone_on_the_shelf(self):
+        """The plan is keyed by the load case: rollover_beam, the path check first, then R4_PREDICTIONS (the criterion's
+        quantity last); every formula is one the tool pairs; the expected mismatch decides by the tool, with its cause.
+        rollover_beam is the only tool covering R4 and its stage is 3 (no lighter tool takes R4's stage)."""
+        from hiraku.catalog.builders.analysis import R4_PREDICTIONS
+        from hiraku.catalog.builders.load_path import PATH_PREDICTION
+        from hiraku.solvers.k2_vehicle.shelf import TOOLS as K2_TOOLS
+
         self.assertNotIn("R4", PLANS)
-        self.assertFalse([t for t in TOOLS.values() if "R4" in t.tests])
+        plan = plan_for(self.lc)
+        self.assertIs(plan, PLANS["R4-rollover"])
+        self.assertEqual(plan["tool"], "rollover_beam")
+        self.assertEqual(plan["predictions"], [PATH_PREDICTION] + R4_PREDICTIONS)
+        self.assertEqual(plan["predictions"][-1]["quantity"], self.lc["criterion"]["quantity"])
+        tool = K2_TOOLS["rollover_beam"]
+        for p in plan["predictions"]:
+            self.assertIn(p["formula_id"], tool.formula_ids())
+        exp = plan["expected_mismatch"]
+        self.assertEqual(exp["quantity"], "rops_occupant_clearance")
+        self.assertTrue(exp["tool_decides"] and exp["tool_decides_reason"] and exp["cause"] and exp["source"])
+        self.assertNotIn("safe_side", exp)
+        self.assertEqual([t.name for t in TOOLS.values() if "R4" in t.tests], ["rollover_beam"])
+        self.assertEqual((tool.stage, tool.planned_only), (3, False))
 
     def test_hand_formulas_named_for_the_prediction_evaluate(self):
         """The formulas the builder's comment names, with frame_inputs and the load case's params."""
