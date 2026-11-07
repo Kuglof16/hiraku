@@ -14,6 +14,7 @@ python -m viewer.src.assembly <run dir>   # assembly record   -> viewer/data/ass
 python -m viewer.src.thermal  <run dir> [--energy <run dir>]          # thermal (+ drive_energy) -> viewer/data/thermal.js
 python -m viewer.src.fatigue  <run dir>                               # fatigue record           -> viewer/data/fatigue.js
 python -m viewer.src.strength <run dir>                               # frame_static record      -> viewer/data/strength.js
+python -m viewer.src.water <case folder> --design <design.json>     # stored flooded road record -> viewer/data/water.js (this one file is kept in the repository, so the place opens with no run and no GPU)
 python -m viewer.src.strength <version dir> --frames <dir> [--name N] [--every n]   # saved shell frames (the step hit)
 python -m viewer.src.handling <run dir> --also <run dir> ...     # tilt / braking / lane_change / offroad_roll
 python -m viewer.src.powertrain <run dir> --also <run dir> ...   # launch / step_climb_dynamic / drive_energy
