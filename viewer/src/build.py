@@ -141,7 +141,8 @@ def _crash(run, vdir, rec):
         return "衝突 (B) の記録に節点の動き (node_motion) がない"
     if rec["tool"] == "crash" and not (_has_field(rec, "stress", "per_member") and _has_field(rec, "displacement", "per_node")):
         return "衝突 (A) の記録に部材ごとの応力と節点ごとの変位がない"
-    return crash.build(_args("crash", run, vdir, rec["analysis_id"], crash._extra, tool=rec["tool"]))
+    # a crash A record (no deformed shape) also gets K2's crash_beam run on its design, drawn first (crash.beam_of_a)
+    return crash.build(_args("crash", run, vdir, rec["analysis_id"], crash._extra, tool=rec["tool"], with_beam=True))
 
 
 def _k2_ok(rec):

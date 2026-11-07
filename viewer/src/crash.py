@@ -77,13 +77,51 @@ def build(args) -> dict:
     design = common.read_json(vdir / "design.json")
     if rec["tool"] == "crash_beam":
         return build_b(args, vdir, rec, design)
-    return build_a(args, vdir, rec, design)
+    a = build_a(args, vdir, rec, design)
+    if getattr(args, "with_beam", False):
+        b = beam_of_a(args, vdir, rec, design)
+        if b is not None:
+            b["a_view"] = a  # the page opens B (the frame folding) and switches to the record's own A
+            return b
+    return a
+
+
+BEAM_NOTE = ("この版の設計と荷重条件で回した梁の衝突 (crash_beam、K2 の梁と塑性ヒンジ)。記録の判定は 1 次元の模型 (A) で"
+             "出している。形・色・余裕は crash_beam の計算の結果そのまま")
+
+
+def beam_of_a(args, vdir, rec, design) -> dict | None:
+    """For a crash A record (1-D: no deformed shape): K2's crash_beam run on the record's design and load case, drawn
+    as B (the frame's real positions over time). None when the tool cannot run it. The record's verdict stays A's."""
+    from hiraku.solvers.k2_vehicle.shelf.crash_beam import CrashBeamTool
+
+    lc = common.load_case_of(vdir, rec["load_case_id"])
+    if lc is None:
+        return None
+    out = CrashBeamTool().run(design, lc, [{"prediction_id": "pred-0001"}], {})
+    if out.get("status") != "ok":
+        return None
+    rb = dict(out, tool="crash_beam", analysis_id=rec["analysis_id"], load_case_id=rec["load_case_id"],
+              design_version=rec.get("design_version"), _path=rec.get("_path"))
+    b = build_b(args, vdir, rb, design)
+    b["title"] = "衝突: 壁への正面衝突 (B: 梁が降伏して折れる。この版の設計で回した crash_beam)"
+    b["beam_rerun"] = BEAM_NOTE
+    for k in ("margin", "split"):  # B's values, not this version's verdict: no OK / NG on them
+        if (b.get("summary") or {}).get(k):
+            b["summary"][k]["ok"] = None
+    if b.get("stop"):
+        b["stop"]["ok"] = None
+    b["notes"].insert(0, BEAM_NOTE + "。乗員の空間の余裕は B の値で、この版の判定には使っていない")
+    b["inputs"].insert(0, {"label": "この絵", "value": BEAM_NOTE, "source": "hiraku.solvers.k2_vehicle.shelf.crash_beam "
+                           "(viewer/src/crash.py beam_of_a: the record's design.json and load case)"})
+    return b
 
 
 # ---------------------------------------------------------------- A: crash (1-D)
 def build_a(args, vdir, rec, design) -> dict:
     obj = common.base_object("crash", "衝突: 壁への正面衝突 (A: 1次元の質量とばね)", args.run, vdir, rec, design)
     obj["model"] = "A"
+    obj["a_view"], obj["beam_rerun"] = None, None  # set by beam_of_a when a crash_beam run on the design leads
     fr = obj["frame"]
     st = next((f for f in rec.get("fields", []) if f.get("kind") == "stress" and "per_member" in f), None)
     dp = next((f for f in rec.get("fields", []) if f.get("kind") == "displacement" and "per_node" in f), None)
@@ -127,7 +165,8 @@ def build_a(args, vdir, rec, design) -> dict:
         {"label": "減速度のピーク", "value": f"{obj['a_max']:.2f} {obj['units']['deceleration']}",
          "source": "the series' largest value; the frame was solved at this instant"},
     ]
-    obj["notes"] = ["A は 1 次元モデル (質量とばね)。車体はその場に置いたまま描き、つぶれ量は下のグラフにだけ出す。",
+    obj["notes"] = ["A は 1 次元モデル (質量とばね)。車をつぶれの分だけ壁へ進め、壁の面より前に出る所を面で止めて描く "
+                    "(実寸。どこがどう曲がるかは解いていない)。",
                     "応力はピークの瞬間に 1 回解いた値 × a(t)/a_max。弾性たわみ (既定は倍率 0) はつぶれた形ではない。"]
     obj["ledger"] = common.parts_ledger("crash", design, lc, rec, obj["parts"])
     return obj
@@ -382,6 +421,7 @@ def hot_spots_of(rec: dict) -> list[dict]:
 def build_b(args, vdir, rec, design) -> dict:
     obj = common.base_object("crash", "衝突: 壁への正面衝突 (B: 梁が降伏して折れる)", args.run, vdir, rec, design)
     obj["model"] = "B"
+    obj["a_view"], obj["beam_rerun"] = None, None  # set by beam_of_a when a crash_beam run on the design leads
     nm = next((f for f in rec.get("fields", []) or [] if f.get("kind") == "node_motion"), None)
     if nm is None:
         raise LookupError(f"{rec['_path']}: a crash_beam record without a node_motion field (the mesh may have had "
@@ -641,6 +681,8 @@ def build_b(args, vdir, rec, design) -> dict:
 
 def _extra(ap):
     ap.add_argument("--tool", choices=["crash", "crash_beam"], help="record kind (default: crash_beam if the run has one)")
+    ap.add_argument("--with-beam", dest="with_beam", action="store_true",
+                    help="a crash A record: also run K2's crash_beam on its design and show that first (beam_of_a)")
 
 
 if __name__ == "__main__":

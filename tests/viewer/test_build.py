@@ -24,7 +24,7 @@ VIEWER = ROOT / "viewer"
 CASES = [
     ("nvh", "ana-0084", "nvh", ["nvh"]),
     ("shell", "ana-0001", "nvh_shell", ["nvh_shell"]),
-    ("crash", "ana-0001", "crash", ["crash"]),
+    ("crash", "ana-0001", "crash", ["crash", "--with-beam"]),  # a crash A record: crash_beam run on its design leads
     ("crash_b", "ana-0002", "crash", ["crash"]),
     ("crash_contact", "ana-0001", "crash", ["crash"]),
     ("assembly", "ana-0006", "assembly", ["assembly"]),

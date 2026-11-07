@@ -8,8 +8,20 @@ window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.crash = {
   label: HV.FIELD_LABEL.crash,   // js/names.js: the contract's DOMAIN_NAMES_JA
-  async init(D, ctx) { return D.model === 'B' ? HV.crashB(D, ctx) : HV.crashA(D, ctx); },
+  async init(D, ctx) {
+    if (D.a_view && !D.a_view['b_view']) D.a_view['b_view'] = D;   // a crash A record with crash_beam run on its design
+    return D.model === 'B' ? HV.crashB(D, ctx) : HV.crashA(D, ctx);
+  },
 };
+// switch between the crash_beam run on the version's design (B) and the record's own 1-D model (A)
+HV.crashSwitch = function (which) {
+  const D = HV.state && HV.state.ctx && HV.state.ctx.D, to = D && (which === 'a' ? D.a_view : D['b_view']);
+  if (!to) return;
+  window.VIEW_DATA = window.VIEW_DATA || {}; window.VIEW_DATA.crash = to; HV.open('crash');
+};
+HV.crashSwitchHtml = D => D.a_view
+  ? `<div style="margin:4px 0"><button onclick="HV.crashSwitch('a')">1 次元の模型 (A: この版の判定) に切り替える</button></div>`
+  : D['b_view'] ? `<div style="margin:4px 0"><button onclick="HV.crashSwitch('b')">梁の衝突 (B: この版の設計で回した crash_beam) に切り替える</button></div>` : '';
 
 HV.crashA = async function (D, ctx) {
   const beams = await ctx.addBeams();
@@ -63,6 +75,7 @@ HV.crashA = async function (D, ctx) {
       return [`A: 1次元モデル。車を壁へつぶれ ${x[S.k].toFixed(0)} ${D.units.crush} だけ進め、壁の面より前に出る所を面で止めて描く (実寸。どこがどう曲がるかは解いていない)` + (S.scale > 0 ? `   弾性たわみ ×${S.scale}、実寸ではない` : ''),
               `色: 部材の相当応力 (ピーク時の値 × a(t)/a_max = ×${ratio().toFixed(2)})   矢印 1 kN = 5 mm`];
     },
+    extraInputs() { return HV.crashSwitchHtml(D); },
     contour: spec,
     plot() {
       const c = t[S.k], mk = [{ x: t[kPeak], label: 'ピーク', col: '#c0c' }];
@@ -191,7 +204,9 @@ HV.crashB = async function (D, ctx) {
       const j = [mg ? `${HV.qtext('occupant_space_margin')} ${HV.fmt(mg.value)} ${mg.unit}${tag(mg.ok)}` : '',
                  sp ? `${HV.qtext('frame_split_fraction')} ${HV.fmt(sp.pct)} % (${sp.limit_pct !== null ? sp.op + ' ' + HV.fmt(sp.limit_pct) + ' %' : ''})${tag(sp.ok)}`
                     : s && s.piece_pct !== null && s.limit_pct !== null ? `分離の塊 ${s.piece_pct} % (${s.limit_pct} % 以上で NG)${tag(s.ok)}` : ''].filter(Boolean).join('   ');
-      return [(j ? `判定: ${j}   ` : '') + (s && s.t_s !== null ? stopText() : `記録の終わり ${(1000 * tf[nF - 1]).toFixed(1)} ms`),
+      const jl = D.beam_rerun ? 'B の値 (この版の判定には使っていない。判定は A)' : '判定';
+      return [(D.beam_rerun ? 'この版の設計で回した梁の衝突 (crash_beam)。形は計算の節点位置そのもの (実寸)   ' : '') +
+              (j ? `${jl}: ${j}   ` : '') + (s && s.t_s !== null ? stopText() : `記録の終わり ${(1000 * tf[nF - 1]).toFixed(1)} ms`),
               `ピーク ${HV.fmt(sm.peak_decel)} ${u.deceleration}、平均 ${HV.fmt(sm.mean_decel)} ${u.deceleration}、つぶれ ${HV.fmt(sm.crush_end)} ${u.crush}${cut ? ' (停止まで)' : ''}   色: ${LABEL[S.what]}`];
     },
     contour: spec,
@@ -230,7 +245,8 @@ HV.crashB = async function (D, ctx) {
               `${sp.member ? '、' + HV.esc(sp.member) : ''}${sp.t_s !== null && sp.t_s !== undefined ? '、' + ms(sp.t_s) : ''}</td><td>${okng(sp.ok)}</td></tr>`
             : s && s.piece_pct !== null ? `<tr><td>フレームの分離</td><td>座席側から ${s.piece_pct} % の塊 (${s.limit_pct} % 以上は NG)、${s.t_s !== null ? ms(s.t_s) : ''} ${HV.esc(s.member || '')}</td><td>${okng(s.ok)}</td></tr>` : '');
       const pieces = (sp && sp.pieces) || [];
-      return `<div class="h" style="margin-top:4px">判定</div><table>${judged}</table>` +
+      return HV.crashSwitchHtml(D) +
+        `<div class="h" style="margin-top:4px">${D.beam_rerun ? 'B の値 (この版の判定には使っていない。判定は A)' : '判定'}</div><table>${judged}</table>` +
         `<div class="h" style="margin-top:4px">結果${cut ? ' (停止まで)' : ''}</div><table>` +
         (s && s.t_s !== null || !sp ? `<tr><td>${s && s.goes_on ? '分離' : '停止'}</td><td>${HV.esc(stopText())}</td></tr>` : '') +
         (pieces.length ? `<tr><td>座席側から離れた塊</td><td>${pieces.map(p => `${ms(p.t_s)} ${p.members.map(HV.esc).join(', ')} (${p.nodes} 節点、質量の ${p.pct} %)`).join('、')}` +
