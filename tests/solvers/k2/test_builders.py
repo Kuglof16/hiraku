@@ -94,6 +94,24 @@ class Builders(unittest.TestCase):
         self.assertEqual(self.cases["S1'"]["params"]["loading"], "empty")
         self.assertNotIn("criterion", self.cases["S5"])
 
+    def test_s4_brakes_from_35_kmh_or_the_lower_top_speed(self):
+        """The braking table's 35 km/h for a vehicle whose Q50 is above it (the demo: 40 km/h); a product slower than
+        that (the serving robot's Q50 1.2 m/s = 4.32 km/h) brakes from its own Q50, listed in the requirement keys."""
+        lc = self.cases["S4"]
+        self.assertEqual((lc["load_case_id"], lc["params"]["speed"]), ("S4-brake35", {"value": 35.0, "unit": "km/h"}))
+        self.assertNotIn("Q50", lc["requirement_keys"])
+        req = copy.deepcopy(self.req)
+        for r in req["requirements"]:
+            if r["key"] == "Q50":
+                r.update(value=1.2, unit="m/s")
+        slow = BUILDERS["S4"]({"id": "S4"}, req, self.design)
+        self.assertAlmostEqual(slow["params"]["speed"]["value"], 4.32, places=9)
+        self.assertEqual(slow["params"]["speed"]["unit"], "km/h")
+        self.assertEqual(slow["load_case_id"], "S4-brake4.32")
+        self.assertIn("Q50", slow["requirement_keys"])
+        self.assertIn("from Q50 4.32 km/h", slow["criterion"]["basis"])
+        contract.validate("load_case", slow)
+
     def test_a_missing_requirement_is_named(self):
         req = copy.deepcopy(self.req)
         req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q52"]

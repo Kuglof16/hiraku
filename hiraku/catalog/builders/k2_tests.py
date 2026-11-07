@@ -212,16 +212,28 @@ def _s3_dlc(spec: Record, req: Record, design: Record) -> Record:
                        "both wheels of one side lift when their loads together reach 0", []))
 
 
+def _s4_speed(req: Record) -> tuple[float, list[str], str]:
+    """S4's initial speed (km/h), the requirement keys it adds, and the basis's words for it: the braking table's
+    S4_SPEED_KMH, or the product's top speed Q50 when that is lower (a product that cannot reach 35 km/h, such as the
+    serving robot at 4.32 km/h, brakes from its own top speed)."""
+    if entry(req, "Q50"):
+        top = number(req, "Q50", "km/h")
+        if top < S4_SPEED_KMH:
+            return top, ["Q50"], (f"from Q50 {top:g} km/h, the top speed (the braking table's {S4_SPEED_KMH:g} km/h, "
+                                  "細目告示 第171条 第5項, is above it)")
+    return S4_SPEED_KMH, [], f"from {S4_SPEED_KMH:g} km/h (細目告示 第171条 第5項, borrowed)"
+
+
 def _s4_brake(spec: Record, req: Record, design: Record) -> Record:
     on, keys = _loading(req, design)
     mu = number(req, "Q11", "1")
     stop = number(req, "Q52", "m")
-    return _case(spec, "S4", "handling", f"S4-brake{S4_SPEED_KMH:g}",
-                 f"{S4_SPEED_KMH:g} km/h から急制動、μ {mu:g} で {stop:g} m 以内に止まる ({LOADING_JA[on]})",
-                 {"loading": on, "speed": q(S4_SPEED_KMH, "km/h"), "mu": q(mu, "1"), "reaction_time": q(0.0, "s")},
-                 keys + ["Q11", "Q52"],
-                 _crit("stopping_distance", "<=", q(stop, "m"),
-                       f"Q52 {stop:g} m from {S4_SPEED_KMH:g} km/h (細目告示 第171条 第5項, borrowed)", ["Q52"]))
+    v, vkeys, vtext = _s4_speed(req)
+    return _case(spec, "S4", "handling", f"S4-brake{v:g}",
+                 f"{v:g} km/h から急制動、μ {mu:g} で {stop:g} m 以内に止まる ({LOADING_JA[on]})",
+                 {"loading": on, "speed": q(v, "km/h"), "mu": q(mu, "1"), "reaction_time": q(0.0, "s")},
+                 keys + ["Q11", "Q52"] + vkeys,
+                 _crit("stopping_distance", "<=", q(stop, "m"), f"Q52 {stop:g} m {vtext}", ["Q52"]))
 
 
 def _s4b_park(spec: Record, req: Record, design: Record) -> Record:
@@ -325,13 +337,13 @@ def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
 def _s4_beyond(spec: Record, req: Record, design: Record) -> Record:
     on, keys = _loading(req, design)
     stop = number(req, "Q52", "m")
+    v, vkeys, vtext = _s4_speed(req)
     return _case(spec, "S4", "handling", f"S4-mu{BEYOND_MU:g}-beyond",
-                 f"限界の外: 滑りやすい砂利 (μ {BEYOND_MU:g} は仮定) で {S4_SPEED_KMH:g} km/h から急制動、"
+                 f"限界の外: 滑りやすい砂利 (μ {BEYOND_MU:g} は仮定) で {v:g} km/h から急制動、"
                  f"{stop:g} m 以内に止まる ({LOADING_JA[on]})",
-                 {"loading": on, "speed": q(S4_SPEED_KMH, "km/h"), "mu": q(BEYOND_MU, "1"), "reaction_time": q(0.0, "s")},
-                 keys + ["Q52"],
-                 _crit("stopping_distance", "<=", q(stop, "m"),
-                       f"Q52 {stop:g} m from {S4_SPEED_KMH:g} km/h (細目告示 第171条 第5項, borrowed)", ["Q52"]))
+                 {"loading": on, "speed": q(v, "km/h"), "mu": q(BEYOND_MU, "1"), "reaction_time": q(0.0, "s")},
+                 keys + ["Q52"] + vkeys,
+                 _crit("stopping_distance", "<=", q(stop, "m"), f"Q52 {stop:g} m {vtext}", ["Q52"]))
 
 
 def _s5_beyond(spec: Record, req: Record, design: Record) -> Record:
