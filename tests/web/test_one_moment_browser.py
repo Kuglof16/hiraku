@@ -121,7 +121,7 @@ class OneMomentBrowserTest(unittest.TestCase):
         self.assertEqual(got["openedAt"], "request")
         self.assertFalse(got["playing"])
         self.assertIsNone(got["ver"])
-        self.assertTrue(got["pill"].startswith("v—"), got["pill"])
+        self.assertTrue(got["pill"].startswith("設計はまだ"), got["pill"])  # (no design yet: in words, not v—)
         self.assertIn("依頼の時点", got["mode"])
         self.assertNotIn("記録の途中", got["mode"])
         self.assertEqual(got["activity"], "")  # no footer line of a later moment
@@ -178,7 +178,7 @@ class OneMomentBrowserTest(unittest.TestCase):
         got = self.read(page, A2)
         self.assertEqual(got["title"], "実行の前に決めたこと (最初のヒアリング): 聞かずに進めました")
         self.assertEqual([c for c, _ in got["rounds"]], ["shown", "later", "later"])
-        self.assertTrue(self.read(page)["pill"].startswith("v—"))
+        self.assertTrue(self.read(page)["pill"].startswith("設計はまだ"))
         self.assertEqual(errors, [])
 
     def test_a_record_cut_short_says_so(self):

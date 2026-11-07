@@ -64,6 +64,24 @@ SUMMARY = """() => { const p = window.hiraku.player;
   return { clock: p.clock, playhead: p.playhead, applied: p.applied, now: document.getElementById('now').textContent,
            rec: document.getElementById('pb-rec').textContent, time: document.getElementById('pb-time').textContent }; }"""
 
+# The frame once it no longer changes: SUMMARY read until it is the same SAME_READS times in a row,
+# two animation frames apart (a title fetched late, e.g. a tool's, can still change いま after
+# window.hiraku.ready). No time is fixed: under load it takes as many frames as it needs.
+SAME_READS = 3
+SETTLED = """async (n) => {
+  const read = """ + SUMMARY + """;
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  let last = JSON.stringify(read()), same = 1;
+  while (same < n) { await frame(); const now = JSON.stringify(read()); same = now === last ? same + 1 : 1; last = now; }
+  return JSON.parse(last);
+}"""
+
+# How long a page may take to say it is ready. Not a pace: the wait ends as soon as
+# window.hiraku.ready is there and settled. With browser tests side by side (qa.run_tests --browser)
+# a page took more than the 60 s this test used to give it; 10 minutes only stops a page that never
+# comes (the class's own limit in qa.run_tests is an hour).
+READY_TIMEOUT_MS = 600_000
+
 
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class EventPlayBrowserTest(unittest.TestCase):
@@ -89,8 +107,8 @@ class EventPlayBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1440, "height": 810})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.bases['saved']}/?run=sample&autoplay=0{query}", wait_until="domcontentloaded")
-        page.wait_for_function(READY, timeout=60000)
+        page.goto(f"{self.bases['saved']}/?run=sample&autoplay=0{query}", wait_until="domcontentloaded", timeout=READY_TIMEOUT_MS)
+        page.wait_for_function(READY, timeout=READY_TIMEOUT_MS)
         page.evaluate("window.hiraku.ready")
         page.evaluate("([ev, t]) => window.hiraku.load(ev, t)", [self.events, t])
         self.addCleanup(page.close)
@@ -125,8 +143,9 @@ class EventPlayBrowserTest(unittest.TestCase):
         a, ea = self.open(t=t)
         b, eb = self.open(t=0)
         b.evaluate("(t) => window.hiraku.seek(t)", t)
-        self.assertEqual(a.evaluate(SUMMARY), b.evaluate(SUMMARY))
-        self.assertTrue(a.evaluate(SUMMARY)["rec"].startswith("実時間 1:00:"))  # the recorded time, small beside
+        got = a.evaluate(SETTLED, SAME_READS)
+        self.assertEqual(got, b.evaluate(SETTLED, SAME_READS))
+        self.assertTrue(got["rec"].startswith("実時間 1:00:"))  # the recorded time, small beside
         self.assertEqual(ea + eb, [])
 
     def test_the_buttons_jump(self):
@@ -186,23 +205,28 @@ class EventPlayBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1440, "height": 810})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.bases['saved']}/?run=sample{query}", wait_until="domcontentloaded")
-        page.wait_for_function(READY, timeout=60000)
+        page.goto(f"{self.bases['saved']}/?run=sample{query}", wait_until="domcontentloaded", timeout=READY_TIMEOUT_MS)
+        page.wait_for_function(READY, timeout=READY_TIMEOUT_MS)
         page.evaluate("window.hiraku.ready")
         self.addCleanup(page.close)
         return page, errors
 
     def test_url_t_gives_the_same_frame_with_and_without_video(self):
         """?t= in the URL and a seek to the same t give the same frame: on the event clock (the
-        screen's default) and on the paced clock (?video=1's default, the filming's ?t= values)."""
+        screen's default) and on the paced clock (?video=1's default, the filming's ?t= values).
+        Each frame is read once it has settled (SETTLED), and each pair of pages is closed before
+        the next opens, so the test does not keep four drawing pages at once."""
         for video, clock in (("", "event"), ("&video=1", "paced")):
             ref, e1 = self.url_page(f"{video}&autoplay=0")
             self.assertEqual(ref.evaluate("window.hiraku.player.clock"), clock, video)
             ts = ref.evaluate("window.hiraku.player.events.map((e) => e.t)")
             t = round((ts[len(ts) // 2] + ts[len(ts) // 2 + 1]) / 2, 3)
             ref.evaluate("(t) => window.hiraku.seek(t)", t)
+            want = ref.evaluate(SETTLED, SAME_READS)
+            ref.close()
             at, e2 = self.url_page(f"{video}&t={t}")
-            self.assertEqual(at.evaluate(SUMMARY), ref.evaluate(SUMMARY), video)
+            self.assertEqual(at.evaluate(SETTLED, SAME_READS), want, video)
+            at.close()
             self.assertEqual(e1 + e2, [], video)
         # ?pace= is followed under ?video=1 too
         page, errors = self.url_page("&video=1&pace=event&autoplay=0")

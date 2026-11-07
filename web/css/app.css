@@ -755,6 +755,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 /* 境目 (edge_note.js) under the verdict's row: orange like the card's line, kept whole (it wraps) */
 .ch-edge { display: flex; align-items: baseline; color: var(--orange, #b26b00); font-weight: 600; font-size: 14px; line-height: 1.35; margin-top: -4px; }
 .ch-edge small { flex: none; }
+/* basis path_checked: why the tool's value decides (why_line.js), under the verdict's row, whole (it wraps) */
+.ch-why { display: flex; align-items: baseline; color: var(--ink); font-size: 14px; line-height: 1.4; margin-top: -4px; }
+.ch-why small { flex: none; }
 .ch-q { font-weight: 600; }
 .ch-v { font-variant-numeric: tabular-nums; }
 .ch-verdict { margin-left: auto; font-size: 24px; line-height: 1; }
@@ -1157,6 +1160,11 @@ body.video .mode .stop-btn { display: none; }
 .runlist.plain .dline { font-size: 16px; }
 .runlist.plain .rsum { font-size: 16px; font-weight: 600; }
 .runlist.plain .rmeta { font-size: 14px; color: var(--muted); margin-top: 2px; }
+/* a stopped run's why, one line (the whole as the tooltip) */
+.runlist.plain .rwhy { font-size: 14px; color: #8a5a1c; margin-top: 2px; max-width: 640px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a record that stopped before its first design, over the empty 3D (app.js renderStoppedNote) */
+.stopped-note { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; max-width: min(640px, 80%); background: rgba(251, 249, 244, 0.95); border: 1.5px solid #e9b872; border-radius: 12px; padding: 12px 18px; font-size: 17px; line-height: 1.5; }
+.stopped-note[hidden] { display: none; }
 .runlist.plain td.state[data-state="stopped"], .runlist.plain td.state[data-state="failed"] { color: var(--red); }
 .runlist.plain details.older { margin-top: 14px; }
 .runlist.plain details.older summary { cursor: pointer; font-size: 15px; color: var(--muted); }
@@ -1225,6 +1233,8 @@ body.video .mode .stop-btn { display: none; }
   pointer-events: none;
 }
 .now[hidden] { display: none; }
+/* a verdict just recorded on the tool's value after the load path was checked (why_line.js): why, on its own line */
+.now .now-why { display: block; font-weight: 400; font-size: 0.85em; }
 /* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
 .now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
 /* ③'s sentence card under the 3D (js/benchnote.js): one card at a time (the いま line, the round's
@@ -1246,8 +1256,14 @@ body.video .mode .stop-btn { display: none; }
 .bn-pick .pr { display: none !important; }
 .bn-pick .who .pet { display: inline-block; vertical-align: -4px; margin-right: 4px; }
 .bn-pick .hn-head { color: var(--orange); font-weight: 700; margin-right: 0.5em; }
-.bn-card .rec { display: none; }
-body.dev .bn-card .rec { display: inline; }
+/* plain words (js/plain.js): the record's ids and English words (.rec) hidden on ③'s card, the
+   footer's line and the log, the Japanese name put in for one (.rn) shown there; ?dev=1 the
+   record's words as recorded (.rec shown, .rn hidden), as in くわしく and elsewhere */
+.rn { display: none; }
+.bn-card .rec, #activity .rec, #log .rec { display: none; }
+.bn-card .rn, #activity .rn, #log .rn { display: inline; }
+body.dev .bn-card .rec, body.dev #activity .rec, body.dev #log .rec { display: inline; }
+body.dev .bn-card .rn, body.dev #activity .rn, body.dev #log .rn { display: none; }
 .bn-more { flex: none; font-size: 14px; padding: 3px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); cursor: pointer; }
 .bn-more[hidden] { visibility: hidden; display: inline-block; }
 .bn-full { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rule); max-height: 260px; overflow: auto; font-size: 15px; line-height: 1.5; color: var(--ink); }
@@ -1402,6 +1418,7 @@ body.video .pc-now { display: -webkit-box; -webkit-box-orient: vertical; -webkit
 .pc-verdict { font-size: 28px; font-weight: 800; line-height: 1.25; }
 .pc-verdict.ok { color: var(--green); }
 .pc-verdict.bad { color: var(--red); }
+.pc-why { font-size: 16px; line-height: 1.45; }
 .pc-extra { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.45; }
 .pc-ref { color: var(--muted); font-size: 15px; line-height: 1.4; }
 .pc-ref .pc-ref-h { font-weight: 700; }
@@ -1436,6 +1453,9 @@ body.present.present-detail .chain { height: 100%; }
 .card .edge-near { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
 .tile .edge-line { font-size: 12px; margin-top: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .tiles.dense .tile .edge-line { font-size: 11px; -webkit-line-clamp: 2; }
+/* basis path_checked: why the tool's value decides (why_line.js), small under the tile's number; whole in its tooltip */
+.tile .pathwhy { color: var(--muted); font-size: 12px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.tiles.dense .tile .pathwhy { font-size: 11px; -webkit-line-clamp: 2; }
 
 /* ① ② : the hooks' line would sit on the request's bar at the top: it goes to the bottom instead */
 body[data-intake-tab="A1"]:not(.video) .hookline, body[data-intake-tab="A2"]:not(.video) .hookline { top: auto !important; bottom: 70px; }
@@ -1471,3 +1491,18 @@ body.grid-fixed .grid-view .replay-tag { display: none; }
 }
 /* ④'s viewer open: the hooks' line is not laid over it (its header and back button) */
 body:has(#grid-viewer:not([hidden])) .hookline { display: none !important; }
+
+/* ④: what the versions fixed, one line per test that went from NG to OK (tiles.js storyHtml) */
+.vstory { flex-basis: 100%; list-style: none; margin: 6px 0 2px; padding: 8px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 2px 18px; font-size: 16px; background: var(--card, #fffdf8); border: 1.5px solid var(--line, #ccc); border-radius: 10px; }
+.vstory .sng { color: var(--red, #c0392b); font-weight: 700; }
+.vstory .sok { color: var(--green, #2e7d32); font-weight: 700; }
+body.video .vstory { display: none; } /* (the film's ④ as before) */
+
+/* the static page's hero (app.js): one sentence and 「▶ 再生して見る」 under the tabs, its own row */
+.stage.has-hero { grid-template-rows: 64px 56px auto minmax(0, 1fr) 44px var(--band); }
+.hero { display: flex; align-items: center; gap: 20px; padding: 10px 28px; background: var(--card, #fffdf8); border-bottom: 1.5px solid var(--rule); }
+.hero[hidden] { display: none; }
+.hero-what { margin: 0; font-size: 18px; line-height: 1.45; flex: 1; }
+.hero-go { flex: none; font-size: 24px; font-weight: 700; padding: 10px 28px; border-radius: 999px; border: none; background: var(--ink, #1c1c1c); color: #fff; cursor: pointer; }
+.hero-go:hover { filter: brightness(1.25); }
+.hero-note { flex: none; max-width: 300px; font-size: 14px; color: var(--muted); line-height: 1.4; }

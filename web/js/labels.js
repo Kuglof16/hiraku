@@ -170,6 +170,7 @@ export const BASE_JA = {
 const QUANTITY_JA = {
   // frame (K1)
   max_stress: "最大応力",
+  cycles_to_failure: "壊れるまでの繰り返しの回数",
   min_safety_factor: "最小の安全率",
   max_displacement: "最大変位",
   vehicle_mass: "車両の質量",
@@ -892,6 +893,19 @@ export function runSummaryJa(r) {
   }
   if (v) far = `${verLabel(v)} まで` + (j?.red ? `・NG が残った` : "");
   return [how, far].filter(Boolean).join("・");
+}
+
+// Why a run stopped, in one line for people (a stopped or failed run that is over; else ""): the
+// first sentence of the record's own stop_reason when it is in Japanese (its numbers as recorded),
+// else the stop_code's words. Before its first design (no version): 「v1 を作る前に止まりました」 first.
+export function stopWhyJa(r) {
+  if (!r?.finished || !["stopped", "failed"].includes(runState(r))) return "";
+  const raw = String(r.stop_reason ?? "").trim();
+  const first = /[ぁ-んァ-ン一-龥]/.test(raw) ? raw.split("。")[0].trim() : "";
+  const why = first || STOP_CODE_JA[r.stop_code] || (raw ? `止まった理由: ${raw}` : "");
+  const v = Number.isInteger(r.last_version) ? r.last_version : null;
+  const head = v ? `${verLabel(v)} で止まりました` : `この記録は ${verLabel(1)} を作る前に止まりました`;
+  return why ? `${head} (${why})` : head;
 }
 
 // A record the list for people keeps under the closed 「この PC の記録」: one this PC ran that has no

@@ -371,7 +371,7 @@ class StaticBrowserTest(unittest.TestCase):
         # domain cards picked (not 候補 / 考えています)
         moment = page.evaluate(ONE_MOMENT)
         self.assertEqual(moment["openedAt"], "request", moment)
-        self.assertTrue(moment["pill"].startswith("v—"), moment)
+        self.assertTrue(moment["pill"].startswith("設計はまだ"), moment)
         self.assertIn("依頼の時点", moment["mode"])
         self.assertNotIn("記録の途中", moment["mode"])
         self.assertEqual(moment["activity"], "")

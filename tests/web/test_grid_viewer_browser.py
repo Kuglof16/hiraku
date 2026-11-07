@@ -128,7 +128,8 @@ class GridViewerBrowserTest(unittest.TestCase):
         self.assertGreater(got["w"] * got["h"], 0.8 * page.evaluate("document.getElementById('view-grid').offsetWidth * document.getElementById('view-grid').offsetHeight"))
         tool = page.evaluate("(id) => window.hiraku.state().analyses[id]?.tool ?? null", got["ana"])
         self.assertIn("組み立て", got["title"])
-        self.assertIn(tool, got["title"])
+        # the tool by its name, not its id (the id under ?dev=1: test_judge_words_browser)
+        self.assertNotIn(tool, got["title"])
         # the same page: no new tab, the URL as it was
         self.assertEqual((len(page.context.pages), page.url), (pages, url))
         page.click("#grid-viewer .gv-back")

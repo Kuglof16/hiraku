@@ -246,7 +246,9 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
-        self.assertIn("HK3 不一致は原因が先", got["hooksRow"])
+        # (the rules in words; HK3 under ?dev=1 only)
+        self.assertIn("不一致は原因が先 ×1", got["hooksRow"])
+        self.assertNotIn("HK3", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
         page.close()
 

@@ -155,7 +155,9 @@ class TopbarBrowserTest(unittest.TestCase):
         for word in ("HK1", "HK4", "✓", "×"):
             self.assertNotIn(word, folded["words"])
         self.assertTrue(opened["shown"])
-        self.assertIn("HK1", opened["words"])  # opened, the whole list as before
+        # opened, the whole list in words (the rules' ids under ?dev=1: test_judge_words_browser)
+        self.assertIn("守るための決まり (6 つ)", opened["words"])
+        self.assertNotIn("HK1", opened["words"])
         self.assertIn("予測が先", opened["words"])
         self.assertIn("判定を出しました", after_verdict["act"])
         self.assertNotIn("→ OK", after_verdict["act"])
@@ -174,9 +176,9 @@ class TopbarBrowserTest(unittest.TestCase):
                    shown: n.checkVisibility(), color: getComputedStyle(n.querySelector('.hn-head')).color }; }""".replace(
             "LINE_SHOWN()", "(() => { const l = document.getElementById('hookline'); return !l.hidden && l.checkVisibility(); })()"))
         foot = page.evaluate(FOOT)
-        # the stage's line on ④
-        page.click('.tab[data-tab="grid"]')
-        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'grid'")
+        # the stage's line on the tools' shelf (not over ④ and ⑤: test_judge_broken_browser)
+        page.click('.tab[data-tab="A4"]')
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A4'")
         before = (self.seek(page, t_hook - 0.5), page.evaluate(LINE))[1]
         at = (self.seek(page, t_hook + 1.0), page.evaluate(LINE))[1]
         shot1 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
@@ -186,7 +188,7 @@ class TopbarBrowserTest(unittest.TestCase):
         shot2 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
         box = page.evaluate("() => { const r = document.getElementById('hookline').getBoundingClientRect(); return { cx: (r.left + r.right) / 2, h: r.height }; }")
         page.close()
-        page, errs = self.open("run=sample&pace=0&t=0&tab=grid&dev=1")
+        page, errs = self.open("run=sample&pace=0&t=0&tab=A4&dev=1")
         self.seek(page, t_hook + 1.0)
         dev = page.evaluate(LINE)
         page.close()

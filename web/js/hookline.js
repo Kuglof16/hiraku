@@ -62,15 +62,16 @@ export function mountHookLine(stage, { dev = false, showS = 5, avoid = () => [] 
       row.classList.toggle("hooks-open", open);
       hooks.hidden = !open;
       more.setAttribute("aria-expanded", String(open));
-      more.textContent = open ? "hooks を閉じる" : "くわしく";
-      more.title = open ? "hooks の一覧をたたむ" : "hooks の一覧 (どの決まりが何回止めたか) を開く";
+      more.textContent = open ? (dev ? "hooks を閉じる" : "閉じる") : "くわしく";
+      more.title = open ? "決まりの一覧をたたむ" : "守るための決まりの一覧 (どの決まりが何回止めたか) を開く";
     };
     set(dev);
     more.addEventListener("click", () => set(hooks.hidden));
   }
 
-  function render(s, playhead) {
-    const den = s?.denied ?? null;
+  // off: not shown at all (a tab whose words the line would cover)
+  function render(s, playhead, { off = false } = {}) {
+    const den = off ? null : s?.denied ?? null;
     const a = den ? hookLineOpacity(playhead - den.t, showS) : 0;
     line.hidden = a <= 0;
     line.style.opacity = a > 0 ? a.toFixed(3) : "0";
@@ -107,7 +108,8 @@ export function withoutRuleIds(text, { dev = false } = {}) {
   return dev ? text : String(text ?? "").replace(/\s*[(（]HK\d+[^)）]*[)）]/g, "");
 }
 
-// The footer's one line: who does what now, short.
+// The footer's one line: who does what now, short. (app.js shows it in plain words, plain.js: the
+// record's ids and English words out, as ③'s card and the log; as written under ?dev=1.)
 export function footerActivity(s, { dev = false } = {}) {
   const act = s?.activity;
   if (!act) return "";
