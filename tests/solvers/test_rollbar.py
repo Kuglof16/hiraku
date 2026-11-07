@@ -100,7 +100,9 @@ class RollbarDesignTest(unittest.TestCase):
         n, n1 = xyz(v2), xyz(RB)
         self.assertAlmostEqual(n["LH"][0], n1["LH"][0] - 70.0)
         self.assertAlmostEqual(n["LHT"][2], n1["LHT"][2] - 100.0 + 20.0)  # with the seats, 20 mm higher rails
-        narrow = designgen.regenerate(RB, {"rollbar_width": q(700, "mm")})  # posts on the rails, no outriggers
+        # posts on the rails, no outriggers; a round tube narrower than the rail (the default 42.7 mm is wider than
+        # rail_b 40 mm and is refused: ladder_4w._check_post_footprints)
+        narrow = designgen.regenerate(RB, {"rollbar_width": q(700, "mm"), "rollbar_d": q(34.0, "mm")})
         self.assertNotIn("rollbar_foot_L", {m["id"] for m in narrow["members"]})
         self.assertEqual(xyz(narrow)["LHT"][1], 350.0)
         sq = designgen.regenerate(RB, {"rollbar_square": q(1, "1")})
@@ -227,7 +229,7 @@ class PortalInputsTest(unittest.TestCase):
             FORMULAS.evaluate(f"frame_static.portal_frame_{name}", {**pi[name], **extra})
 
     def test_posts_on_the_rails(self):
-        narrow = designgen.regenerate(RB, {"rollbar_width": q(700, "mm")})
+        narrow = designgen.regenerate(RB, {"rollbar_width": q(700, "mm"), "rollbar_d": q(34.0, "mm")})  # fits the rail
         pi = portal_frame_inputs(narrow)
         self.assertNotIn("outrigger", pi["foot"])
         self.assertEqual(pi["side"]["e"]["value"], 0.0)

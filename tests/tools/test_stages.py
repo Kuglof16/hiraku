@@ -59,12 +59,30 @@ class StageTest(RunCase, unittest.TestCase):
         self.ctx.stages = {"tools": kept["tools"], "cases": dict(kept["cases"], **{"R1-step100": 3})}
         self.assertEqual(load_case_stage(self.ctx, self.ctx.load_case("R1-step100")), 3)
 
+    def test_a_load_case_is_at_least_as_heavy_as_the_cases_that_feed_it(self):
+        """R9-bolt on frame_static (stage 1) reads K2's mount forces of stage-2 cases: it waits for them (feeds)."""
+        r1 = self.ctx.load_case("R1-step100")
+        self.assertIn("R1-step100", self.ctx.load_case("P1-step100").get("feeds") or [])
+        self.assertEqual(load_case_stage(self.ctx, r1), 1)
+        self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], stage=2)  # P1, upstream, heavier
+        self.assertEqual(load_case_stage(self.ctx, self.ctx.load_case("P1-step100")), 2)
+        self.assertEqual(load_case_stage(self.ctx, r1), 2)
+        self._unfeed()
+        self.assertEqual(load_case_stage(self.ctx, r1), 1)
+
+    def _unfeed(self):
+        """P1 feeds R1 in this run; the gate tests below make P1's tool heavier with R1 not depending on it."""
+        for lc in self.ctx.load_cases:
+            lc.pop("feeds", None)
+
     # In this run P1 has no criterion (powertrain is not picked), R1 (strength) has one: R1 is the
-    # lower-stage case and step_climb is made heavier for the gate.
+    # lower-stage case and step_climb is made heavier for the gate (P1's feeds taken out: a case fed by a heavier
+    # one is as heavy, test_a_load_case_is_at_least_as_heavy_as_the_cases_that_feed_it).
 
     def test_hk5_holds_a_heavier_tool_until_the_lighter_cases_pass(self):
         from unittest import mock
 
+        self._unfeed()
         self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], stage=2)
         args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": []}
         d = rules.check_analyze(self.ctx, args)
@@ -81,6 +99,7 @@ class StageTest(RunCase, unittest.TestCase):
     def test_hk5_names_a_red_case_and_revise_design(self):
         from unittest import mock
 
+        self._unfeed()
         self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], stage=3)
         red = {"R1-step100": {"verdict_id": "ver-0009", "load_case_id": "R1-step100", "pass": False}}
         with mock.patch.object(rules, "latest_verdicts", return_value=red):
@@ -121,7 +140,9 @@ class StageTest(RunCase, unittest.TestCase):
         # R1 is fed by P1: it never goes before its upstream step, though its own tool is lighter
         self.assertEqual([(k, [s["load_case"] for s in g]) for k, g in stage_groups(self.ctx, steps)],
                          [(2, ["P1-step100", "R1-step100"])])
-        self.assertEqual([k for k, _ in stage_groups(self.ctx, list(reversed(steps)))], [1, 2])
+        # with R1's step first in the plan as well (R9 is composed before S1 to P3, which feed it)
+        self.assertEqual([(k, [s["load_case"] for s in g]) for k, g in stage_groups(self.ctx, list(reversed(steps)))],
+                         [(2, ["P1-step100", "R1-step100"])])
 
 
 if __name__ == "__main__":

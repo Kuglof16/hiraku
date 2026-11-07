@@ -140,17 +140,63 @@ offroad-4w:
         With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
         the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
     - &rev_joints
-      say: 強度 (段 3、つなぎ目の壁) の NG を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
+      say: 強度 (段 3、つなぎ目の壁とサスペンションの取付) の NG を直すため、レールとつなぎ目、塔、取付を強くします
+      # the user's set o2, v5 fixed (2026-11-07; the analysis department's studies/lere sets.py RECSb40w14sb60h8o2,
+      # claude/analysis-lere-ec2 9e563567: RECb40 + the roll bar's rear stays + the roll bar 1400 wide, 200 mm back and the
+      # side bars 60.5 x 3.2 at 800 mm); the design department's generator gives the same design as the set's JSON (72
+      # nodes, 92 members, 239 parts, sections and 787.48 kg compared before the seats' mount brackets, 2026-11-07)
       changes:
         rail_t: {value: 4.5, unit: mm}
-        gusset_leg: {value: 80, unit: mm}
-        gusset_thickness: {value: 3.2, unit: mm}
-        cross_h: {value: 50, unit: mm}
+        rail_b: {value: 45, unit: mm}
+        gusset_leg: {value: 120, unit: mm}
+        gusset_thickness: {value: 4.5, unit: mm}
+        gusset_ends: {value: 1, unit: '1'}
+        cross_h: {value: 60, unit: mm}
+        rollbar_foot_h: {value: 70, unit: mm}
+        tower_b: {value: 40, unit: mm}
+        tower_t: {value: 4.5, unit: mm}
+        tower_brace_b: {value: 35, unit: mm}
+        tower_brace_t: {value: 4.5, unit: mm}
+        tower_brace_at: {value: 0.5, unit: '1'}
+        mount_plate_t: {value: 9, unit: mm}
+        mount_weld_leg: {value: 6.3, unit: mm}
+        # the roll bar's rear stays (42.7 x 2.3, the defaults; the foot at 0.3 of the way from the roll bar's foot to the
+        # rear end: with the roll bar 200 mm back, 0.35 meets bracket_uca_RL1)
+        rollbar_stays: {value: 1, unit: '1'}
+        rollbar_stay_at: {value: 0.3, unit: '1'}
+        # o2: the roll bar wider and further back, and the side bars stronger and higher (R4, the rollover)
+        rollbar_offset: {value: 200, unit: mm}
+        rollbar_width: {value: 1400, unit: mm}
+        side_bar_d: {value: 60.5, unit: mm}
+        side_bar_t: {value: 3.2, unit: mm}
+        side_bar_high: {value: 800, unit: mm}
       reason: >-
-        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
-        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
+        ロールバー: 後ろの支え (42.7 mm・厚さ 2.3 mm の丸管) を、ロールバーの上の角から、ロールバーの足から後ろの端までの 0.3 の所の
+        レールへ足し、ロールバーの揺れを上げる (N1)。横転 (R4) で、右の横の部材が乗員の空間を横切るので、ロールバーの幅を 1265 mm から
+        1400 mm に広げて 80 mm から 200 mm 後ろへずらし、横の部材を 60.5 mm・厚さ 3.2 mm の丸管にして座面から 800 mm へ上げる。
+        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm、
+        幅を 40 mm から 45 mm にし、つなぎ目と両端の角に脚 120 mm・厚さ 4.5 mm のガセットを足し、横の部材の高さを 40 mm から 60 mm
+        (ロールバーの足は 70 mm) にする (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)。後ろの塔の柱の足を、
+        40 mm 角・厚さ 4.5 mm の塔の管と、柱の高さの半分から後ろの横の部材への斜めの支え (35 mm 角・厚さ 4.5 mm) で受ける。
+        R9: 後ろの下のアームの後ろのピンのブラケットの板と溶接が利用率 1 を超えるので、板の厚さを 9 mm、溶接の脚を 6.3 mm にする
+        (溶接の長さはレールの幅 45 mm で決まる)
       source: >-
+        REC (tyre 60 N/mm, the analysis department's EC2 shell runs, 2026-11-06): +6.1 kg; hot spots LE / RE 98 / 97 MPa,
+        LB / RB 94 / 94 MPa, the front tower post LA2 130 MPa; R9 plate / weld 0.81 / 0.64. RECb40 (the tower tubes 40 x
+        40, the user's choice): +2.9 kg more, 762.5 kg; LA2 95.9 MPa at tyre 60 N/mm and 109.1 MPa at tyre 90 N/mm (the
+        top of the tyre's range, within the limit; an assumption of this revision: the design's tyre is 60 N/mm); the
+        posts' footprint leaves 2.5 mm of the rail's top face.
+        o2 (the analysis department, 2026-11-06/07: EC2 runs results-analysis-lere-stay3-946ff4e5-r1 at tyre 60 N/mm and
+        stay4-9e563567-r1 at tyre 45 / 90 N/mm; the rollover by the K2 team's R4-rollover, claude/k2-rollover-r4): 787.5
+        kg; LE / RE 89 / 87, LB / RB 98 / 98, LA2 98 MPa; R9 plate / weld 0.83 / 0.65; N1 first frame-involving mode
+        13.06 Hz (limit 12.72 Hz); the rollover on soil (contact stiffness 0.5 to 2 times) +48 to +77 mm of room, the head
+        199 mm or more. At tyre 45 / 90 N/mm (assumptions of this revision: the design's tyre is 60 N/mm) every step hot
+        spot 111 MPa or less and R9 0.96 or less. Not run on o2 by the analysis department: C1, handling, assembly (H1,
+        H3, H7) and the rollover on pavement; this scripted run shows them.
+        R9: the analysis department's hand estimates on v4 of the demo scripted run 20261106-185605 (plate 6.16, weld 2.88
+        at RR.lca_rear) and its shell runs (set A) on v5 with the bracket base (claude/analysis-lca-bracket-base cce7565f),
+        mount_plate_t 9 and mount_weld_leg 6.3: plate 0.997 / weld 0.80 at rail_b 40, 0.81 / 0.63 at rail_b 45, 2026-11-06.
+        R1s:
         the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
         at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
         The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member

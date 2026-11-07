@@ -177,15 +177,28 @@ def _gives(tool: AnalysisTool | None, quantity: str) -> bool | None:
 STAGE_NAMES_JA = {0: "レイアウトと規則", 1: "軽い計算", 2: "車の動き", 3: "重い計算"}
 
 
-def load_case_stage(ctx: RunContext, load_case: Record) -> int | None:
+def load_case_stage(ctx: RunContext, load_case: Record, _seen: frozenset = frozenset()) -> int | None:
     """The lowest stage among the usable tools on the shelf whose tests cover the load case's test
     (test_family), that apply to the version's design (functions.not_applying), and that give the quantity its criterion judges (_gives; all covering tools when
-    none says so). None when no usable tool covers it (no tool checks it, so HK5 does not wait for
-    it). Without the tools (the plugin's hook command) the run's server worked it out (ctx.stages)."""
+    none says so), and at least the stage of every load case that feeds it (feeds: its inputs are those cases'
+    results, so it cannot be judged before them; R9-bolt on frame_static, stage 1, reads K2's mount forces of S1,
+    S3 to S5, P2 and P3, stage 2). None when no usable tool covers it (no tool checks it, so HK5 does not wait
+    for it). Without the tools (the plugin's hook command) the run's server worked it out (ctx.stages)."""
     kept = ((getattr(ctx, "stages", None) or {}).get("cases") or {})
     if not ctx.tools and load_case["load_case_id"] in kept:
         got = kept[load_case["load_case_id"]]
         return None if got is None else int(got)
+    own = _own_stage(ctx, load_case)
+    if own is None:
+        return None
+    lc_id = load_case["load_case_id"]
+    ups = [lc for lc in ctx.load_cases if lc_id in (lc.get("feeds") or []) and lc["load_case_id"] not in _seen]
+    up_stages = [load_case_stage(ctx, lc, _seen | {lc_id}) for lc in ups]
+    return max([own, *(s for s in up_stages if s is not None)])
+
+
+def _own_stage(ctx: RunContext, load_case: Record) -> int | None:
+    """load_case_stage without its upstream load cases: the lowest stage of the tools that cover it."""
     from hiraku.tools.functions import not_applying
 
     fam = test_family(load_case["test_id"])
