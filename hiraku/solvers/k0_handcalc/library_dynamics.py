@@ -504,8 +504,4 @@ def _flooded() -> list[Formula]:
 
 
 def all_formulas() -> list[Formula]:
-<<<<<<< HEAD
-    return _tilt() + _crosswind() + _drag() + _lane_change() + _braking() + _launch_formulas()
-=======
-    return _tilt() + _crosswind() + _lane_change() + _braking() + _launch_formulas() + _flooded()
->>>>>>> d94c9e91
+    return _tilt() + _crosswind() + _drag() + _lane_change() + _braking() + _launch_formulas() + _flooded()
