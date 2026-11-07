@@ -153,9 +153,10 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
    .venv\Scripts\python -m hiraku run data/requirements/offroad-4w-n12.yaml --scripted
    ```
 
-3. Claude Code を、プラグインを指定して起こします。`--allowedTools` を付けないと、エージェントがツールを呼ぶたびに許可を聞かれます。
+3. Claude Code を、プラグインを指定して起こします。`--allowedTools` を付けないと、エージェントがツールを呼ぶたびに許可を聞かれます。MCP サーバーの起動を待つ時間は、環境変数 `MCP_TIMEOUT` (ミリ秒) で長くしておきます。込み合った PC で HIRAKU の MCP サーバーの読み込みに 35.7 秒かかり、待ち時間を長くしないとつながらなかったことがあります (2026-11-07)。
 
    ```
+   set MCP_TIMEOUT=300000
    claude --plugin-dir <リポジトリ>/plugins/hiraku --allowedTools "mcp__plugin_hiraku_hiraku"
    ```
 
