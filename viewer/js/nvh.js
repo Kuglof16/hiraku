@@ -3,6 +3,10 @@
 // mode list with the top strain-energy members; frequency response plot.
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
+// the part boxes in the mode / response views: dense enough that their motion shows against the frame
+HV.PART_OPACITY_MOVING = 0.45;
+// the line that says how the parts move: only when the data holds their motion
+HV.partsLine = moving => moving ? '部品とタイヤは載っている節点と一緒に動く' : '部品の動きはこの記録に無い (部品は止めて描いている)';
 HV.fields.nvh = {
   label: HV.FIELD_LABEL.nvh,   // js/names.js: the contract's DOMAIN_NAMES_JA
   // always: a variant of other designs (sets before / after a fix) that can be opened from any other; lazy: its data
@@ -16,7 +20,7 @@ HV.fields.nvh = {
     const shapes = await Promise.all(D.modes.map(m => HV.unpack(m.shape)));
     // each part's rigid motion per mode (src/nvh.py part_motion): fit centre, translation, rotation per unit shape
     const pmot = await Promise.all(D.modes.map(async m => m.parts ? { c: await HV.unpack(m.parts.c), t: await HV.unpack(m.parts.t), w: await HV.unpack(m.parts.w), rel: m.parts.rel } : null));
-    const boxes = ctx.addParts(D.parts, { opacity: 0.22 });
+    const boxes = ctx.addParts(D.parts, { opacity: HV.PART_OPACITY_MOVING });
     const wheels = (D.wheels || []).length ? new HV.Wheels(ctx.view, D.wheels) : null;
     if (wheels) ctx.root.add(wheels.group);
     const frf = D.frf ? { x: await HV.unpack(D.frf.x), y: await HV.unpack(D.frf.y) } : null;
@@ -61,7 +65,7 @@ HV.fields.nvh = {
       timeText(i) { return `モード ${S.mode + 1}: ${D.modes[S.mode].f_Hz.toFixed(2)} Hz   位相 ${Math.round(360 * i / NT)}°`; },
       hud() {
         const m = D.modes[S.mode];
-        return [`変形: 最大点を ${S.scale} mm で表示 (実寸ではない、相対値)   部品とタイヤは載っている節点と一緒に動く`,
+        return [`変形: 最大点を ${S.scale} mm で表示 (実寸ではない、相対値)   ${HV.partsLine(!!pmot[S.mode])}`,
                 `色: ${S.by === 'strain' ? '部材のひずみ (モード内の最大 = 1)' : '節点の変位 |u|/|u|max'}` +
                 (ctx.partMode === 'field' ? '   部品: 動きの大きさ (部品の最大 = 1)' : '') +
                 (m.share_bending !== null && m.share_bending !== undefined ? `   フレームが曲がる割合 ${(100 * m.share_bending).toFixed(0)} %` : '')];
@@ -132,7 +136,7 @@ HV.nvhShell = async function (D, ctx) {
   const nodes0 = await HV.unpack(SH.nodes), quads = await HV.unpack(SH.quads), emem = await HV.unpack(SH.member);
   const shapes = await Promise.all(D.modes.map(m => HV.unpack(m.shape)));
   const strains = await Promise.all(D.modes.map(m => m.strain ? HV.unpack(m.strain) : null));
-  const pmot = await Promise.all(D.modes.map(async m => ({ c: await HV.unpack(m.parts.c), t: await HV.unpack(m.parts.t), w: await HV.unpack(m.parts.w), rel: m.parts.rel })));
+  const pmot = await Promise.all(D.modes.map(async m => m.parts ? { c: await HV.unpack(m.parts.c), t: await HV.unpack(m.parts.t), w: await HV.unpack(m.parts.w), rel: m.parts.rel } : null));
   const shell = new HV.Shell(ctx.view, nodes0, quads);
   ctx.root.add(shell.group);
   for (let i = 0; i < nodes0.length; i += 3) for (let a = 0; a < 3; a++) { ctx.lo[a] = Math.min(ctx.lo[a], nodes0[i + a]); ctx.hi[a] = Math.max(ctx.hi[a], nodes0[i + a]); }
@@ -143,7 +147,7 @@ HV.nvhShell = async function (D, ctx) {
   const ghost = new T.LineSegments(lg, ctx.view.material(new T.LineBasicMaterial({ color: 0x777777, transparent: true, opacity: 0.6 })));
   ghost.visible = false; shell.group.add(ghost);
   ctx.beams = { mesh: shell.mesh, ghost }; ctx.has.frame = ctx.has.ghost = true;
-  const boxes = ctx.addParts(D.parts, { opacity: 0.22 });
+  const boxes = ctx.addParts(D.parts, { opacity: HV.PART_OPACITY_MOVING });
   const wheels = (D.wheels || []).length ? new HV.Wheels(ctx.view, D.wheels) : null;
   if (wheels) ctx.root.add(wheels.group);
   const NT = 48, S = { mode: D.first && D.first.frame !== null && D.first.frame !== undefined ? D.first.frame : 0, scale: 60, t: 0, log: true, by: 'strain' };   // log by default: the shell's strain peaks are local (joints)
@@ -160,6 +164,7 @@ HV.nvhShell = async function (D, ctx) {
     shell.setNodes(cur);
     const P = pmot[S.mode];
     for (let j = 0; j < D.parts.length; j++) {
+      if (!P) { boxes.off[j] = [0, 0, 0]; boxes.rot[j] = null; continue; }
       const pose = HV.rigidPose(D.parts[j].c, v3(P.c, j), v3(P.t, j), v3(P.w, j), f);
       boxes.off[j] = pose.off; boxes.rot[j] = pose.q;
       if (ctx.partMode === 'field') boxes.colour(j, HV.turbo(P.rel[j]));
@@ -181,7 +186,7 @@ HV.nvhShell = async function (D, ctx) {
     timeText(i) { const m = D.modes[S.mode]; return `シェル モード ${m.n}: ${m.f_Hz.toFixed(2)} Hz ${kind(m)}   ← ${pairText(m)}   位相 ${Math.round(360 * i / NT)}°`; },
     hud() {
       const m = D.modes[S.mode], fr = D.first && D.first.frame !== null ? D.modes[D.first.frame] : null, bf = (D.beam_first || {}).frame;
-      return [`変形: 最大点を ${S.scale} mm で表示、実寸ではない、相対値   部品とタイヤは載っている節点と一緒に動く`,
+      return [`変形: 最大点を ${S.scale} mm で表示、実寸ではない、相対値   ${HV.partsLine(!!pmot[S.mode])}`,
               `色: ${S.by === 'strain' && strains[S.mode] ? '要素のひずみ (モード内の最大 = 1)' : '節点の変位 |u|/|u|max'}` +
               (ctx.partMode === 'field' ? '   部品: 動きの大きさ (部品の最大 = 1)' : '') +
               (fr ? `   最初のフレームのモード: シェル ${fr.f_Hz.toFixed(2)} Hz` + (bf ? ` / 梁 ${bf.toFixed(2)} Hz` : '') : '') +
@@ -255,13 +260,22 @@ HV.nvhFrf = async function (D, ctx) {
   }));
   const group = new T.Group(); sets.forEach(z => group.add(z.shell.group)); ctx.root.add(group);
   ctx.beams = { mesh: group, ghost: { visible: false } }; ctx.has.frame = true;
+  // the parts of every set (src/nvh_frf.py --designs), drawn beside their set (offset_y), moved with their nodes
+  const allParts = [], partSet = [];
+  sets.forEach(z => (z.s.parts || []).forEach((p, j) => { allParts.push({ ...p, c: [p.c[0], p.c[1] + z.s.offset_y, p.c[2]] }); partSet.push([z.i, j]); }));
+  const boxes = allParts.length ? ctx.addParts(allParts, { opacity: HV.PART_OPACITY_MOVING }) : null;
+  if (boxes) D.parts = allParts;   // the page (main.js) names a picked box by D.parts[i]: the same list as the boxes
   const pats = Object.keys(D.patterns), outs = Object.keys(D.outputs);
   const S = { p: pats[0], o: outs[0], q: 'acc', f: null, scale: 30, t: 0, log: false };
   const keyF = () => { const ks = D.keys[S.p] || []; if (S.f === null) { const rb = sets[0].s.rollbar_Hz; S.f = ks.reduce((b, v) => Math.abs(v - (rb || 0)) < Math.abs(b - (rb || 0)) ? v : b, ks[0]); } return S.f; };
   async function shapeOf(z, p, f) {   // {re, im, vm, u_max, vm_max} of set z at the stored key
     const key = Object.keys(z.s.shapes).find(kk => { const [pp, ff] = kk.split('@'); return pp === p && Math.abs(+ff - f) < 1e-6; });
     if (!key) return null;
-    if (!z.cache[key]) { const sh = z.s.shapes[key]; z.cache[key] = { re: await HV.unpack(sh.re), im: await HV.unpack(sh.im), vm: await HV.unpack(sh.vm), u_max: sh.u_max, vm_max: sh.vm_max }; }
+    if (!z.cache[key]) {
+      const sh = z.s.shapes[key], P = sh.parts;
+      z.cache[key] = { re: await HV.unpack(sh.re), im: await HV.unpack(sh.im), vm: await HV.unpack(sh.vm), u_max: sh.u_max, vm_max: sh.vm_max,
+                       parts: P ? { c: await HV.unpack(P.c), tr: await HV.unpack(P.t_re), wr: await HV.unpack(P.w_re), ti: await HV.unpack(P.t_im), wi: await HV.unpack(P.w_im) } : null };
+    }
     return z.cache[key];
   }
   const X = Array.from(new Set(sets.flatMap(z => z.x))).sort((a, b) => a - b);   // every set's frequencies
@@ -279,6 +293,18 @@ HV.nvhFrf = async function (D, ctx) {
       z.shell.setNodes(z.cur);
       z.shell.colourElements(e => HV.colour(sp, h.vm[e]));
     });
+    if (boxes) {   // each part: Re(motion e^{i phase}) = t_re cos - t_im sin (the same for w), times the display scale
+      const v3 = (a, j) => [a[3 * j], a[3 * j + 1], a[3 * j + 2]];
+      partSet.forEach(([zi, j], b) => {
+        const P = now[zi] && now[zi].parts;
+        if (!P) { boxes.off[b] = [0, 0, 0]; boxes.rot[b] = null; return; }
+        const t = v3(P.tr, j).map((x, a) => x * c - v3(P.ti, j)[a] * sn), w = v3(P.wr, j).map((x, a) => x * c - v3(P.wi, j)[a] * sn);
+        const cf = v3(P.c, j), off = sets[zi].s.offset_y;
+        const pose = HV.rigidPose(allParts[b].c, [cf[0], cf[1] + off, cf[2]], t, w, S.scale);
+        boxes.off[b] = pose.off; boxes.rot[b] = pose.q;
+      });
+      boxes.update();
+    }
   }
   const valAt = (z, f) => { const v = z.curves[S.p][S.o][S.q]; let k = 0, bd = Infinity; z.x.forEach((x, i) => { const d = Math.abs(x - f); if (d < bd) { bd = d; k = i; } }); return v[k]; };
   const ctl = {
@@ -291,7 +317,8 @@ HV.nvhFrf = async function (D, ctx) {
     timeText(i) { return `${D.patterns[S.p]}  ${keyF().toFixed(2)} Hz   位相 ${Math.round(360 * i / NT)}°`; },
     hud() {
       const f = keyF();
-      return [`入力: 接地面の上下 ${D.input_mm} mm (振幅)、${D.patterns[S.p]}   ` + sets.map(z => `${z.s.label} (${z.s.name})`).join(' | ') + '  ← y の向きに並べた (手前から)',
+      return [`入力: 接地面の上下 ${D.input_mm} mm (振幅)、${D.patterns[S.p]}   ` + sets.map(z => `${z.s.label} (${z.s.name})`).join(' | ') + '  ← y の向きに並べた (手前から)   ' +
+                (boxes ? HV.partsLine(now.some(h => h && h.parts)) + (now.some(h => h && h.parts) ? ' (ばね下は止めて描く)' : '') : '部品は描いていない'),
               `${D.outputs[S.o]} @${f.toFixed(2)} Hz: ` + sets.map((z, j) => `${z.s.name} ${HV.fmt(valAt(z, f))} ${S.q === 'acc' ? 'm/s²' : 'mm'}` +
                 (now[j] ? ` (最大変位 ${HV.fmt(now[j].u_max)} mm、応力 ${HV.fmt(now[j].vm_max)} MPa)` : ' (形なし)')).join('  |  ')];
     },

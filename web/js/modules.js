@@ -376,7 +376,8 @@ export function mountAssemblySwitch(panel) {
 // The round card (proposals.js roundCardHtml) in a host.
 export function renderRoundCard(host, html) {
   moduleStyle();
-  let el = host.querySelector(":scope > .roundcard");
+  // (it may be in ③'s strip under the 3D: benchnote.js moves it there and back)
+  let el = host.querySelector(":scope > .roundcard") ?? host.ownerDocument?.getElementById("roundcard");
   if (!el) {
     el = document.createElement("div");
     el.className = "roundcard";

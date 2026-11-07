@@ -204,6 +204,33 @@ def answer(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR
     return out
 
 
+def design_keys(events_file: Path) -> list[str]:
+    """The design_key (viewer/src/common.py design_key, the analysis department's) of each design.created
+    in the record, in its order: the screen shows the records kept in viewer/fixtures/ for a design
+    (web/js/viewer_link.js VIEWER_EXTRAS) on the runs that have it. [] without the record or the function."""
+    try:
+        key = importlib.import_module("viewer.src.common").design_key
+    except (ImportError, AttributeError):
+        return []
+    keys: list[str] = []
+    try:
+        with open(events_file, encoding="utf-8") as f:
+            for line in f:
+                if '"design.created"' not in line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except ValueError:
+                    continue
+                if ev.get("kind") == "design.created" and isinstance(ev.get("data"), dict):
+                    k = key(ev["data"])
+                    if k not in keys:
+                        keys.append(k)
+    except OSError:
+        return []
+    return keys
+
+
 def info(data_dir: Path = VIEWER_DATA_DIR, build: Callable[[Path, str], dict[str, Any]] | None = None,
          runs: dict[str, Path] | None = None) -> dict[str, Any]:
     """GET /api/viewer: whether the answers are provisional (on the whole, and for each of runs:
@@ -214,7 +241,8 @@ def info(data_dir: Path = VIEWER_DATA_DIR, build: Callable[[Path, str], dict[str
     prov = use is None
     table = tool_table()
     not_here = {} if prov else entry_tables()[1]
-    per_run = {rid: {"provisional": prov or not keeps_records(d)} for rid, d in (runs or {}).items()}
+    per_run = {rid: {"provisional": prov or not keeps_records(d), "design_keys": design_keys(Path(d) / "events.jsonl")}
+               for rid, d in (runs or {}).items()}
     any_prov = prov or any(r["provisional"] for r in per_run.values()) or not per_run
     fields = sorted(set(table.values()))
     missing = [f for f in fields if not sample_file(f, data_dir).is_file()] if any_prov else []

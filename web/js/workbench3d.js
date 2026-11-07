@@ -113,6 +113,7 @@ function paintTwin(mesh, color) {
   t.material.color.set(vertex ? "#ffffff" : color);
 }
 // Camera directions (ISO, from the target) for the scenes that need their own view.
+const SCREEN_RECT_VERTS = 20000; // Workbench3D.screenRect: the vertices looked at, per geometry
 export const VIEWS = {
   default: [0.85, 0.95, 0.62],
   table: [1, 0.14, 0.2], // a tilt table from the front, low: the table's turn reads as a turn
@@ -401,6 +402,10 @@ export class Workbench3D {
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = false;
       this.controls.screenSpacePanning = true;
+      // turned or moved by hand since the last framing (fitPoints / fit clear it): app.js leaves
+      // such a camera where it is when the 3D's size changes
+      this.handMoved = false;
+      this.controls.addEventListener("start", () => { this.handMoved = true; });
     } else {
       this.labelRenderer = null;
       this.controls = { target: new THREE.Vector3(), update: () => this.camera.lookAt(this.controls.target) };
@@ -608,6 +613,7 @@ export class Workbench3D {
       ring.visible = false;
       group.add(ring);
       const tag = label(esc(s.id), "lbl-id");
+      tag.visible = !!this.toggles?.names; // (as setToggles: a design loaded after the toggles were set shows no names unless 名前 is on)
       tag.position.set(0, 0, r + 60);
       if (this.labelRenderer) group.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.wheels.add(group);
@@ -717,6 +723,8 @@ export class Workbench3D {
       const tag = label(same.length > 1 ? `${esc(short)}<small>部品 ${same.length} 個</small>` : `${esc(short)}${mass}`, "lbl-part");
       tag.element.title = same.length > 1 ? `${short}: ${same.map((x) => x.name ?? x.id).join("、")}` : p.name ?? p.id;
       if (same.length > 1 && same[0] !== p) tag.element.dataset.named = "0"; // named by the first one's tag
+      // (as setToggles: the names only while 名前 is on, also for a design loaded after the toggles were set)
+      tag.visible = !!this.toggles?.names && tag.element.dataset.named !== "0";
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
@@ -1048,6 +1056,13 @@ export class Workbench3D {
 
   // Frame the design from a direction (VIEWS).
   fit(view = VIEWS.default) {
+    // a strip kept clear at the right (setReserve: ③'s legend): framed by the outline's points in the
+    // free part's width (the sphere below sees the height only, and the vehicle ran under the legend)
+    // (fitWidth: set by app.js on ③'s workbench; the video's frames are framed as before)
+    if (this.fitWidth && this.reserveRight > 0 && this.design) {
+      this.fitPoints(this.contentPoints(), view, 1.08);
+      return;
+    }
     const b = this.bboxIso;
     const center = isoToThree(b.getCenter(new THREE.Vector3()).toArray());
     const radius = b.getSize(new THREE.Vector3()).length() * 0.0005;
@@ -1062,6 +1077,7 @@ export class Workbench3D {
     this.controls.update();
     this.followBase = null;
     this.followApplied = null;
+    this.handMoved = false;
   }
 
   // A mesh (the contract's mesh record: shells, solids or both) as faces and element edges,
@@ -1420,6 +1436,7 @@ export class Workbench3D {
   // the result). It swings once a second of replay, so a frame at a given ?t=
   // is always the same.
   setModeShape(contour) {
+    if (this.modeShape) this.poseParts(0);
     this.modeShape = null;
     this.poseMembers(0);
     for (const o of Object.values(this.shellObjs)) this.poseShell(o, null, 0);
@@ -1430,7 +1447,77 @@ export class Workbench3D {
     if (!(dmax > 0)) return;
     const size = this.bboxIso.getSize(new THREE.Vector3()).length();
     const scale = (0.08 * size) / dmax;
-    this.modeShape = shellModes ? { shell: this.shellObj(contour.mesh.rec), shellModes, scale } : { modes: contour.modes, scale };
+    this.modeShape = shellModes
+      ? { shell: this.shellObj(contour.mesh.rec), shellModes, scale, ...(contour.kind === "mode_shape" ? this.modeParts(contour.field.per_node) : {}) }
+      : { modes: contour.modes, scale };
+  }
+
+  // A shell mode shape's per_node (modal_shell: the design nodes, on the mesh's scale, and the
+  // linkage's points) as each part's and each wheel's move (unscaled), as the model carries
+  // their masses: a part by the mean of its carried_by nodes' vectors, moved without turning
+  // (its mass shared equally on them, no rotary inertia); an occupant's segment without
+  // carried_by as its person's part that has them; a part without carried_by at a wheel (inside
+  // its radius) and the wheel drawn from a support by "<support>.wheel_center". A part with none
+  // of these in per_node stays put. { parts: {id: [x, y, z]}, wheels: {support id: [x, y, z]} }.
+  modeParts(perNode) {
+    const vec = (n) => {
+      const d = perNode?.[n];
+      return Array.isArray(d) && d.length === 3 && d.every(Number.isFinite) ? d : null;
+    };
+    const mean = (names) => {
+      const ds = (names ?? []).map(vec);
+      if (!ds.length || ds.some((d) => !d)) return null;
+      return [0, 1, 2].map((j) => ds.reduce((s, d) => s + d[j], 0) / ds.length);
+    };
+    const wheels = {};
+    for (const s of this.design?.supports ?? []) {
+      const d = vec(`${s.id}.wheel_center`);
+      if (d) wheels[s.id] = d;
+    }
+    const parts = {};
+    const byPerson = {};
+    const design = this.design?.parts ?? [];
+    for (const p of design) {
+      const d = mean(p.carried_by);
+      if (d) parts[p.id] = d;
+      if (d && p.kind === "occupant" && !byPerson[personOf(p)]) byPerson[personOf(p)] = d;
+    }
+    for (const p of design) {
+      if (parts[p.id] || p.carried_by?.length) continue;
+      if (p.kind === "occupant" && byPerson[personOf(p)]) {
+        parts[p.id] = byPerson[personOf(p)];
+        continue;
+      }
+      const c = v3(p.box.center_mm);
+      let near = null;
+      for (const s of this.design?.supports ?? []) {
+        const dist = v3(s.position_mm).distanceTo(c);
+        if (wheels[s.id] && dist < (s.radius_mm ?? 0) && (!near || dist < near.dist)) near = { dist, d: wheels[s.id] };
+      }
+      if (near) parts[p.id] = near.d;
+    }
+    for (const id of Object.keys(parts)) if (!this.partObjs[id]) delete parts[id];
+    for (const id of Object.keys(wheels)) if (!this.wheelObjs[id]) delete wheels[id];
+    return { parts, wheels };
+  }
+
+  // Move the parts and the wheels of a shell mode shape by s times their vectors (s = 0: at
+  // rest); a wheel from where the motion's frame (or the design) puts it.
+  poseParts(s) {
+    const ms = this.modeShape;
+    for (const [id, d] of Object.entries(ms?.parts ?? {})) {
+      const o = this.partObjs[id];
+      if (o) o.group.position.set(d[0] * s, d[1] * s, d[2] * s);
+    }
+    if (!ms?.wheels || !Object.keys(ms.wheels).length) return;
+    const byId = Object.fromEntries((this.frame?.wheels ?? []).map((w) => [w.id, w]));
+    for (const [id, d] of Object.entries(ms.wheels)) {
+      const o = this.wheelObjs[id];
+      if (!o) continue;
+      o.group.matrix.copy(this.wheelPose(id, byId[id], this.body.matrix));
+      for (let j = 0; j < 3; j += 1) o.group.matrix.elements[12 + j] += d[j] * s;
+      o.group.matrixWorldNeedsUpdate = true;
+    }
   }
 
   // Move a shell's nodes by k times their scaled vectors (k = 0: at rest).
@@ -1458,8 +1545,10 @@ export class Workbench3D {
   // A mode shape (or displacement) at k of its swing, on the beams or on a shell.
   poseShape(k) {
     const ms = this.modeShape;
-    if (ms?.shell) this.poseShell(ms.shell, ms.shellModes, k * ms.scale);
-    else this.poseMembers(k);
+    if (ms?.shell) {
+      this.poseShell(ms.shell, ms.shellModes, k * ms.scale);
+      this.poseParts(k * ms.scale);
+    } else this.poseMembers(k);
   }
 
   poseMembers(k) {
@@ -2076,6 +2165,48 @@ export class Workbench3D {
     return pts;
   }
 
+  // The vehicle's outline on the screen (client px: left, top, right, bottom), cut to the canvas: what
+  // is drawn of the body and the wheels (their meshes and lines as they stand now, a motion's pose too)
+  // through the camera: each vertex (every n-th of a large geometry, SCREEN_RECT_VERTS at most), an
+  // instanced mesh by each instance's box. null when nothing is drawn. (The tests keep the boxes over
+  // the 3D off it: tests/web/test_clear_3d_browser.py.)
+  screenRect() {
+    this.scene.updateMatrixWorld();
+    this.camera.updateMatrixWorld();
+    const r = this.renderer.domElement.getBoundingClientRect();
+    let l = Infinity, t = Infinity, rt = -Infinity, b = -Infinity;
+    const p = new THREE.Vector3();
+    const m = new THREE.Matrix4();
+    const at = (mat) => {
+      p.applyMatrix4(mat).project(this.camera);
+      if (p.z < -1 || p.z > 1) return; // (behind the camera or past its far plane)
+      const sx = r.left + ((p.x + 1) / 2) * r.width;
+      const sy = r.top + ((1 - p.y) / 2) * r.height;
+      l = Math.min(l, sx); rt = Math.max(rt, sx); t = Math.min(t, sy); b = Math.max(b, sy);
+    };
+    for (const g of [this.body, this.wheels]) {
+      g.traverseVisible((o) => {
+        if (!(o.isMesh || o.isLine || o.isPoints) || !o.geometry?.attributes?.position) return;
+        if (o.isInstancedMesh) {
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+          const bb = o.geometry.boundingBox;
+          for (let i = 0; i < o.count; i += 1) {
+            o.getMatrixAt(i, m);
+            m.premultiply(o.matrixWorld);
+            for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) at((p.set(x, y, z), m));
+          }
+          return;
+        }
+        const pos = o.geometry.attributes.position;
+        const step = Math.max(1, Math.ceil(pos.count / SCREEN_RECT_VERTS));
+        for (let i = 0; i < pos.count; i += step) at((p.fromBufferAttribute(pos, i), o.matrixWorld));
+      });
+    }
+    if (!(rt > l)) return null;
+    const out = { left: Math.max(l, r.left), top: Math.max(t, r.top), right: Math.min(rt, r.right), bottom: Math.min(b, r.bottom) };
+    return out.right > out.left && out.bottom > out.top ? out : null;
+  }
+
   // Frame a box (ISO mm) from a direction so it fills the view's width or height,
   // whichever binds (a wide tile is filled across, not by a sphere around the box).
   fitBox(box, dir, margin = 1.08) {
@@ -2111,6 +2242,7 @@ export class Workbench3D {
     this.controls.update();
     this.followBase = null;
     this.followApplied = null;
+    this.handMoved = false;
     // a cut's sun is fixed to the world from its first framing (look.js fixSun)
     if (this.look.stage) this.look.fixSun(this.camera, this.controls.target);
   }

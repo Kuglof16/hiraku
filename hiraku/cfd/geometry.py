@@ -254,7 +254,7 @@ def voxelize(shapes: Sequence[Shape], grid: Grid, ground: bool = False) -> Voxel
         for q in range(1, 19):
             d = -C[q] * grid.dx  # from the node back along the arriving direction
             t_in, t_out = shape.clip(p, d.astype(float))
-            hit = (t_in <= t_out) & (t_in < 1.0) & (t_out > 0.0) & ~ins
+            hit = (t_in <= t_out) & (t_in <= 1.0 + 1e-9) & (t_out > 0.0) & ~ins  # a face on a node plane is at t = 1
             if hit.any():
                 keys.append(n[hit] * 19 + q)
                 ts.append(np.maximum(t_in[hit], 0.0))
@@ -272,6 +272,11 @@ def voxelize(shapes: Sequence[Shape], grid: Grid, ground: bool = False) -> Voxel
     key, t, own = key[first], t[first], own[first]
     node, q = key // 19, key % 19
     keep = mask[node] == 0
+    node, q, t, own = node[keep], q[keep], t[keep], own[keep]
+    keep = _not_corner_clip(mask, grid, node, q, own, shapes)
+    node, q, t, own = node[keep], q[keep], t[keep], own[keep]
+    # a link that only touches a shape at its far end, where rounding left the far node just outside: not a wall, and one-way
+    keep = ~((t >= 1.0 - 1e-9) & (mask[node - C[q] @ np.array(grid.strides, dtype=np.int64)] == 0))
     node, q, t, own = node[keep], q[keep], t[keep], own[keep]
 
     # a fluid node next to a solid node always has its link (a tangent meeting can miss the clip)
@@ -312,6 +317,38 @@ def voxelize(shapes: Sequence[Shape], grid: Grid, ground: bool = False) -> Voxel
     vox = Voxels(grid, mask, node, q, np.clip(t, 0.0, 1.0), own, names, gid, list(shapes))
     vox.enclosed_nodes = enclosed
     return vox
+
+
+def _not_corner_clip(mask: np.ndarray, grid: Grid, node: np.ndarray, q: np.ndarray, own: np.ndarray, shapes: Sequence[Shape]) -> np.ndarray:
+    """False for a diagonal link between two fluid nodes that only clips a corner of a solid.
+
+    A link through a thin plate must stay cut, but on a solid body such links stand in a row along each edge, like a small
+    fence. Their number at a cube's upstream edge flipped from 8 to 100 with a shift of a millionth of a cell, and its
+    Cd went from 1.00 to 1.31; without them it stays within 2 % at any shift. A link goes when a corner of its lattice
+    square is a solid node inside the same shape, so a thin part keeps its links where it touches another part."""
+    keep = np.ones(len(node), bool)
+    if not len(node):
+        return keep
+    strides = np.array(grid.strides, dtype=np.int64)
+    neighbour = node - C[q] @ strides
+    candidates = np.flatnonzero((q >= 7) & (mask[neighbour] == 0))
+    for s_id in np.unique(own[candidates]):
+        shape = shapes[int(s_id)]
+        if shape.reflect < 1.0:
+            continue
+        idx = candidates[own[candidates] == s_id]
+        c = C[q[idx]]
+        axes = np.argsort(c == 0, axis=1)[:, :2]  # the two nonzero axes
+        rows = np.arange(len(idx))
+        for pick in (0, 1):
+            axis = axes[:, pick]
+            corner = node[idx] - c[rows, axis] * strides[axis]
+            solid = mask[corner] == 1
+            if solid.any():
+                inside = np.zeros(len(idx), bool)
+                inside[solid] = shape.inside(grid.position(corner[solid]))
+                keep[idx[inside]] = False
+    return keep
 
 
 def _fill_enclosed(mask: np.ndarray, grid: Grid, node: np.ndarray, q: np.ndarray, t: np.ndarray, own: np.ndarray,

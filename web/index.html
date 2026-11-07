@@ -46,10 +46,11 @@
   window.hirakuBootTimer = setTimeout(function () { window.hirakuBootFail("時間切れ"); }, 60000);
 })();
 </script>
+<div class="narrow-note" role="note">PC の画面でご覧ください</div>
 <div id="stage" class="stage">
   <header class="topbar">
     <!-- back to the list at the top left by the wordmark, on every tab (js/app.js sets the href) -->
-    <div class="brand"><span class="wordmark">HIRAKU</span><a class="back-link" id="back-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a><span class="want" id="want"></span></div>
+    <div class="brand"><span class="wordmark">HIRAKU</span><a class="back-link" id="back-link" href="?list=1" title="ほかの記録を見る・新しく実行する">☰ 記録の一覧へ</a><span class="want" id="want"></span></div>
     <div class="pills">
       <span class="pill" id="pill-version">v—</span>
       <span class="pill" id="pill-cost">費用 —</span>
@@ -121,6 +122,14 @@
           <button class="pb-speed" id="pb-speed" title="速さ">1×</button>
           <button class="pb-live" id="pb-live" title="実行中の最新に戻る">LIVE</button>
         </div>
+      </div>
+      <!-- the sentence card out of the 3D: one at a time, two lines, くわしく opens it under (js/benchnote.js) -->
+      <div class="benchnote" id="benchnote" hidden>
+        <div class="bn-row">
+          <div class="bn-card" id="bn-card"><div class="hooknote" id="hooknote" hidden></div></div>
+          <button class="bn-more" id="bn-more" type="button" title="この札の全文 (記録の ID・英語の文も) を開く">くわしく</button>
+        </div>
+        <div class="bn-full" id="bn-full" hidden></div>
       </div>
       <p class="hint" id="hint">カメラ: ドラッグで回す・右ドラッグで動かす・ホイールで寄る ／ Space 再生・← → 前後のイベント</p>
       <!-- the workbench's notes (js/app.js): what the real look's dummy is drawn from -->

@@ -42,7 +42,7 @@ window.HV = window.HV || {};
       if (window.VIEW_DATA && window.VIEW_DATA[field]) return resolve(window.VIEW_DATA[field]);
       if (HV.dataFromUrl) return resolve(null);   // ?data=: only the given data, no data/<field>.js
       const s = document.createElement('script');
-      s.src = `data/${field}.js`;
+      s.src = (HV.fields[field] || {}).dataUrl || `data/${field}.js`;   // a field may keep its data elsewhere (js/water.js)
       s.onload = () => resolve((window.VIEW_DATA || {})[field] || null);
       s.onerror = () => resolve(null);
       document.head.appendChild(s);
@@ -58,7 +58,8 @@ window.HV = window.HV || {};
     if (HV.dataFromUrl) return false;
     if (location.protocol === 'file:') return true;
     for (const k of keys) {
-      const st = await fetch(`data/${k}.js`, { method: 'HEAD', cache: 'no-store' }).then(r => r.status, () => 0);
+      const url = (HV.fields[k] || {}).dataUrl || `data/${k}.js`;   // as loadData reads it (js/water.js keeps its own)
+      const st = await fetch(url, { method: 'HEAD', cache: 'no-store' }).then(r => r.status, () => 0);
       if (st !== 404) return true;
     }
     return false;

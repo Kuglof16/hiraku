@@ -18,6 +18,7 @@ import { fill, h } from "./intake/dom.js";
 import { domainIconSvg } from "./domain_icons.js";
 import { getUrl } from "./source.js";
 import { mountMaterials } from "./materials.js";
+import { plainWords } from "./plain.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
 const MODES = [["domain", "分野から"], ["base", "土台から"]];
@@ -27,6 +28,9 @@ const POLL_MS = 2000; // asking again while the server builds the shelf
 // A check's got is null when the tool could not give that value (e.g. tilt.py finds no tipping angle);
 // its pass is then false. Not "still checking": the record is final.
 const noValue = (c) => c.got === null;
+// A tool's title for people: its asides with the record's words (「段差越え (K2 で段差を走らせる)」) out,
+// a step's number by its name (plain.js); the title as recorded under ?dev=1.
+const toolTitle = (t) => (t.title ? plainWords(t.title) || t.title : t.name);
 const isClaude = (t) => t.origin === "claude";
 const hasNoValue = (t) => (t.checks ?? []).some(noValue);
 // 確かめを通っていない (notok): at least one check that did not pass or gave no value (a tool without checks is not counted)
@@ -56,7 +60,8 @@ export function shelfTree(tools, { mode = "domain", filter = "all", query = "" }
   const keyOf = (t) => (mode === "base" ? t.base : t.domain);
   const order = mode === "base" ? BASES : DOMAINS;
   const keys = [...order, ...[...new Set(shown.map(keyOf))].filter((k) => !order.includes(k))];
-  const label = (k) => (mode === "base" ? `${k} ${BASE_JA[k] ?? ""}`.trim() : DOMAIN_JA[k] ?? String(k));
+  // (a step's number, K2, only under ?dev=1: else its name)
+  const label = (k) => (mode === "base" ? (DEV ? `${k} ${BASE_JA[k] ?? ""}`.trim() : BASE_JA[k] ?? String(k)) : DOMAIN_JA[k] ?? String(k));
   return keys
     .map((k) => ({ key: k, label: label(k), tools: shown.filter((t) => keyOf(t) === k).sort((a, b) => a.name.localeCompare(b.name)) }))
     .filter((b) => b.tools.length);
@@ -229,11 +234,11 @@ export function mountShelf(el, api) {
   function row(t) {
     return h("li", { class: `sh-tool${ui.selected === t.name ? " sel" : ""}${isUnusable(t) ? " is-off" : ""}${isClaude(t) ? " is-claude" : ""}`,
         dataset: { tool: t.name }, onclick: () => { ui.selected = t.name; render(); } },
-      h("div", { class: "sh-name" }, h("b", {}, t.title ?? t.name), DEV ? h("code", {}, t.name) : null, marks(t)),
+      h("div", { class: "sh-name" }, h("b", {}, DEV ? t.title ?? t.name : toolTitle(t)), DEV ? h("code", {}, t.name) : null, marks(t)),
       h("div", { class: "sh-cols" },
         h("span", { class: "sh-tests", title: "対応する試験 (カタログの番号)" }, (t.tests ?? []).length ? t.tests.map((x) => h("span", { class: "sh-tid" }, x)) : h("span", { class: "sh-dim" }, "試験なし")),
         h("span", { class: "sh-k0", title: "手計算の式 (K0)" }, (t.formulas ?? []).length ? t.formulas.map(formulaChip) : h("span", { class: "sh-dim" }, "式なし")),
-        h("span", { class: "sh-base", title: "CAE の段 (土台)" }, h("b", {}, t.base), ` ${BASE_JA[t.base] ?? ""}`),
+        h("span", { class: "sh-base", title: "CAE の段 (土台)" }, ...(DEV ? [h("b", {}, t.base), ` ${BASE_JA[t.base] ?? ""}`] : [BASE_JA[t.base] ?? t.base])),
         checkState(t)),
       appliesTo(t));
   }
@@ -300,7 +305,7 @@ export function mountShelf(el, api) {
     // a check's case or source: the Japanese when the record has it (the English under くわしく), else the English
     const words = (ja, en, key) => (typeof ja === "string" && ja ? [ja, more(key, h("div", { class: "sh-en" }, en))] : en);
     return h("div", { class: "sh-detail", dataset: { tool: t.name } },
-      h("header", {}, h("h3", {}, t.title ?? t.name), marks(t), checkState(t), more(k("name"), h("code", {}, t.name))),
+      h("header", {}, h("h3", {}, DEV ? t.title ?? t.name : toolTitle(t)), marks(t), checkState(t), more(k("name"), h("code", {}, t.name))),
       h("dl", {},
         h("dt", {}, "分野"), h("dd", {}, DOMAIN_JA[t.domain] ?? t.domain),
         h("dt", {}, "試験"), h("dd", {}, (t.tests ?? []).join("・") || "—"),
@@ -312,7 +317,7 @@ export function mountShelf(el, api) {
               more(k(`f:${id}`), h("code", {}, id)));
           })
           : "—"),
-        h("dt", {}, "CAE の段"), h("dd", {}, `${t.base} ${BASE_JA[t.base] ?? ""}`),
+        h("dt", {}, "CAE の段"), h("dd", {}, DEV ? `${t.base} ${BASE_JA[t.base] ?? ""}` : BASE_JA[t.base] ?? t.base),
         h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行で確かめた記録)") : null)),
       h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問、通った ${passed(t)}${checks.length - passed(t) ? `、通っていない ${checks.length - passed(t)}` : ""})`),
       h("p", { class: "sh-what" }, "ツールを使う前に、式で答えが出る簡単な問題を解かせ、答えと合うかを確かめた結果です。設計を確かめる手計算とは別のものです。"),

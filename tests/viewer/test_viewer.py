@@ -816,10 +816,10 @@ class PageTest(unittest.TestCase):
         self.assertIn("(occupant_space_margin)", out["codes"])
         self.assertIn("乗員の空間の余裕 (occupant_space_margin)", out["inputs"])
         self.assertIn("(frame_split_fraction)", out["codes"])
-        # the field buttons: the contract's domain names, in the page's order (opened from disk the page cannot ask
-        # the server which data is there, so every field is kept)
-        self.assertEqual(out["switch"], [names.field_labels()[f] for f in ["strength", "fatigue", "rops", "nvh", "crash", "handling",
-                                                                            "powertrain", "aero", "thermal", "assembly"]])
+        # the field buttons: the contract's domain names, in the page's order, and the flooded road's place (js/water.js)
+        # (opened from disk the page cannot ask the server which data is there, so every field is kept)
+        self.assertEqual(out["switch"], [{**names.field_labels(), "water": "冠水路"}[f] for f in ["strength", "fatigue", "rops", "nvh", "crash", "handling",
+                                                                            "powertrain", "aero", "water", "thermal", "assembly"]])
         self.assertTrue(out["switch_shown"])
         # a crash over time plays as it opens: the large play button on the 3D view says 止める, dark; pressed, it
         # stops like the panel's button and turns red

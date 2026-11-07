@@ -14,6 +14,8 @@ import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
 import { judgedResult, referenceResults } from "./judged.js";
 import { assemblyRecord } from "./assembly.js";
 import { versionChangeLine } from "./proposals.js";
+import { markRecordWords } from "./benchnote.js";
+import { pathCheckedWhy } from "./why_line.js";
 
 // ---- hooks: what happened, what comes next, resolved or not ---------------------------
 
@@ -75,7 +77,7 @@ export function openCause(s) {
     if (lc && passedAfter(lc, s.firstSeqOf[id])) continue;
     const lcRec = (s.project?.load_cases ?? []).find((x) => x.load_case_id === lc);
     // who wrote it: Claude, or the fixed text of a scripted run (project.driver "scripted")
-    return { id, key: `${id}|${s.seqOf[id]}`, text: roundLongDecimals(judgedWords(c.cause ?? "")), domain: p?.domain ?? lcRec?.domain ?? null,
+    return { id, key: `${id}|${s.seqOf[id]}`, seq: s.seqOf[id], text: roundLongDecimals(judgedWords(c.cause ?? "")), domain: p?.domain ?? lcRec?.domain ?? null,
       scripted: s.project?.driver === "scripted",
       // the load case's title up to its first ":" or bracket (the short name)
       version: p?.design_version ?? null, lcTitle: lcRec?.title ? String(lcRec.title).split(/[:：(（]/)[0].trim() || null : null };
@@ -86,7 +88,8 @@ export function openCause(s) {
 export function causeNoteHtml(c) {
   const where = [c.domain ? DOMAIN_JA[c.domain] ?? c.domain : null, c.version != null ? `v${c.version}` : null, c.lcTitle].filter(Boolean).join("・");
   const who = c.scripted ? "決まった手順の文" : "Claude が書いた";
-  return `<small>不一致の原因 (${who})${where ? `・${esc(where)}` : ""}</small><div class="tx">${esc(c.text)}</div>`;
+  // (the record's ids and English words in span.rec: ③'s strip leaves them to くわしく, benchnote.js)
+  return `<small>不一致の原因 (${who})${where ? `・${esc(where)}` : ""}</small><div class="tx">${markRecordWords(c.text)}</div>`;
 }
 
 // ---- a verdict in words --------------------------------------------------------------
@@ -209,7 +212,9 @@ function verdictCard(c, numTool = null) {
   if (!verdict) return { crit: criterionLine(loadCase), verdict: null };
   const tool = c.s.analyses[c.s.comparisons[verdict.comparison_id]?.analysis_id]?.tool;
   const from = tool && numTool && tool !== numTool ? `判定 (${c.toolTitle(tool)}): ` : "";
-  return { crit: from + verdictLine(verdict), verdict: verdictSentence(verdict) };
+  // basis path_checked: why the tool's value decides, in one line (why_line.js)
+  const why = pathCheckedWhy(c.s, verdict, c.formulaTitle)?.text ?? null;
+  return { crit: from + verdictLine(verdict), verdict: verdictSentence(verdict), why };
 }
 
 // The quantity a verdict judged: its comparison's (frame_shell: the hot-spot stress for a
@@ -401,6 +406,7 @@ export function presentCardHtml(scene, now, opts = {}) {
     (c.crit ? `<div class="pc-crit">${esc(c.crit)}</div>` : "") +
     // ok null: a statement that is not a verdict (no colour)
     (c.verdict ? `<div class="pc-verdict ${c.verdict.ok == null ? "plain" : c.verdict.ok ? "ok" : "bad"}">${esc(c.verdict.text)}</div>` : "") +
+    (c.why ? `<div class="pc-why" data-role="why">${esc(c.why)}</div>` : "") +
     // values shown beside the judged one that the verdict does not use, small and under their heading
     (c.ref?.length ? `<div class="pc-ref" data-role="reference"><div class="pc-ref-h">${esc(JUDGED_JA.ref)}</div><ul>${c.ref.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "") +
     (c.note ? `<div class="pc-note" data-role="not-judged">${esc(c.note)}</div>` : "") +

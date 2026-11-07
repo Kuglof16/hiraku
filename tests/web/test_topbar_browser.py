@@ -1,9 +1,10 @@
 """The top and the footer kept short (web/js/domain_icons.js, web/js/hookline.js, web/css/topbar.css):
-「☰ 一覧へ」 at the top left by the wordmark on every tab (hidden on ?video=1); the domain chips at
+「☰ 記録の一覧へ」 at the top left by the wordmark on every tab (hidden on ?video=1); the domain chips at
 the top right and ④'s tile headings with the icons of the one definition; the footer's hooks list
 folded under 「くわしく」 (open on ?dev=1) and its activity line without a verdict's numbers or a
 rule's id; the moment a hook stops, one line near the middle that goes after a few seconds of the
-replay (the same t, the same picture).
+replay (the same t, the same picture), on the tabs other than ③'s workbench; there the same words
+are the card of the strip under the 3D (web/js/benchnote.js) while the stop is the newest event.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -94,11 +95,11 @@ class TopbarBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
         first = seen["A1"]
         for key, g in seen.items():
-            self.assertEqual((g["text"], g["href"], g["shown"], g["inBrand"]), ("☰ 一覧へ", "?list=1", True, True), key)
+            self.assertEqual((g["text"], g["href"], g["shown"], g["inBrand"]), ("☰ 記録の一覧へ", "?list=1", True, True), key)
             self.assertEqual((g["l"], g["t"]), (first["l"], first["t"]), key)  # the same place on every tab
             self.assertLess(g["rel"], 0.2, key)  # top left
             self.assertTrue(0 <= g["gap"] < 40, key)  # by the wordmark
-            self.assertNotIn("☰ 一覧へ", g["modeLinks"], key)  # not at the top right any more
+            self.assertNotIn("☰ 記録の一覧へ", g["modeLinks"], key)  # not at the top right any more
         page, errors = self.open("run=sample&pace=0&t=1e6&dev=1")
         dev = page.evaluate(BACK)
         page.close()
@@ -154,7 +155,9 @@ class TopbarBrowserTest(unittest.TestCase):
         for word in ("HK1", "HK4", "✓", "×"):
             self.assertNotIn(word, folded["words"])
         self.assertTrue(opened["shown"])
-        self.assertIn("HK1", opened["words"])  # opened, the whole list as before
+        # opened, the whole list in words (the rules' ids under ?dev=1: test_judge_words_browser)
+        self.assertIn("守るための決まり (6 つ)", opened["words"])
+        self.assertNotIn("HK1", opened["words"])
         self.assertIn("予測が先", opened["words"])
         self.assertIn("判定を出しました", after_verdict["act"])
         self.assertNotIn("→ OK", after_verdict["act"])
@@ -166,6 +169,16 @@ class TopbarBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=0&tab=bench")
         self.seek(page, 1e6)
         t_hook = page.evaluate("() => window.hiraku.player.state.hooks.denied[0].t")
+        # ③'s workbench: the stop is the strip's card under the 3D, the stage's line is not drawn
+        self.seek(page, t_hook + 0.001)
+        bench = page.evaluate("""() => { const n = document.getElementById('hooknote'), s = document.getElementById('benchnote');
+          return { line: LINE_SHOWN(), kind: s.dataset.kind, text: n.innerText.replace(/\\s+/g, ' ').trim(), inStrip: n.closest('#benchnote') !== null,
+                   shown: n.checkVisibility(), color: getComputedStyle(n.querySelector('.hn-head')).color }; }""".replace(
+            "LINE_SHOWN()", "(() => { const l = document.getElementById('hookline'); return !l.hidden && l.checkVisibility(); })()"))
+        foot = page.evaluate(FOOT)
+        # the stage's line on the tools' shelf (not over ④ and ⑤: test_judge_broken_browser)
+        page.click('.tab[data-tab="A4"]')
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A4'")
         before = (self.seek(page, t_hook - 0.5), page.evaluate(LINE))[1]
         at = (self.seek(page, t_hook + 1.0), page.evaluate(LINE))[1]
         shot1 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
@@ -174,37 +187,27 @@ class TopbarBrowserTest(unittest.TestCase):
         page.evaluate(LINE)
         shot2 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
         box = page.evaluate("() => { const r = document.getElementById('hookline').getBoundingClientRect(); return { cx: (r.left + r.right) / 2, h: r.height }; }")
-        # ③'s board of tests: the line is not on any of its boxes (it goes under the board)
-        over = page.evaluate("""() => { const l = document.getElementById('hookline').getBoundingClientRect();
-          const cut = (r) => !(r.right <= l.left || l.right <= r.left || r.bottom <= l.top || l.bottom <= r.top);
-          const board = document.getElementById('tests');
-          return { board: board.checkVisibility() && board.querySelectorAll('button.test').length > 0,
-                   hit: [...board.querySelectorAll('.tb-group, .tb-tail')].filter((x) => cut(x.getBoundingClientRect())).map((x) => x.className) }; }""")
-        foot = page.evaluate(FOOT)
-        # on ④ too
-        page.click('.tab[data-tab="grid"]')
-        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'grid'")
-        on_grid = page.evaluate(LINE)
         page.close()
-        page, errs = self.open("run=sample&pace=0&t=0&tab=bench&dev=1")
+        page, errs = self.open("run=sample&pace=0&t=0&tab=A4&dev=1")
         self.seek(page, t_hook + 1.0)
         dev = page.evaluate(LINE)
         page.close()
         self.assertEqual(errors + errs, [])
+        self.assertFalse(bench["line"])
+        self.assertEqual((bench["kind"], bench["inStrip"], bench["shown"]), ("hooknote", True, True))
+        self.assertEqual(bench["text"], "hooks が止めた 予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertFalse(before["shown"])
         self.assertTrue(at["shown"])
         self.assertEqual(at["text"], "!予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertEqual(at["rule"], "HK1")
         self.assertNotIn("HK", at["text"])
         self.assertEqual(at["color"], at["border"])  # orange (test_video_fixes_browser: not the NG red)
+        self.assertEqual(bench["color"], at["color"])  # the strip's card in the same orange
         self.assertFalse(gone["shown"])
         self.assertEqual(shot1, shot2)  # the same t, the same picture
         self.assertAlmostEqual(box["cx"], 960, delta=40)  # near the middle
         self.assertLess(box["h"], 60)  # one line
-        self.assertTrue(over["board"])
-        self.assertEqual(over["hit"], [])
         self.assertNotIn("HK", foot["act"])
-        self.assertTrue(on_grid["shown"])
         self.assertTrue(dev["text"].startswith("!HK1 "), dev)
 
     def test_lines_for_every_rule(self):

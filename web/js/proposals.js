@@ -6,7 +6,8 @@
 //
 // No three.js here: state.js uses proposalText for the log lines.
 
-import { agentName, designNumberName, designerModule, designerRole, esc, fmt, judgedWords, moduleName, moduleOwner, unitLabel, verLabel } from "./labels.js";
+import { CHOICE_JA, agentName, designNumberName, designerModule, designerRole, esc, fmt, judgedWords, moduleName, moduleOwner, unitLabel, verLabel } from "./labels.js";
+import { markRecordWords } from "./benchnote.js";
 
 // The module colours: pet3d.js v10 ROLES (the rows with a module) when the page has them, else
 // the same values here. package is the packager's (its pet's colour, app.js PET_COLORS.packager).
@@ -88,7 +89,8 @@ export function changeWords(chg, base, sep = " ") {
     const unit = u && u !== "1" ? ` ${u}` : "";
     out.push(was && typeof was.value === "number" ? `${said}${sep}${fmt(was.value)} → ${fmt(q.value)}${unit}` : `${said}を ${fmt(q.value)}${unit} に`);
   }
-  for (const [name, v] of Object.entries(chg.choices ?? {})) out.push(`${name} を ${String(v)} に`);
+  // a choice by the screen's words when it has them (labels.js CHOICE_JA), else as recorded
+  for (const [name, v] of Object.entries(chg.choices ?? {})) out.push(`${CHOICE_JA[name] ?? name} を ${CHOICE_JA[`${name}=${v}`] ?? String(v)} に`);
   return out;
 }
 
@@ -115,7 +117,7 @@ function rowHtml(chg, base) {
   const who = agentName(chg.agent_id ?? moduleOwner(chg.module_id, base));
   return (
     `<li data-change="${esc(chg.change_id)}" data-module="${esc(chg.module_id)}"><span class="mdot" style="--mod:${moduleColor(chg.module_id)}"></span>` +
-    `<span class="pw"><b>${esc(who)}</b>: ${esc(changeWords(chg, base).join("・") || "変更")}</span>` +
+    `<span class="pw"><b>${esc(who)}</b>: ${markRecordWords(changeWords(chg, base).join("・") || "変更")}</span>` +
     // (the reason in two lines at most, all of it in the title: a long one hid the 3D)
     (chg.reason ? `<span class="pr" title="${esc(judgedWords(chg.reason))}">${esc(judgedWords(chg.reason))}</span>` : "") +
     `</li>`
@@ -150,6 +152,17 @@ export function roundCardHtml(s, playhead) {
     `<div class="rc-head" data-round="built" data-version="${v}">${esc(agentName("packager"))}が ${list.length} つの提案を ${verLabel(v)} にまとめた</div>` +
     `<ol class="rc-list">${list.map((c) => rowHtml(c, base)).join("")}</ol>`
   );
+}
+
+// The seq of the newest record the round card at the playhead shows (the newest proposal waiting, or
+// the design.created that built them); null when there is no card (benchnote.js noteKind).
+export function roundSeq(s, playhead) {
+  const pending = isOver(s) ? [] : pendingProposals(s);
+  if (pending.length) return Math.max(...pending.map((p) => p.seq ?? -1));
+  const v = s.currentVersion;
+  const t = s.builtT?.[v];
+  if (!(s.designs?.[v]?.module_changes ?? []).length || t == null || playhead - t > ROUND_SHOW_S) return null;
+  return s.builtSeq?.[v] ?? null;
 }
 
 // What a version changed from its parent, in one sentence for viewers, made from the records'

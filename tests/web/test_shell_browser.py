@@ -132,12 +132,13 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertEqual([b[0] for b in got["rows"][1][1]], [f"{shell}・メッシュ・{s}" for s in ("外面", "中面", "内面", "外面と内面の大きい方")])
         self.assertEqual(got["rows"][1][1][3][1], True)
         self.assertEqual((got["ana"], got["shell"], got["beams"]), ("ana-0004", True, False))
-        self.assertIn("色の元: ana-0004・" + shell, got["src"])
+        self.assertIn("色の元: " + shell, got["src"])  # (the analysis' id only under ?dev=1)
         page.click(f"#legend .variants button:text-is('{beam}・梁')")
         page.wait_for_function("window.hiraku.bench.keys.contour?.analysisId === 'ana-0003'")
         beams = page.evaluate(LEGEND)
         self.assertEqual((beams["shell"], beams["beams"]), (False, True))
-        self.assertIn("色の元: ana-0003・" + beam, beams["src"])
+        self.assertIn("色の元: 梁のフレーム・", beams["src"])  # (the title's 「(K1)」 out: plain.js)
+        self.assertNotIn("K1", beams["src"])
         self.assertNotIn("zoom", beams["acts"])  # the beams have no element to go to
         # the right pane still follows the shown analysis
         self.assertEqual(page.evaluate("() => window.hiraku.state().analyses['ana-0004'].tool"), "frame_shell")

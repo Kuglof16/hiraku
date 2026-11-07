@@ -47,7 +47,7 @@ export const TAB_JA = {
   A2: { no: "②", name: "確認したいこと", tip: "HIRAKU が足りない情報を聞きます。答えなくても標準の値で進めます", id: "A2" },
   bench: { no: "③", name: "解析", tip: "予測と解析を照らし合わせる様子を 3D で見ます", id: "A3 (bench)" },
   // the grid's tiles: the domains, and assembly (tiles.js TILE_ORDER); the count from DOMAINS
-  grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析を再生します`, id: "A6 (grid)" },
+  grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析をビューアで見られます`, id: "A6 (grid)" },
   A7: { no: "⑤", name: "組み立て", tip: "組み立ての順番を 3D で確かめます", id: "A7" },
   A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、判定の結果を見ます", id: "A4" },
   A5: { no: "", name: "守るルール", tip: "設計のチェックに使うルールを見ます。ファイルを置くと足せます", id: "A5" },
@@ -170,6 +170,7 @@ export const BASE_JA = {
 const QUANTITY_JA = {
   // frame (K1)
   max_stress: "最大応力",
+  cycles_to_failure: "壊れるまでの繰り返しの回数",
   min_safety_factor: "最小の安全率",
   max_displacement: "最大変位",
   vehicle_mass: "車両の質量",
@@ -894,6 +895,19 @@ export function runSummaryJa(r) {
   return [how, far].filter(Boolean).join("・");
 }
 
+// Why a run stopped, in one line for people (a stopped or failed run that is over; else ""): the
+// first sentence of the record's own stop_reason when it is in Japanese (its numbers as recorded),
+// else the stop_code's words. Before its first design (no version): 「v1 を作る前に止まりました」 first.
+export function stopWhyJa(r) {
+  if (!r?.finished || !["stopped", "failed"].includes(runState(r))) return "";
+  const raw = String(r.stop_reason ?? "").trim();
+  const first = /[ぁ-んァ-ン一-龥]/.test(raw) ? raw.split("。")[0].trim() : "";
+  const why = first || STOP_CODE_JA[r.stop_code] || (raw ? `止まった理由: ${raw}` : "");
+  const v = Number.isInteger(r.last_version) ? r.last_version : null;
+  const head = v ? `${verLabel(v)} で止まりました` : `この記録は ${verLabel(1)} を作る前に止まりました`;
+  return why ? `${head} (${why})` : head;
+}
+
 // A record the list for people keeps under the closed 「この PC の記録」: one this PC ran that has no
 // project.driver (made before the field, while HIRAKU was being built), no design version, or that
 // ended at the domain picks. Saved records always stay on the list.
@@ -967,6 +981,20 @@ export function keepAsides(s, max = 40) {
   const re = new RegExp(`\\(((?:[^()]|\\([^()]*\\)){1,${max}})\\)`, "g");
   return esc(s).replace(re, '<span class="aside">($1)</span>');
 }
+
+// A design generator's choices (revise_design choices; their meaning: hiraku/designgen/ladder_4w.py
+// JOINT_VALUES and OPTION_VALUES) in the screen's words: the choice by its name, an option by
+// "name=option". One not here is said as recorded.
+export const CHOICE_JA = {
+  joints: "T 字の継ぎ目", "joints=butt": "突き合わせ溶接", "joints=gusset": "三角の当て板つき", "joints=through": "横の部材を通す形",
+  part_mounts: "部品の取付", "part_mounts=none": "取付金具なし", "part_mounts=brackets": "取付金具つき",
+  pedal_mount: "ペダルの取付", "pedal_mount=none": "なし", "pedal_mount=floor": "床", "pedal_mount=bulkhead": "前の仕切り", "pedal_mount=post": "柱",
+  side_guard: "横の守り", "side_guard=none": "なし", "side_guard=bars": "横の棒", "side_guard=bars_net": "横の棒と網", "side_guard=net": "網だけ",
+  rops: "ロールバーの形", "rops=hoop": "アーチだけ", "rops=hoop_stays": "アーチと後ろの支え", "rops=four_post": "4 本の柱", "rops=four_post_stays": "4 本の柱と後ろの支え",
+  fenders: "泥よけ", "fenders=none": "なし", "fenders=wheel": "車輪ごと",
+  side_opening: "横の乗り口", "side_opening=none": "なし", "side_opening=clip_net": "留め具の網", "side_opening=door": "ドア",
+  grab_bar: "つかまる棒", "grab_bar=none": "なし", "grab_bar=front_post": "横の枠の前の柱",
+};
 
 // Words from the record (a judgement's summary written by hiraku/tools/judge.py, what an agent
 // or the scripted driver said, a proposal's reason) in the screen's words: OK / NG for 合格 /

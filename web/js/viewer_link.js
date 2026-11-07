@@ -111,6 +111,23 @@ export function viewerUrl(runId, analysisId, field) {
   return `/viewer/index.html?data=${enc(`/api/runs/${runId}/viewer/${analysisId}`)}#${field}`;
 }
 
+// Records the analysis department keeps in viewer/fixtures/ for one design (by its design_key,
+// viewer/src/common.py design_key; the server gives each run's keys, viewer_link.py info): a row on
+// that domain's tile of a run that has the design opens it in the viewer, read only when pressed.
+export const VIEWER_EXTRAS = [
+  { id: "aero_cfd", domain: "aero", designKey: "7caab1a546ac", label: "空気の流れ (CFD)", note: "", page: "index.html?data=fixtures/aero_cfd.json#aero_cfd", field: "aero_cfd" },
+  { id: "water", domain: "aero", designKey: "7caab1a546ac", label: "冠水路の水", note: "", page: "index.html#water", field: "water" },
+];
+
+// the extras of the run's designs on that domain's tile (none until the server's info is in)
+export function viewerExtras(runId, domain) {
+  const keys = (runId && info.runs[runId]?.design_keys) || [];
+  return VIEWER_EXTRAS.filter((e) => e.domain === domain && keys.includes(e.designKey));
+}
+
+// an extra's page (relative in the static site, as viewerUrl)
+export const extraUrl = (e) => `${isStatic() ? "viewer/" : "/viewer/"}${e.page}`;
+
 // The button with its small notes, as HTML. A place (the workbench card, a tile's list row) puts it
 // where it wants.
 export function viewerButtonHtml(runId, ana, opts = {}) {

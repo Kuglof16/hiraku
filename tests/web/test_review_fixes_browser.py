@@ -283,6 +283,8 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
         # no value: a dash only (neither 不明 nor the limit)
         self.assertEqual(pill.strip(), "費用 —")
+        # (and on the screen for people no pill at all: test_judge_words_browser)
+        self.assertFalse(page.evaluate("() => document.getElementById('pill-cost').checkVisibility()"))
         self.assertNotIn("$", pill)
         self.assertNotIn("不明", pill)
         page.close()

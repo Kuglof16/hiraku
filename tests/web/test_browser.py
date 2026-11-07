@@ -246,7 +246,9 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
-        self.assertIn("HK3 不一致は原因が先", got["hooksRow"])
+        # (the rules in words; HK3 under ?dev=1 only)
+        self.assertIn("不一致は原因が先 ×1", got["hooksRow"])
+        self.assertNotIn("HK3", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
         page.close()
 
@@ -1634,10 +1636,10 @@ class BrowserReplayTest(unittest.TestCase):
             page.wait_for_url(f"**/?run={run_id}")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_function("document.getElementById('runlist').hidden && !document.getElementById('loading-note')")
-            # back to the list by 「☰ 一覧へ」 at the top left by the wordmark; the run's id is not on the screen without ?dev=1
+            # back to the list by 「☰ 記録の一覧へ」 at the top left by the wordmark; the run's id is not on the screen without ?dev=1
             back = page.evaluate("""() => ({ link: [...document.querySelectorAll(".brand a, #mode a")].map((a) => [a.textContent, a.getAttribute("href")]),
                                              text: document.getElementById("mode").textContent })""")
-            self.assertEqual(back["link"], [["☰ 一覧へ", "?list=1"]])
+            self.assertEqual(back["link"], [["☰ 記録の一覧へ", "?list=1"]])
             self.assertNotIn(run_id, back["text"])
             page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .pick")

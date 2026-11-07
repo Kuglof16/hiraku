@@ -319,7 +319,8 @@ export function applyEvent(s, ev) {
       const said = STOP_CODE_JA[d.stop_code] ?? d.stop_reason;
       const why = said && d.stop_code !== "done" ? `・${said}` : "";
       log(s, ev, d.status === "failed" ? "bad" : "info", `実行が終わった (${d.status ?? ""}${why})${ev.text ? ": " + ev.text : ""}`);
-      setActivity(s, ev, ev.text || "実行が終わった");
+      // (a run that stopped or failed says so, as the top's 途中で止まった / エラーで止まった)
+      setActivity(s, ev, d.status === "stopped" ? "実行はここで止まりました" : d.status === "failed" ? "実行はエラーで止まりました" : ev.text || "実行が終わった");
       break;
     }
     case "agent.started": {
@@ -361,6 +362,7 @@ export function applyEvent(s, ev) {
       const n = (d.module_changes ?? []).length;
       if (n) {
         s.builtT[v] = ev.t;
+        (s.builtSeq ??= {})[v] = ev.seq; // (benchnote.js: the round card is the newest event's card)
         log(s, ev, "info", `${who(ev)}が ${n} つの提案を ${verLabel(v)} にまとめた`);
         setActivity(s, ev, `${who(ev)}が ${n} つの提案を ${verLabel(v)} にまとめた`);
         break;
@@ -546,7 +548,13 @@ export function chainFor(s, loadCaseId, version) {
   const preds = list(s, "predictions").filter(sameCase);
   const predIds = new Set(preds.map((p) => p.prediction_id));
   const lastCmp = list(s, "comparisons").filter((c) => predIds.has(c.prediction_id)).at(-1) ?? null;
-  const waiting = lastCmp ? preds.filter((p) => s.firstSeqOf[p.prediction_id] > s.firstSeqOf[lastCmp.comparison_id]) : preds;
+  // A record that is over (run.finished) with a prediction written after the last comparison and no
+  // analysis of it running: that prediction never got its analysis, so the chain is the last compared
+  // one (the verdict ④ shows), not a wait that will not end.
+  const over = s.status === "done" || s.status === "stopped" || s.status === "failed";
+  const later = lastCmp ? preds.filter((p) => s.firstSeqOf[p.prediction_id] > s.firstSeqOf[lastCmp.comparison_id]) : preds;
+  const stillRuns = Object.values(s.running).some((r) => r.load_case_id === loadCaseId);
+  const waiting = over && lastCmp && !stillRuns ? [] : later;
   const pred = waiting[0] ?? (lastCmp ? s.predictions[lastCmp.prediction_id] : null) ?? null;
   const anas = list(s, "analyses").filter(sameCase);
   const usedPred = (a) => pred && (a.prediction_ids ?? []).includes(pred.prediction_id);

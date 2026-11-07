@@ -40,7 +40,7 @@ WORKBENCH_ROLES = ("sky", "horizon", "dirt", "concrete")
 
 # The canvas pixel at points of the contour and the legend's swatch for the same value.
 # Members: the middle of the top of each member with one value (a member coloured from its two
-# nodes' values blends between bands along its length). Shell: the centres of elements
+# nodes' values blends between bands along its length). Shell: the centres of elements (of a quad's first triangle)
 # that are big enough on screen and seen first along the camera's ray. The arrows, the centre-of-gravity
 # mark and the part boxes are turned off first: they may stand in front of a member.
 PIXELS = """async (shell) => {
@@ -85,12 +85,17 @@ PIXELS = """async (shell) => {
     const rc = new THREE.Raycaster();
     const step = Math.max(1, Math.floor(rec.elements.length / 1500));
     for (let e = 0; e < rec.elements.length; e += step) {
-      const pts = rec.elements[e].map((n) => new THREE.Vector3(...rec.nodes_mm[n]).applyMatrix4(o.faces.matrixWorld));
+      const all = rec.elements[e].map((n) => new THREE.Vector3(...rec.nodes_mm[n]).applyMatrix4(o.faces.matrixWorld));
+      // a quad is drawn as two triangles (meshkind.js loopTriangles: 0-1-2 and 0-2-3); its centre
+      // lies on their shared diagonal, where the software renderer may leave a 1 px seam with the
+      // far wall's colour in it. The point looked at is the centre of the first triangle instead.
+      const pts = all.length === 4 ? all.slice(0, 3) : all;
       const c3 = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
       const scr = (p) => { const q = p.clone().project(b.camera); return { x: (q.x * 0.5 + 0.5) * b.size.w, y: (-q.y * 0.5 + 0.5) * b.size.h, q }; };
       const c = scr(c3);
       if (Math.abs(c.q.x) > 0.95 || Math.abs(c.q.y) > 0.95) continue;
-      // at least 4 px from the centre to each side on screen (the element edges are drawn there)
+      // at least 4 px from the point to each side on screen (the element edges are drawn there; for a
+      // quad, the sides of its first triangle, the diagonal too)
       const sc = pts.map(scr);
       const side = (a, d) => { const dx = d.x - a.x, dy = d.y - a.y, L = dx * dx + dy * dy || 1;
         const u = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / L)); return Math.hypot(c.x - a.x - u * dx, c.y - a.y - u * dy); };
