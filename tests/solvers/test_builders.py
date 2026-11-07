@@ -175,6 +175,7 @@ class BuildersTest(unittest.TestCase):
             got = {r["quantity"]: r for r in self.runs[key]["results"]}
             preds = {}
             expected = plan.get("expected_mismatch", {}).get("quantity")
+            when = plan.get("expected_mismatch", {}).get("when")  # high / low: the miss is expected that way only
             for p in plan["predictions"]:
                 extra = p["inputs_from"](DESIGN, lc) if "inputs_from" in p else {}
                 refs = [ref for ref in p["inputs"].values() if isinstance(ref, str)]
@@ -201,7 +202,11 @@ class BuildersTest(unittest.TestCase):
                     self.assertTrue("Members that break in one run and not in another" in edge
                                     or "Unbroken at" in edge, edge)
                     continue
-                if p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
+                side = "high" if out["value"] > ana["value"] else "low"  # as scripted.expected_for
+                if p["quantity"] == expected and when and (side != when or abs(rel) <= lc["tolerance_rel"]):
+                    # the plan expects the miss one way only (when): on this design it is not that way, so it matches
+                    self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
+                elif p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
                     self.assertGreater(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
                 else:
                     self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
