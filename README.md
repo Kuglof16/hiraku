@@ -4,7 +4,8 @@ HIRAKU は CAE (コンピューターでの解析) のエージェントです�
 
 まず見る所: 下の再生のページ (保存した実行を、何も計算せずに 3D で再生します)。手元で動かすなら「動かし方」、保存した実行ごとの中身は [showcase/README.md](showcase/README.md)、主な主張ごとの記録・コード・試験の場所は「主張と確かめる場所」です。
 
-<!-- TODO lead: judges' page URL -->
+- 再生のページ: https://kuglof16.github.io/hce992216cd55727ff7/ (8 分野の解析の結果から見るなら [こちら](https://kuglof16.github.io/hce992216cd55727ff7/?run=20261105-150416-offroad-4w-scripted&tab=grid))
+- 紹介のページ: https://kuglof16.github.io/h860337f9b68847f246/
 
 HIRAKU: Claude agents predict each result by hand calculation before running the CAE analysis, check one against the other, and revise the design.
 
