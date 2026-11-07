@@ -204,8 +204,15 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertEqual(p.asked["questions"], [])
         self.assertTrue(p.ready)
         self.assertEqual(p.unresolved, [])
-        self.assertEqual(hearing_text(p), "聞くことはありませんでした。設計を始めます")
+        self.assertEqual(hearing_text(p), "要件が先に決まっている記録なので、はじめの質問はありません。設計を始めます")
         self.assertEqual(p.unasked, ["Q20", "Q42", "Q51", "Q74"])  # confirm items with no value anywhere: left out, not made up
+
+    def test_a_standard_value_for_an_item_a_person_would_be_asked_is_said_so_and_never_called_asked(self):
+        p = prepare(self.file(drop=("Q61",)), ask_confirm=False)  # Q61 (the safety factor) is a `confirm` item with a default
+        text = hearing_text(p)
+        self.assertTrue(text.startswith("要件が先に決まっている記録なので、はじめの質問はありません。書かれていない 1 個は、まず標準の値で進めます"), text)
+        self.assertIn("そのうち 1 個は、本来は人に確かめたい項目なので、あとで聞くことがあります", text)
+        self.assertNotIn("聞くことはありませんでした", text)  # the first hearing asked nothing: it does not say nothing is left to ask
 
     def test_a_default_is_added_with_its_source_and_lands_in_the_file_out(self):
         req = self.file(drop=("Q63",))
@@ -216,7 +223,7 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertIn("read 2026-11-03", added["basis"])
         out = {r["key"]: r for r in p.requirements_file["requirements"]}
         self.assertEqual(out["Q63"], added)  # the same record in the answered list and in the requirements
-        self.assertEqual(hearing_text(p), "聞くことはありませんでした。分からない所は標準の値で進めました")
+        self.assertEqual(hearing_text(p), "要件が先に決まっている記録なので、はじめの質問はありません。書かれていない 1 個は、まず標準の値で進めます")
         self.assertEqual(len(p.requirements_file["requirements"]), len(req["requirements"]) + 1)
 
     def test_a_confirm_item_with_a_default_takes_it_instead_of_asking(self):
@@ -378,3 +385,43 @@ class TypedNumberTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SentenceWhereANumberIsNeededTest(unittest.TestCase):
+    """A requirements file that gives a sentence for an item whose default is a number (Q41: "the top shelf"): the default
+    stands in, says so, and nobody is asked."""
+
+    def robot(self, value):
+        from hiraku.intake.products import load_product
+
+        req = load_product("serving-robot")
+        for r in req["requirements"]:
+            if r["key"] == "Q41":
+                r["value"] = value
+                r.pop("unit", None)
+        return req
+
+    def test_the_default_takes_the_sentences_place_and_the_record_says_it_is_a_default(self):
+        p = prepare(self.robot("一番高い段"), ask_confirm=False)
+        q41 = {r["key"]: r for r in p.requirements_file["requirements"]}["Q41"]
+        self.assertEqual((q41["value"], q41["unit"], q41["source"], q41["trust"]), (150, "mm", "default", 3))
+        self.assertIn("assumption", q41["basis"])
+        self.assertIn("一番高い段", q41["basis"])  # what the file said
+        self.assertIn("Q41", [r["key"] for r in p.answered["answers"]])  # in the record of what was settled
+        self.assertNotIn("Q41", [q["req_key"] for q in p.asked["questions"]])  # nobody is asked
+
+    def test_a_number_the_file_gives_stays(self):
+        req = self.robot(200)
+        for r in req["requirements"]:
+            if r["key"] == "Q41":
+                r["unit"] = "mm"
+        p = prepare(req, ask_confirm=False)
+        q41 = {r["key"]: r for r in p.requirements_file["requirements"]}["Q41"]
+        self.assertEqual(q41["value"], 200)
+
+    def test_the_serving_robots_own_file_has_the_number(self):
+        from hiraku.intake.products import load_product
+
+        q41 = {r["key"]: r for r in load_product("serving-robot")["requirements"]}["Q41"]
+        self.assertEqual((q41["value"], q41["unit"], q41["trust"]), (150, "mm", 3))
+        self.assertIn("assumption", q41["basis"])

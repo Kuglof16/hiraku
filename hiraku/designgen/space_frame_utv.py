@@ -190,8 +190,9 @@ def choices_of(design: Record) -> dict[str, str]:
 
 
 def applies(flags: dict) -> bool:
-    """For products that move by themselves and carry people or cargo."""
-    return bool(flags.get("self_propelled")) and bool(flags.get("ride") or flags.get("cargo"))
+    """For products that move by themselves and carry people (ride, or lean on it): the type always seats its
+    occupants (requirement Q33), so a product that carries only cargo gets no type (see ladder_4w.applies)."""
+    return bool(flags.get("self_propelled")) and bool(flags.get("ride") or flags.get("lean"))
 
 
 def _q(v: float, unit: str) -> Record:

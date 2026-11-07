@@ -40,7 +40,7 @@ class PipelineTest(unittest.TestCase):
         kinds = [e["kind"] for e in got.events]
         self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 10 + [ev.HEARING_ANSWERED])  # no hearing.asked
         answered = got.events[-1]
-        self.assertEqual(answered["text"], "聞くことはありませんでした。分からない所は標準の値で進めました")
+        self.assertEqual(answered["text"], "要件が先に決まっている記録なので、はじめの質問はありません。書かれていない 1 個は、まず標準の値で進めます")
         self.assertEqual([a["key"] for a in answered["data"]["answers"]], ["Q63"])
         merged = {r["key"]: r for r in got.requirements_file["requirements"]}
         self.assertEqual(merged["Q63"], answered["data"]["answers"][0])  # what project.requirements takes is what was said

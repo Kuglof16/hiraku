@@ -755,6 +755,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 /* 境目 (edge_note.js) under the verdict's row: orange like the card's line, kept whole (it wraps) */
 .ch-edge { display: flex; align-items: baseline; color: var(--orange, #b26b00); font-weight: 600; font-size: 14px; line-height: 1.35; margin-top: -4px; }
 .ch-edge small { flex: none; }
+/* basis path_checked: why the tool's value decides (why_line.js), under the verdict's row, whole (it wraps) */
+.ch-why { display: flex; align-items: baseline; color: var(--ink); font-size: 14px; line-height: 1.4; margin-top: -4px; }
+.ch-why small { flex: none; }
 .ch-q { font-weight: 600; }
 .ch-v { font-variant-numeric: tabular-nums; }
 .ch-verdict { margin-left: auto; font-size: 24px; line-height: 1; }
@@ -1230,6 +1233,8 @@ body.video .mode .stop-btn { display: none; }
   pointer-events: none;
 }
 .now[hidden] { display: none; }
+/* a verdict just recorded on the tool's value after the load path was checked (why_line.js): why, on its own line */
+.now .now-why { display: block; font-weight: 400; font-size: 0.85em; }
 /* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
 .now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
 /* ③'s sentence card under the 3D (js/benchnote.js): one card at a time (the いま line, the round's
@@ -1413,6 +1418,7 @@ body.video .pc-now { display: -webkit-box; -webkit-box-orient: vertical; -webkit
 .pc-verdict { font-size: 28px; font-weight: 800; line-height: 1.25; }
 .pc-verdict.ok { color: var(--green); }
 .pc-verdict.bad { color: var(--red); }
+.pc-why { font-size: 16px; line-height: 1.45; }
 .pc-extra { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.45; }
 .pc-ref { color: var(--muted); font-size: 15px; line-height: 1.4; }
 .pc-ref .pc-ref-h { font-weight: 700; }
@@ -1447,6 +1453,9 @@ body.present.present-detail .chain { height: 100%; }
 .card .edge-near { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
 .tile .edge-line { font-size: 12px; margin-top: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .tiles.dense .tile .edge-line { font-size: 11px; -webkit-line-clamp: 2; }
+/* basis path_checked: why the tool's value decides (why_line.js), small under the tile's number; whole in its tooltip */
+.tile .pathwhy { color: var(--muted); font-size: 12px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.tiles.dense .tile .pathwhy { font-size: 11px; -webkit-line-clamp: 2; }
 
 /* ① ② : the hooks' line would sit on the request's bar at the top: it goes to the bottom instead */
 body[data-intake-tab="A1"]:not(.video) .hookline, body[data-intake-tab="A2"]:not(.video) .hookline { top: auto !important; bottom: 70px; }

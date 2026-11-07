@@ -402,6 +402,10 @@ export class Workbench3D {
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = false;
       this.controls.screenSpacePanning = true;
+      // turned or moved by hand since the last framing (fitPoints / fit clear it): app.js leaves
+      // such a camera where it is when the 3D's size changes
+      this.handMoved = false;
+      this.controls.addEventListener("start", () => { this.handMoved = true; });
     } else {
       this.labelRenderer = null;
       this.controls = { target: new THREE.Vector3(), update: () => this.camera.lookAt(this.controls.target) };
@@ -1073,6 +1077,7 @@ export class Workbench3D {
     this.controls.update();
     this.followBase = null;
     this.followApplied = null;
+    this.handMoved = false;
   }
 
   // A mesh (the contract's mesh record: shells, solids or both) as faces and element edges,
@@ -2237,6 +2242,7 @@ export class Workbench3D {
     this.controls.update();
     this.followBase = null;
     this.followApplied = null;
+    this.handMoved = false;
     // a cut's sun is fixed to the world from its first framing (look.js fixSun)
     if (this.look.stage) this.look.fixSun(this.camera, this.controls.target);
   }

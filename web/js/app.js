@@ -35,6 +35,7 @@
 import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, stopWhyJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
+import { pathCheckedWhy } from "./why_line.js";
 import { applyEvent, chainFor, domainVerdicts, initialState, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldLabel, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
@@ -288,10 +289,22 @@ function resize3d() {
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
   const h = viewport.clientHeight;
   if (w > 0 && h > 0) {
+    const aspect = bench.camera.aspect;
     bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
     grip.resize(w, h); // grip:
     if (half && cmpView) cmpView.bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    if (bench.camera.aspect !== aspect) refitForSize();
   }
+}
+// ③'s framing left of the legend (Workbench3D.fit with fitWidth: by the outline's points in the
+// view's free width) depends on the view's shape: framed again when the 3D's size changes (the
+// strip under the 3D, benchnote.js, comes after the first framing), so the same t gives the same
+// picture however the page got there. Not a camera turned by hand, a focus, or the compare view.
+function refitForSize() {
+  if (!bench.fitWidth || !(bench.reserveRight > 0) || !bench.design || bench.focused || bench.handMoved) return;
+  if (viewport.classList.contains("compare")) return;
+  if (grip.reserved) grip.reserve(grip.reserved, true); // (its own view from higher up)
+  else bench.fit(VIEWS[bench.view ?? "default"]);
 }
 new ResizeObserver(resize3d).observe(viewport);
 window.addEventListener("resize", fitStage);
@@ -1630,7 +1643,8 @@ function renderTestChips(cases, lcId, span) {
 // The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
 // a prediction shows its formula as written.
 const formulaTitles = new Map();
-fetch(getUrl("/api/formulas"), { cache: "no-store" })
+const formulaTitleOf = (id) => formulaTitles.get(id);
+const formulasIn = fetch(getUrl("/api/formulas"), { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : { formulas: [] }))
   .then((got) => {
     for (const f of got.formulas ?? []) if (f.title) formulaTitles.set(f.formula_id, f.title);
@@ -1847,9 +1861,13 @@ function renderChainHead(s, chain) {
   const edgeRow = edge && (edgeFlips(edge, verdict.quantity) || edgeFlips(edge, cmp?.quantity))
     ? `<div class="ch-row ch-edge" data-role="edge-head" title="${esc(edgeRaw(vAna))}"><small></small>${esc(edgeText(edge))}</div>`
     : "";
+  // why a verdict on the tool's value after the load path was checked by hand is OK / NG (why_line.js)
+  const why = verdict ? pathCheckedWhy(s, verdict, formulaTitleOf) : null;
+  const whyRow = why ? `<div class="ch-row ch-why" data-role="why" title="${esc(why.text)}"><small></small>${esc(why.text)}</div>` : "";
   const html =
     `<div class="ch-row ch-now clamp1" title="${esc(now)}"><small>いま</small>${esc(now.replace(/^いま: /, ""))}</div>` +
     `<div class="ch-row ch-judged" data-role="verdict"><small>判定</small>${judged}</div>` +
+    whyRow +
     edgeRow +
     `<div class="ch-row ch-next clamp1" title="${esc(nextStep(chain))}"><small>次</small>${esc(nextStep(chain))}</div>`;
   if (chainHeadHtml !== html) $("chain-head").innerHTML = chainHeadHtml = html;
@@ -2311,6 +2329,13 @@ function fitOverlays() {
       if (f.scrollHeight > f.clientHeight) f.scrollTop = Math.max(0, on.offsetTop - f.offsetTop - (f.clientHeight - on.offsetHeight) / 2);
     }
   } else setStyle(lg, "maxHeight", "");
+  // the mesh's list (above the legend, app.css .meshcard) ends above the legend's top, whatever the
+  // legend's height (its Japanese title may take another line): the list scrolls instead
+  if (meshCard && !meshCard.hidden) {
+    const room = lgIn && lg.offsetWidth ? lg.offsetTop - meshCard.offsetTop - 6 : null;
+    // (in px, as the browser keeps it: setStyle compares the string; 520: the CSS's calc(100% - 520px))
+    setStyle(meshCard, "maxHeight", room != null ? `${Math.max(0, Math.floor(Math.min(viewport.clientHeight - 520, room)))}px` : "");
+  }
 
   const nowEl = $("now");
   if (!nowEl.hidden && tg.offsetWidth && nowEl.parentElement === viewport) {
@@ -2515,6 +2540,7 @@ function animSeekFromPointer(ev) {
 }
 
 const board = new TileBoard($("grid-head"), $("tiles"));
+board.formulaTitle = formulaTitleOf;
 // ④'s 3D pictures (tile3d.js): one renderer for the tiles, always in the real look (black rubber
 // tyres, opaque parts) whichever look the workbench has
 const tileViews = new TileViews("real", () => (drawn.rev = -2));
@@ -3003,11 +3029,17 @@ function drawNow() {
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = withoutRuleIds(nowSentence(s, chain, (tool) => toolTitle(s, tool)), { dev: DEV });
     // (the record's ids and English words in span.rec: ③'s strip leaves them to くわしく)
-    const nowHtml = markRecordWords(now);
+    // the いま line telling the verdict just recorded (its activity is the verdict's event) on the
+    // tool's value after the load path was checked by hand: why it is OK / NG, under it (why_line.js)
+    // (as nowSentence: not while an analysis runs, nor once the run has ended)
+    const saysActivity = !chain.running && !Object.keys(s.running ?? {}).length && !["done", "stopped", "failed"].includes(s.status);
+    const nowVerdict = saysActivity && s.activity ? Object.values(s.verdicts).find((v) => s.firstSeqOf[v.verdict_id] === s.activity.seq) : null;
+    const justJudged = nowVerdict ? pathCheckedWhy(s, nowVerdict, formulaTitleOf) : null;
+    const nowHtml = markRecordWords(now) + (justJudged ? `<span class="now-why" data-role="why">${esc(justJudged.text)}</span>` : "");
     if ($("now").innerHTML !== nowHtml) $("now").innerHTML = nowHtml;
     $("now").title = now;
     $("now").hidden = !now;
-    const scene = presentScene({ s, chain, contour, tab: view, toolTitle: (tool) => toolTitle(s, tool) });
+    const scene = presentScene({ s, chain, contour, tab: view, toolTitle: (tool) => toolTitle(s, tool), formulaTitle: formulaTitleOf });
     document.body.dataset.presentScene = scene.key;
     if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now, { dev: DEV });
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present, over, view, dom: span?.domain ?? null };
@@ -3103,6 +3135,9 @@ async function seekAndDraw(t) {
   ui.frozen = true;
   player.pause();
   player.seek(t >= player.duration - END_SNAP_S ? player.duration : t);
+  // the formulas' titles in (or failed), so the frame at t names them every time (the prediction's
+  // title, the path_checked line's 上限: why_line.js)
+  await formulasIn;
   draw();
   await nextFrame();
   draw();
