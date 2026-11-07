@@ -229,7 +229,7 @@ class ExportTest(unittest.TestCase):
         self.assertEqual([str(f) for f in findings if f.level == "error"], [])
         root = self.tmp / "planted"
         root.mkdir()
-        home = "C:" + "/Users/someone/x"  # (split so this file holds no such path)
+        home = "C:" + "/Users/" + "someone/x"  # (split so no line of this file holds such a path)
         line = json.dumps({"seq": 999, "t": 99.0, "ts": "", "run_id": RUN_ID, "kind": "agent.said", "agent": "lead",
                            "text": f"zqprivatezq {home} D:\\\\work\\\\a"})
         saved = make_saved(root, extra_line=line)
