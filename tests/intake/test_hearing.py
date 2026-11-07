@@ -204,8 +204,15 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertEqual(p.asked["questions"], [])
         self.assertTrue(p.ready)
         self.assertEqual(p.unresolved, [])
-        self.assertEqual(hearing_text(p), "聞くことはありませんでした。設計を始めます")
+        self.assertEqual(hearing_text(p), "要件が先に決まっている記録なので、はじめの質問はありません。設計を始めます")
         self.assertEqual(p.unasked, ["Q20", "Q42", "Q51", "Q74"])  # confirm items with no value anywhere: left out, not made up
+
+    def test_a_standard_value_for_an_item_a_person_would_be_asked_is_said_so_and_never_called_asked(self):
+        p = prepare(self.file(drop=("Q61",)), ask_confirm=False)  # Q61 (the safety factor) is a `confirm` item with a default
+        text = hearing_text(p)
+        self.assertTrue(text.startswith("要件が先に決まっている記録なので、はじめの質問はありません。書かれていない 1 個は、まず標準の値で進めます"), text)
+        self.assertIn("そのうち 1 個は、本来は人に確かめたい項目なので、あとで聞くことがあります", text)
+        self.assertNotIn("聞くことはありませんでした", text)  # the first hearing asked nothing: it does not say nothing is left to ask
 
     def test_a_default_is_added_with_its_source_and_lands_in_the_file_out(self):
         req = self.file(drop=("Q63",))
@@ -216,7 +223,7 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertIn("read 2026-11-03", added["basis"])
         out = {r["key"]: r for r in p.requirements_file["requirements"]}
         self.assertEqual(out["Q63"], added)  # the same record in the answered list and in the requirements
-        self.assertEqual(hearing_text(p), "聞くことはありませんでした。分からない所は標準の値で進めました")
+        self.assertEqual(hearing_text(p), "要件が先に決まっている記録なので、はじめの質問はありません。書かれていない 1 個は、まず標準の値で進めます")
         self.assertEqual(len(p.requirements_file["requirements"]), len(req["requirements"]) + 1)
 
     def test_a_confirm_item_with_a_default_takes_it_instead_of_asking(self):

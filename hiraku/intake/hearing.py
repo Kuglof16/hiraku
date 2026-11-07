@@ -306,6 +306,8 @@ class Prepared:
     unfilled: list[str]  # `default` items with no value anywhere
     unasked: list[str] = field(default_factory=list)  # `confirm` items left out (ask_confirm False), no value anywhere
     ignored: list[str] = field(default_factory=list)  # answered, but the file already has the key (skip_present)
+    from_file: bool = False  # the requirements came settled, as a file somebody wrote (ask_confirm False): said so in hearing_text
+    given: int = 0  # how many requirements the file already had
 
     @property
     def ready(self) -> bool:
@@ -379,7 +381,8 @@ def prepare(
         answered["note"] = "。".join(said)
     taken = {r["key"] for r in settled}
     return Prepared(out, {"questions": plan.questions}, answered, unresolved,
-                    [k for k in plan.unfilled if k not in taken], [k for k in plan.unasked if k not in taken], ignored)
+                    [k for k in plan.unfilled if k not in taken], [k for k in plan.unasked if k not in taken], ignored,
+                    from_file=not ask_confirm, given=len(in_file))
 
 
 # ------------------------------------------------------------------- waiting for a person in a run
@@ -503,7 +506,11 @@ def hearing_text(prepared: Prepared) -> str:
         by[r["source"]] += 1
     rules = prepared.asked.get("rule_questions") or []
     trades = prepared.asked.get("tradeoff_questions") or []
-    standard = "分からない所は標準の値で進めました"
+    asked_keys = {q["req_key"] for q in prepared.asked["questions"]}
+    defaults = [r for r in prepared.answered["answers"] if r["source"] == "default"]
+    by_default_ask = len([r for r in defaults if r["key"] in asked_keys])  # asked, no answer: its standard value
+    quiet = [r for r in defaults if r["key"] not in asked_keys]  # not asked: the file lacked it
+    should_ask = len([r for r in quiet if item(r["key"])["ask"] == "confirm"])  # items a person would be asked, filled in quietly
     if trades and not prepared.asked["questions"] and not rules:  # only trade-offs were asked
         got = {a["tradeoff_id"]: a["choice"] for a in prepared.answered.get("tradeoff_answers", [])}
         return ("どちらを優先するかの答えをもらいました" if len(got) >= len(trades)
@@ -513,11 +520,18 @@ def hearing_text(prepared: Prepared) -> str:
         dropped = [r for r, c in got.items() if c == "drop_rule"]
         line = "規則に当たったことへの答えをもらいました" if len(got) >= len(rules)             else f"規則に当たったことのうち {len(rules) - len(got)} つが、まだ決まっていません (人がまだ決めていない)"
         return line + (f"。{len(dropped)} つの規則は、この実行では外します" if dropped else "")
-    if not prepared.asked["questions"]:  # nothing to ask: the requirements file stands
-        return f"聞くことはありませんでした。{standard}" if by["default"] else "聞くことはありませんでした。設計を始めます"
-    parts = [f"{by['hearing']} つ答えてもらいました" if by["hearing"] else "答えはなかったので、標準の値で進めました"]
-    if by["hearing"] and by["default"]:
-        parts.append(standard)
+    if not prepared.asked["questions"]:  # nothing to ask: say why, as it is, and how many are standard values
+        # only what is true at this point: the first hearing asks nothing (a run may still ask later, with ask_user)
+        why = "要件が先に決まっている記録なので、はじめの質問はありません" if prepared.from_file or prepared.given else "この依頼から、はじめに聞くことはありませんでした"
+        if not quiet:
+            return f"{why}。設計を始めます"
+        line = f"{why}。書かれていない {len(quiet)} 個は、まず標準の値で進めます"
+        return line + (f" (そのうち {should_ask} 個は、本来は人に確かめたい項目なので、あとで聞くことがあります)" if should_ask else "")
+    parts = [f"{by['hearing']} つ答えてもらいました" if by["hearing"] else "答えはなかったので、聞いたことは標準の値で進めました"]
+    if by["hearing"] and by_default_ask:
+        parts.append(f"答えのなかった {by_default_ask} つは標準の値です")
+    if quiet:
+        parts.append(f"もともと聞かない項目 {len(quiet)} 個も標準の値です")
     if prepared.unresolved:
         parts.append(f"答えも標準の値も無い {len(prepared.unresolved)} つは、要件に入っていません")
     if rules:
