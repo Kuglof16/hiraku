@@ -440,11 +440,16 @@ def clevis_weld_stress(F: float, F_n: float, F_t: float, e: float, b: float, t: 
 
 def clevis_utilisations(F, pin_axis, root_line, d: float, n: int, t: float, s: float, b: float, e: float,
                         f_v: float, f_b: float, f_plate: float, f_vw: float) -> dict[str, float]:
-    """[clevis] R9's four quantities (contract 40645e0) for one mount: each stress over its allowable."""
+    """[clevis] R9's quantities (contract 40645e0, docs/contract.md 金具の継ぎ手) for one mount: each stress over
+    its allowable, and bolt_utilisation, the larger of the bolt's shear and bearing (as the R9-bolt builder judges,
+    hiraku/catalog/builders/mounts_r9.py)."""
     p = mount_force_split(F, pin_axis, root_line)
+    shear = clevis_pin_shear(p["F_p"], d, n) / f_v
+    bearing = clevis_bearing(p["F_p"], d, t, n) / f_b
     return {
-        "bolt_shear_utilisation": clevis_pin_shear(p["F_p"], d, n) / f_v,
-        "bolt_bearing_utilisation": clevis_bearing(p["F_p"], d, t, n) / f_b,
+        "bolt_utilisation": max(shear, bearing),
+        "bolt_shear_utilisation": shear,
+        "bolt_bearing_utilisation": bearing,
         "plate_bending_utilisation": clevis_plate_root_stress(p["F_n"], p["F_t"], p["F_v"], e, b, t) / f_plate,
         "weld_utilisation": clevis_weld_stress(p["F"], p["F_n"], p["F_t"], e, b, t, s) / f_vw,
     }
