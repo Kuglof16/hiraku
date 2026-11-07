@@ -199,8 +199,13 @@ def _check_stop(ctx: RunContext) -> None:
 
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
+    skipped: set[str] = set()  # quantities of this step not predicted: a prediction reading one (pred.<q>) is skipped too
     for p in specs:
+        needs = sorted({ref[len("pred."):] for ref in p["inputs"].values()
+                        if isinstance(ref, str) and ref.startswith("pred.") and ref[len("pred."):] in skipped})
         try:
+            if needs:
+                raise ReaderError(f"its inputs read {', '.join(needs)}, not predicted on this design")
             given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
         except ReaderError as e:  # the formula does not apply to this design (e.g. nothing outside point R for R8-push)
             ctx.store.emit("agent.said", agent="system", domain=lc["domain"],
@@ -208,6 +213,7 @@ def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> li
                                 f"予測しません ({e})",
                            data={"skipped_prediction": p["formula_id"], "load_case_id": lc["load_case_id"],
                                  "quantity": p["quantity"], "reason": str(e)})
+            skipped.add(p["quantity"])
             continue
         args = {
             "load_case_id": lc["load_case_id"],
@@ -618,7 +624,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         reasons = rev.get("reasons") or {}  # module (or packager) -> the plan's own words for that part
         routed = route_reds(ctx, ctx.version)
         mods_red = red_modules(ctx, ctx.version)  # module -> its reds (a role may own several modules)
-        if rev.get("answers_ended"):
+        if rev.get("answers_ended") or rev.get("whole"):
+            # whole: the entry is one design set fixed as a whole (the submission's v5), so every module of it goes to
+            # its designer whichever modules the version's reds name, the reds in the reason
             # no red: the entry answers load cases that ended without a verdict (their cause's fix names a change of
             # these modules), so it goes to the designers of its own modules; load_case_ids are for reds only, the
             # ended cases are in the reason

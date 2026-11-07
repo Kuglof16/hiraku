@@ -144,6 +144,10 @@ offroad-4w:
         the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
     - &rev_joints
       say: 強度 (段 3、つなぎ目の壁とサスペンションの取付) の NG を直すため、レールとつなぎ目、塔、取付を強くします
+      # the fixed v5 (reach222) as one set: every module's part goes to its designer, not only the modules v4's reds
+      # name (without it the EC2 runs of d3e700b7 built three different v5s, none of them reach222: the occupant's
+      # roll bar and side frame left out in all three, the package's seat and pedals and the suspension's mounts in some)
+      whole: true
       # the user's set o2, v5 fixed (2026-11-07; the analysis department's studies/lere sets.py RECSb40w14sb60h8o2,
       # claude/analysis-lere-ec2 9e563567: RECb40 + the roll bar's rear stays + the roll bar 1400 wide, 200 mm back and the
       # side bars 60.5 x 3.2 at 800 mm); the design department's generator gives the same design as the set's JSON (72
