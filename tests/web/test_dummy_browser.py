@@ -253,8 +253,10 @@ class DummyBrowserTest(unittest.TestCase):
         self.assertEqual(self.errors, {"real": [], "plain": []})
         # the showcase's four car runs (the whole dummy, a head and limbs) are among the designs
         # drawn; other runs' occupants (the care bed's lying person: back, seat, thigh, leg) are too
+        # (and others since: 20261107-164004-free-utv)
         whole = {n.split(" v")[0] for n, d, _ in self.designs if n.startswith("2026") and any(f"{p}.head" in {q["id"] for q in d["parts"]} for p in persons(d))}
-        self.assertEqual(len(whole), 4, whole)
+        cars = {"20261105-091217-offroad-4w", "20261105-094333-offroad-4w", "20261105-150416-offroad-4w-scripted", "20261105-160725-offroad-4w"}
+        self.assertLessEqual(cars, whole, whole)
 
     def test_table_in_inches_and_millimetres(self):
         self.assertEqual(self.table["inch"], TABLE_IN)
@@ -398,8 +400,11 @@ class DummyBrowserTest(unittest.TestCase):
         record: within 3 mm for the driver of every version of 20261105-160725 and -150416 and of the
         versions whose seat does not slide (v1: -69.25 recorded, -67.74 drawn). Not asserted: the
         200 mm slides of -091217 v2 and -094333 v2 to v4 (about 9 mm apart: the record sits the big
-        driver elsewhere on the slide, k4_geometry.people.poses, than the design's occupant boxes) and
-        the passengers, whose knee is bent otherwise than the record's straight buttock-knee length."""
+        driver elsewhere on the slide, k4_geometry.people.poses, than the design's occupant boxes),
+        20261107-164004-free-utv (its occupant boxes are not K4's pose: the thigh's pitch goes from
+        -6.4 deg at v1 to -10.0 deg at v5 while K4's knee room stays 55.75 mm; drawn at v1: 40.29 mm,
+        the design's boxes as they are) and the passengers, whose knee is bent otherwise than the
+        record's straight buttock-knee length."""
         rows = []
         for name, d, record in self.designs:
             if record is None:
@@ -415,7 +420,8 @@ class DummyBrowserTest(unittest.TestCase):
                 if person == "occupant_R":
                     self.assertAlmostEqual(room, record, places=6, msg=name)  # the record is K4's own
                 rows.append((name, person, round(room, 2), round(drawn, 2)))
-                if person == "occupant_R" and (people.seat_slide(d) == 0.0 or name.startswith(("20261105-160725", "20261105-150416"))):
+                own_pose = not name.startswith("20261107-164004")  # (its boxes are not K4's pose: the docstring)
+                if person == "occupant_R" and own_pose and (people.seat_slide(d) == 0.0 or name.startswith(("20261105-160725", "20261105-150416"))):
                     self.assertLess(abs(drawn - room), 3.0, (name, person, room, drawn))
         self.assertTrue(any(r[2] < -69 for r in rows), rows)  # the -69.25 mm of the first versions is among them
         self.assertTrue(any(r[0].startswith("20261105-160725") for r in rows), rows)  # (its later versions: the same parts as v2)
