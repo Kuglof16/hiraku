@@ -402,9 +402,9 @@ class EndingTest(unittest.TestCase):
         self.assertEqual((r["end_status"], r["stop_code"], r["stop_reason"]), (None, None, ""))
         self.assertEqual(r["last_version"], 1)
 
-    def test_a_big_record_is_read_at_its_head_and_tail_only(self):
-        # 3 MB of events between the start and the end: the judgement far from the end is not seen,
-        # the one in the tail is
+    def test_a_big_record_is_read_at_its_head_and_tail_and_its_judgements(self):
+        # 3 MB of events between the start and the end: the head and the tail are read; of the rest,
+        # only the judgement.updated lines (so a domain judged far from the end still counts)
         filler = _line(1, "agent.said", data={"text": "x" * 900})
         lines = [_line(0, "run.started", data={"want": "w"}), self.judged(1, "early", "red")] + [filler] * 3300 + [
             self.judged(1, "strength", "green"), _line(9, "run.finished", data={"status": "done"})]
@@ -413,7 +413,16 @@ class EndingTest(unittest.TestCase):
         r = self.summary(d.name)
         self.assertEqual(r["want"], "w")  # the head
         self.assertTrue(r["finished"])
-        self.assertEqual(r["judged"], {"green": 1, "red": 0, "pending": 0})  # "early" was not read
+        self.assertEqual(r["judged"], {"green": 1, "red": 1, "pending": 0})  # "early" is counted
+
+    def test_a_domain_left_pending_far_from_the_end_is_not_all_ok(self):
+        # (showcase care-bed: nvh's last judgement.updated, pending, is far from the end; the row
+        # must not say 全部 OK)
+        filler = _line(1, "agent.said", data={"text": "x" * 900})
+        lines = [_line(0, "run.started", data={"want": "w"}), self.judged(1, "nvh", "pending")] + [filler] * 3300 + [
+            self.judged(1, "strength", "green"), _line(9, "run.finished", data={"status": "done"})]
+        r = self.summary(self.folder("20261104-011628-pending", lines, project={"want": "w", "design_versions": [1]}).name)
+        self.assertEqual(r["judged"], {"green": 1, "red": 0, "pending": 1})
 
     def test_when_without_a_clock(self):
         self.assertEqual(webserver._when("", "bad-id"), "")

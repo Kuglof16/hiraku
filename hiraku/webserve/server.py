@@ -285,10 +285,46 @@ def _when(created_at: str, run_id: str) -> str:
     return f"{int(mo)}/{int(d)} {h}:{mi}"
 
 
+_JUDGEMENT_LINES: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
+
+
+def _judgement_events(events_file: Path) -> list[dict[str, Any]]:
+    """Every judgement.updated event's data in events.jsonl, oldest first. Only the lines that name
+    the kind are parsed (a big record is scanned, not parsed whole), and the answer is kept while
+    the file's size and time stay the same."""
+    try:
+        st = events_file.stat()
+    except OSError:
+        return []
+    key = (str(events_file), st.st_mtime_ns, st.st_size)
+    if key in _JUDGEMENT_LINES:
+        return _JUDGEMENT_LINES[key]
+    out: list[dict[str, Any]] = []
+    try:
+        with events_file.open("rb") as f:
+            for raw in f:
+                if b'"judgement.updated"' not in raw:
+                    continue
+                try:
+                    ev = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue  # (the last line, still being written)
+                if isinstance(ev, dict) and ev.get("kind") == "judgement.updated" and isinstance(ev.get("data"), dict):
+                    out.append(ev["data"])
+    except OSError:
+        return []
+    if len(_JUDGEMENT_LINES) > 64:  # (an older size or time of the same file stays behind: kept small)
+        _JUDGEMENT_LINES.clear()
+    _JUDGEMENT_LINES[key] = out
+    return out
+
+
 def _judged(run_dir: Path, version: int | None, tail: list[dict[str, Any] | None]) -> dict[str, int] | None:
     """How the domains of the last version were judged: {"green", "red", "pending"} counts, from
-    v<NNN>/judgements.json, else from the judgement.updated events of that version in the tail
-    (the last one per domain); None when neither has any."""
+    v<NNN>/judgements.json, else from the judgement.updated events of that version anywhere in
+    events.jsonl (the last one per domain: a domain judged long before the end, e.g. one still
+    pending, is counted too, so 全部 OK is never said with a domain unjudged); None when neither has
+    any. tail is no longer needed for this (kept in the signature for the callers)."""
     if version is None:
         return None
     judgements: list[dict[str, Any]] = []
@@ -301,11 +337,9 @@ def _judged(run_dir: Path, version: int | None, tail: list[dict[str, Any] | None
             judgements = []
     if not judgements:
         last: dict[str, dict[str, Any]] = {}
-        for ev in tail:
-            if ev and ev.get("kind") == "judgement.updated" and isinstance(ev.get("data"), dict):
-                d = ev["data"]
-                if d.get("design_version") == version and d.get("domain"):
-                    last[d["domain"]] = d
+        for d in _judgement_events(run_dir / EVENTS_FILE):
+            if d.get("design_version") == version and d.get("domain"):
+                last[d["domain"]] = d
         judgements = list(last.values())
     if not judgements:
         return None
