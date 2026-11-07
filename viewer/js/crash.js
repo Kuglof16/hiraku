@@ -1,5 +1,5 @@
 // Crash (C1), two record kinds (viewer/src/crash.py):
-//  A (crash, 1-D): the frame stays where it stands (A has no deformed shape); colour = the stored peak
+//  A (crash, 1-D): the crush(t) drawn as the front pushed back to (front end - crush) (A has no deformed shape); colour = the stored peak
 //    stress x a(t)/a_max; the elastic deflection x a(t)/a_max x scale is off by default; crush(t) is a plot.
 //  B (crash_beam): the run's own node positions over time (real size); colour = element axial strain or
 //    fold angle computed from those positions; broken members marked; part boxes moved with their nodes;
@@ -30,10 +30,19 @@ HV.crashA = async function (D, ctx) {
   const ratio = () => Math.max(0, a[S.k]) / amax;
   const spec = () => ({ min: S.log ? Math.max(0.1, D.stress.max * 1e-3) : 0, max: Math.max(D.stress.max, 1e-9), log: S.log, unit: D.stress.unit,
                         title: '部材の相当応力 × a(t)/a_max', marks: D.marks || [], note: `範囲はピーク時の最大 ${HV.fmt(D.stress.max)} ${D.stress.unit}` });
+  // the 1-D crush drawn on the shape (update below). A's model has no shape: where and how the frame folds is not
+  // solved, this only shows how far the vehicle has gone into the wall at t
+  let xFront = -Infinity;
+  for (let i = 0; i < nodes0.length; i += 3) xFront = Math.max(xFront, nodes0[i]);
   function update() {
-    const r = ratio(), f = S.scale * r;
+    // the vehicle moves crush(t) towards the wall and what would pass the wall face (the front end at contact)
+    // stays at it: the front crushed by crush(t), the rest carried forward rigidly
+    const r = ratio(), f = S.scale * r, go = Math.max(0, x[S.k]);
     for (let i = 0; i < nodes0.length; i++) cur[i] = nodes0[i] + f * disp[i];
+    for (let i = 0; i < nodes0.length; i += 3) cur[i] = Math.min(cur[i] + go, xFront);
     beams.setNodes(cur);
+    D.parts.forEach((p, j) => { const front = p.c[0] + p.s[0] / 2; boxes.off[j] = [Math.min(go, xFront - front), 0, 0]; });
+    boxes.update();
     const c = spec();
     beams.colourMembers(m => pm[m] === null ? [0.6, 0.6, 0.6] : HV.colour(c, pm[m] * r));
     for (const o of arr) {
@@ -51,7 +60,7 @@ HV.crashA = async function (D, ctx) {
     setLog(on) { S.log = on; update(); },
     timeText(i) { return `t = ${(1000 * t[i]).toFixed(1)} ms   減速度 ${a[i].toFixed(2)} ${D.units.deceleration}   つぶれ ${x[i].toFixed(1)} ${D.units.crush}`; },
     hud() {
-      return ['A: 1次元モデル。車体はその場に描く (つぶれはグラフだけ)' + (S.scale > 0 ? `   弾性たわみ ×${S.scale}、実寸ではない` : ''),
+      return [`A: 1次元モデル。車を壁へつぶれ ${x[S.k].toFixed(0)} ${D.units.crush} だけ進め、壁の面より前に出る所を面で止めて描く (実寸。どこがどう曲がるかは解いていない)` + (S.scale > 0 ? `   弾性たわみ ×${S.scale}、実寸ではない` : ''),
               `色: 部材の相当応力 (ピーク時の値 × a(t)/a_max = ×${ratio().toFixed(2)})   矢印 1 kN = 5 mm`];
     },
     contour: spec,
@@ -67,7 +76,7 @@ HV.crashA = async function (D, ctx) {
     pickables: () => [beams.mesh, boxes.mesh],
     info(hit) {
       const r = ratio();
-      if (hit.object === boxes.mesh) { const p = D.parts[hit.instanceId]; return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)}<br>動かさない (A は 1次元モデル)`; }
+      if (hit.object === boxes.mesh) { const p = D.parts[hit.instanceId]; return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)}<br>A は 1次元モデル: つぶれの分だけ壁へ進め、壁の面より前に出る分は面で止めて描く`; }
       const m = beams.memberOf(hit), s = pm[m], [na, nb] = D.frame.members[m], ids = D.frame.node_ids;
       const d = n => Math.hypot(disp[3 * n], disp[3 * n + 1], disp[3 * n + 2]);
       return `<b>${HV.esc(D.frame.member_ids[m])}</b> ${HV.esc(D.frame.member_names[m])}<br>` +
