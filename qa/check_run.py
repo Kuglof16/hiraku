@@ -167,7 +167,9 @@ def utilisation(value, limit, op) -> float | None:
         return 0.0 if OPS[op](value, limit) else UTIL_CAP
     return ratio
 MOUNT_TEST = "R9"  # suspension mounts (contract 40645e0): a bracket's bolts, plate and weld at the mount force
-MOUNT_QUANTITIES = ("bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
+# bolt_utilisation: the larger of bolt_shear_utilisation and bolt_bearing_utilisation, the name the R9-bolt
+# builder judges (hiraku/catalog/builders/mounts_r9.py; docs/contract.md, 金具の継ぎ手)
+MOUNT_QUANTITIES = ("bolt_utilisation", "bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
                     "weld_utilisation")
 PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
 FREE_PARTS = "free_parts"  # the version-wide count of the same formula, and a tool result that must be 0 then
@@ -369,7 +371,13 @@ class RunChecker:
             elif kind == "load_cases.created":
                 v = data.get("design_version")
                 if v in self.version_lcs:
-                    self.error("ids.duplicate", w, f"load cases of version {v} created twice")
+                    # write_load_case saves the version's whole list again with its load case added
+                    # (hiraku/tools/load_case_writer.py): every earlier load case kept, the new ones written by Claude
+                    old = self.version_lcs[v][1]
+                    new = {lc.get("load_case_id"): lc for lc in data.get("load_cases") or []}
+                    added = [new[k] for k in set(new) - set(old)]
+                    if not (set(old) <= set(new) and added and all(lc.get("written_by") == "claude" for lc in added)):
+                        self.error("ids.duplicate", w, f"load cases of version {v} created twice")
                 if v not in self.designs:
                     self.error("load_cases.version", w, f"load cases for version {v}, not created before them")
                 elif v == 1:
