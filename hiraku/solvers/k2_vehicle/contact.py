@@ -9,15 +9,35 @@ the road normal with Coulomb friction across it, compressive only:
     F_t = -mu F_n v_t / max(|v_t|, v_eps)                         (v_t: its speed across the normal)
 
 v_eps turns Coulomb friction into a steep viscous law below that slip speed (a regularised Coulomb
-friction), so a body at rest is held by a force that grows with its creep. On a road.Planes ground
+friction), so a body at rest is held by a force that grows with its creep. The step is explicit, so that
+viscous law's coefficient mu F_n / v_eps is capped at 1 / (h / m_eff): a force that would take a point's
+slip past zero in one step h brings it to rest instead (1 / m_eff = n (1/M + (r x t) . I^-1 (r x t)) for the
+body, M its mass, n the points touching at once, and for a wheel point + n_w (t . dc)^2 / (m_u |dc|^2) for
+its wheel's travel, n_w that wheel's points touching, dc = d(point)/ds). Without the cap a stiff ground
+(large F_n) made the step diverge: the slip reversed each step and grew. On a road.Planes ground
 (a tilt table with the floor at its hinge) each plane acts along its own normal, and a point in the
 valley between two planes touches both. On any other road the ground is taken as flat under each
 point: the normal is vertical, the height is Road.height at the point (exact on the flat road of the
 lane change; on a step it ignores the step's face).
 
 The forces are computed from the state at the start of the step, as the tyres' are, and enter the
-body's equations through Sim.step(ext=...) (a force in body axes at a point relative to the sprung CG),
-so Sim itself is unchanged and a run without contact points is the same run as before.
+body's equations through Sim.step(ext=...) (a force in body axes at a point relative to the sprung CG); a
+run without contact points is the same run as before. A wheel point's place follows its wheel's travel
+s, so its force also works on that travel: BodyContact.travel ({corner: F . d(point)/ds}) goes into
+Sim.step(travel=...), and its speed includes the travel's (s' d(point)/ds). Without that (before
+2026-11-07) the force went into the body only while the point's depth moved with the travel, and a stiff
+ground made energy (measured on a design rolled on the tilt table at 1e5 N/mm: 210 kJ of work on the body
+in the first 54 ms of contact, the CG thrown to 18.7 m/s).
+
+start(): a point already under the ground when the contact starts takes the ground at that depth and is
+pushed only for what it goes deeper (the ground follows it back up). The tilt rollover turns the table
+without the body's contact, and a soft tyre (60 N/mm, 62 mm deflection) on a body rolled 9 deg puts its
+wheel's ring 18.6 mm under the table at the tip: switched on, that spring would give the body k d^2 / 2
+(173 J at 1000 N/mm, 17 kJ at 1e5 N/mm).
+
+Stiff ground (a pavement): the springs need a step that resolves them on the lightest mass a point
+moves, the wheel's unsprung mass for a ring point (h < 2 sqrt(m_u / k) for the step to be stable: about
+0.85 ms at 1e5 N/mm and 18 kg).
 
 The points: the roll bar's members (design members whose id starts with rollbar_ or rops_, the
 names of hiraku.designgen.ladder_4w) sampled every POINT_SPACING along their length, and the corners of
@@ -56,6 +76,29 @@ V_EPS = 0.05
 # to c v at touchdown (the form of Hunt and Crossley's contact damping, proportional to the depth; not
 # checked against their paper). HIRAKU's choice
 D_RAMP = 0.005
+# A paved ground (R4-rollover's second ground, beside the soil of K_CONTACT): 100000 N/mm per point, 「HIRAKU の仮定」.
+# No measured stiffness of a ground under a point load was found (the intake survey converts 1000 N/mm into sand's
+# range; concrete is effectively rigid). It is where the R4 rollover on the design RECSb40w14sb60h8 stops changing as
+# the stiffness grows (2026-11-07, rops_occupant_clearance in mm at the steps 0.05 / 0.025 ms: 3e4 N/mm 62 / 60,
+# 1e5 60 / 54, 3e5 63 / 55). At this stiffness the result is not converged with the step: 70 / 60 / 54 / 50 mm at
+# 0.1 / 0.05 / 0.025 / 0.0125 ms (contact_dt takes 0.025 ms).
+K_PAVEMENT = 1.0e8
+
+
+def contact_dt(k: float) -> float:
+    """s: the step the rollover runs give their body contact of stiffness k (N/m per point); they step at min(their
+    dt, this). From the R4 rollover on RECSb40w14sb60h8 (2026-11-07, rops_occupant_clearance at this step and at half
+    of it): up to 1e6 N/m 93 / 92 mm, up to 1e7 72 / 70, up to 3e7 62 / 60 (converged within 2 mm; at 1 ms the soil's
+    was 13 mm off, at 0.25 ms 3e4 N/mm's 32 mm). Above 3e7 N/m (the pavement) 0.025 ms, where 1e5 N/mm gave 54 mm
+    against 50 at half the step: not converged (about 4 mm per halving), a step taken for the run's time (447 s for the
+    whole R4 run with the turn to the tip at that step too, 639 s at 0.0125 ms). HIRAKU's choice from those runs."""
+    if k <= 1.0e6:
+        return 2.5e-4
+    if k <= 1.0e7:
+        return 1.0e-4
+    if k <= 3.0e7:
+        return 5.0e-5
+    return 2.5e-5
 WHEEL_FACE_POINTS = 12  # points on each wheel's outer face, on a ring ...
 # ... of 0.8 x the wheel radius: the sidewall, inside the tread, so the ring stays off the road while the
 # tyre carries the wheel (at the full radius its lowest point sits in the tyre's own deflection). HIRAKU's choice
@@ -172,7 +215,8 @@ class BodyContact:
 
     ext(sim): the contact forces of the sim's present state as Sim.step's ext list; after it,
     self.force[i] (N, world) and self.touch[i] (bool) per point, self.pos[i] (m, world), self.depth[i]
-    (m below the road, negative above it)."""
+    (m below the road, negative above it), self.travel (Sim.step's travel: the wheel points' forces on
+    their wheels' travels). A run steps with sim.step(ctl, con.ext(), con.travel), after start()."""
 
     def __init__(self, sim, points: list[ContactPoint], mu: float, k: float = K_CONTACT, c: float = C_CONTACT,
                  v_eps: float = V_EPS):
@@ -191,6 +235,13 @@ class BodyContact:
             wc = sim.veh.corners[i].pos
             self.wheel.append((i, p.design[0] - float(wc[0]), p.design[1] - float(wc[1]), p.design[2] - float(wc[2])))
         self.mu, self.k, self.c, self.v_eps = float(mu), float(k), float(c), float(v_eps)
+        # the friction cap's body: the mass the sim's translation carries and the sprung inertia (body axes)
+        self.m_body = float(getattr(sim, "m_dof", 0.0) or 0.0)
+        i_s = getattr(sim, "i_s", None)
+        self.i_inv = np.linalg.inv(np.asarray(i_s, float)) if i_s is not None else None
+        self.capped = 0  # point-steps whose friction the cap held
+        self.d0 = {}  # (point, plane) -> the depth the ground is taken at (start())
+        self.travel = {}  # corner index -> N: the last ext()'s generalised forces on the wheels' travels
         n = len(self.points)
         self.force = [(0.0, 0.0, 0.0)] * n
         self.touch = [False] * n
@@ -207,32 +258,65 @@ class BodyContact:
         planes_road = hasattr(road, "planes")
         out = []
         k, c, mu, ve = self.k, self.c, self.mu, self.v_eps
+        h = float(getattr(sim, "dt", 0.0) or 0.0)
+        cap = self.m_body > 0.0 and self.i_inv is not None and h > 0.0
+        # first pass: every point's place (body axes from the sprung CG, and world), the wheel's travel
+        # direction for a wheel point, and which points touch at the start of the step (they share the
+        # body's mass, a wheel's touching points share its travel, in the friction cap)
         centres = {}
+        self.travel = {}
+        geo = []
+        n_touch = 0
+        n_wheel = {}
         for i, (bx, by, bz) in enumerate(self.b):
             wh = self.wheel[i]
+            tr = None
             if wh is not None:
                 j = wh[0]
                 if j not in centres:
-                    centres[j] = sim._path(j, sim.s[j])[:3]  # wheel centre, body axes from the sprung CG
-                cx, cy, cz = centres[j]
+                    g = sim._path(j, sim.s[j])  # wheel centre, body axes from the sprung CG, and d(centre)/ds
+                    dcw = _to_world(rot, g[3], g[4], g[5])
+                    m_tr = sim.mu_[j] * (g[3] * g[3] + g[4] * g[4] + g[5] * g[5])  # the travel's own mass
+                    centres[j] = (g[0], g[1], g[2], dcw, float(sim.sd[j]),
+                                  1.0 / m_tr if sim.dof[j] and m_tr > 0.0 else 0.0)
+                cx, cy, cz, dcw, sdj, inv_tr = centres[j]
                 bx, by, bz = cx + wh[1], cy + wh[2], cz + wh[3]
+                tr = (j, dcw, sdj, inv_tr)
             rx, ry, rz = _to_world(rot, bx, by, bz)
             x, y, z = px + rx, py + ry, pz + rz
-            self.pos[i] = (x, y, z)
             # the planes under the point: a Planes road's own, else the road's height with a vertical normal
             planes = road.planes if planes_road else (((x, y, road.height(x, y)), (0.0, 0.0, 1.0)),)
+            geo.append((bx, by, bz, rx, ry, rz, x, y, z, planes, tr))
+            if cap and any((qx - x) * nx + (qy - y) * ny + (qz - z) * nz > 0.0
+                           for (qx, qy, qz), (nx, ny, nz) in planes):
+                n_touch += 1
+                if tr is not None:
+                    n_wheel[tr[0]] = n_wheel.get(tr[0], 0) + 1
+        for i, (bx, by, bz, rx, ry, rz, x, y, z, planes, tr) in enumerate(geo):
+            self.pos[i] = (x, y, z)
             ux = vx + wy * rz - wz * ry
             uy = vy + wz * rx - wx * rz
             uz = vz + wx * ry - wy * rx
+            if tr is not None:  # a wheel point also moves with the wheel's travel
+                dcw, sdj = tr[1], tr[2]
+                ux, uy, uz = ux + dcw[0] * sdj, uy + dcw[1] * sdj, uz + dcw[2] * sdj
             fx = fy = fz = 0.0
             dmax = -math.inf
             touch = False
-            for (qx, qy, qz), (nx, ny, nz) in planes:
+            for kp, ((qx, qy, qz), (nx, ny, nz)) in enumerate(planes):
                 d = (qx - x) * nx + (qy - y) * ny + (qz - z) * nz  # depth below the plane, along its normal
                 dmax = d if d > dmax else dmax
                 if d <= 0.0:
+                    self.d0.pop((i, kp), None)
                     continue
                 touch = True
+                d0 = self.d0.get((i, kp))
+                if d0 is not None:  # under the ground at start(): only what it went deeper counts
+                    if d < d0:
+                        self.d0[(i, kp)] = d0 = d
+                    d -= d0
+                    if d <= 0.0:
+                        continue
                 un = ux * nx + uy * ny + uz * nz
                 fn = k * d - c * (d / D_RAMP if d < D_RAMP else 1.0) * un
                 if fn <= 0.0:
@@ -240,6 +324,25 @@ class BodyContact:
                 tx, ty, tz = ux - un * nx, uy - un * ny, uz - un * nz
                 vt = math.sqrt(tx * tx + ty * ty + tz * tz)
                 s = mu * fn / (vt if vt > ve else ve)
+                if cap and vt > 0.0:
+                    # the body's mass seen at the point along the slip direction (body axes), shared by the
+                    # touching points, and for a wheel point its travel's (mass m_u |dc|^2, moved by t . dc)
+                    t_b = _to_body(rot, tx / vt, ty / vt, tz / vt)
+                    cx_ = by * t_b[2] - bz * t_b[1]
+                    cy_ = bz * t_b[0] - bx * t_b[2]
+                    cz_ = bx * t_b[1] - by * t_b[0]
+                    ii = self.i_inv
+                    rot_part = (cx_ * (ii[0, 0] * cx_ + ii[0, 1] * cy_ + ii[0, 2] * cz_)
+                                + cy_ * (ii[1, 0] * cx_ + ii[1, 1] * cy_ + ii[1, 2] * cz_)
+                                + cz_ * (ii[2, 0] * cx_ + ii[2, 1] * cy_ + ii[2, 2] * cz_))
+                    inv = (1.0 / self.m_body + rot_part) * max(n_touch, 1)
+                    if tr is not None and tr[3] > 0.0:
+                        td = (tx * tr[1][0] + ty * tr[1][1] + tz * tr[1][2]) / vt
+                        inv += td * td * tr[3] * max(n_wheel.get(tr[0], 0), 1)
+                    s_max = 1.0 / (inv * h)
+                    if s > s_max:
+                        s = s_max
+                        self.capped += 1
                 fx += fn * nx - s * tx
                 fy += fn * ny - s * ty
                 fz += fn * nz - s * tz
@@ -248,7 +351,30 @@ class BodyContact:
             self.force[i] = (fx, fy, fz)
             if fx != 0.0 or fy != 0.0 or fz != 0.0:
                 out.append((_to_body(rot, fx, fy, fz), (bx, by, bz)))
+                if tr is not None and sim.dof[tr[0]]:
+                    # the generalised force on the wheel's travel: F . d(point)/ds
+                    dcw = tr[1]
+                    self.travel[tr[0]] = self.travel.get(tr[0], 0.0) + fx * dcw[0] + fy * dcw[1] + fz * dcw[2]
         return out
+
+    def start(self, sim=None):
+        """Start the contact from the present state: a point already under the ground (a wheel's ring inside
+        its tyre's deflection while the tyre carries the wheel, when the run before had no body contact)
+        takes the ground at its present depth instead, and is pushed only for what it goes deeper; the
+        ground follows it back up as it rises, to the true ground once it is out (so starting gives the
+        body no energy: a spring switched on d deep would give it k d^2 / 2)."""
+        self.d0 = {}
+        self.ext(sim)
+        for i, (x, y, z) in enumerate(self.pos):
+            sim_ = sim or self.sim
+            planes = sim_.road.planes if hasattr(sim_.road, "planes") else (
+                ((x, y, sim_.road.height(x, y)), (0.0, 0.0, 1.0)),)
+            for kp, ((qx, qy, qz), (nx, ny, nz)) in enumerate(planes):
+                d = (qx - x) * nx + (qy - y) * ny + (qz - z) * nz
+                if d > 0.0:
+                    self.d0[(i, kp)] = d
+        self.ext(sim)
+        return sorted({self.points[i].name for i, _ in self.d0})
 
     def total(self) -> tuple:
         return tuple(sum(f[a] for f in self.force) for a in range(3))

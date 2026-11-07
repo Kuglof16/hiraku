@@ -21,6 +21,14 @@ python -m viewer.src.aero <run dir>                              # crosswind
 python -m viewer.src.rops <run dir> [--versions 3,5,6]           # R4 roll bar push-over: the run's tool re-run (events.jsonl)
 ```
 
+Any one analysis, the field taken from its tool (`src/build.py`):
+
+```
+python -m viewer.src.build <run dir> <analysis id> [--json out.json | --out <dir>]
+```
+
+`viewer.src.build.for_analysis(run_dir, analysis_id)` returns `{field, data, title, source}` (`data` = what `data/<field>.js` holds, made by the field's own `build(args)` with its command's arguments for that analysis) or `{field: None, reason}`. Tools: frame_static, step_climb → strength (beam; step_climb with the record's step drawn); load_path → strength (the load-path model of `src/strength_records.py`: the record's load arrows, the contacts the tool's own `find_contacts` finds on the record's design and the path from the loaded parts through them to the members, free parts red, the record's max_stress / max_utilisation members red: the record has no per-member stresses); frame_shell → strength (the shell model at the record's one instant: its per_element von Mises and per_mesh_node displacement on its mesh, its largest hot spot, the wheel reactions; the panel says the time series is not in the record); modal → nvh; modal_shell → nvh_shell; crash, crash_beam → crash; tilt, braking, lane_change, offroad_roll → handling; launch, step_climb_dynamic, drive_energy → powertrain; crosswind → aero; fatigue → fatigue; thermal → thermal; assembly, entry_opening, spray_reach → assembly (the two as numbers beside the version's assembly record). A reason, nothing solved: rops_pushover (the page re-runs the run's tool), other tools, records without what the field reads. `--json` is read by `index.html?data=<url>#<field>` (over http: fetch does not read file://); `--out` writes a ready folder (index.html, js/, data/<field>.js).
+
 `<run dir>` is a run folder (`runs/<id>`, with `v001/`, ...) or one version folder. By default each script takes the newest version that has the tool's record. `--version v003` or `--analysis ana-0038` picks another one, and `--out` sets the output folder. Then open `viewer/index.html` in a browser; `index.html#crash` opens one field. `viewer/data/` is not committed.
 
 ## What each field shows
@@ -80,4 +88,4 @@ The look is HIRAKU's screen: the CSS variables of `web/css/app.css` (copied into
 
 - K2 tools (`k2_vehicle.model.build_vehicle` on the loading's parts): ばね上 (the rigid body), ばね下 (wheel kinds at the nearest corner with travel), 半分 (suspension kinds); members as rods' mass in the body, no stiffness. drive_energy (K3): every part on board in one mass, compared with the record's `vehicle_mass`.
 
-Tests: `python -m unittest tests.viewer.test_viewer tests.viewer.test_viewer_tfs tests.viewer.test_vehicle_fields tests.viewer.test_viewer_rops`. The browser test needs Playwright for the system Python (`py`) and is skipped without it.
+Tests: `python -m unittest tests.viewer.test_viewer tests.viewer.test_viewer_tfs tests.viewer.test_vehicle_fields tests.viewer.test_viewer_rops tests.viewer.test_build`. The browser test needs Playwright for the system Python (`py`) and is skipped without it.

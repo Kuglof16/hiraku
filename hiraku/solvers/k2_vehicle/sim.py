@@ -359,9 +359,12 @@ class Sim:
         return geo, centres
 
     # ----------------------------------------------------------------- step
-    def step(self, ctl: Controls, ext=None):
+    def step(self, ctl: Controls, ext=None, travel=None):
         """Advance one step. ext: list of (force, point) in body axes, the point relative
-        to the sprung CG (e.g. aerodynamic drag and side force at their centres of pressure)."""
+        to the sprung CG (e.g. aerodynamic drag and side force at their centres of pressure).
+        travel: {corner index: N} generalised forces on the corners' travels (e.g. the part along
+        the travel of a force at a point that moves with a wheel: F . d(point)/ds), added to the
+        corner's own travel force; corners without a travel are left out."""
         h = self.dt
         n = self.n
         rot = _r_tuple(self.q)
@@ -386,6 +389,9 @@ class Sim:
         for i in range(n):
             (rows[i], qs[i], o_spring[i], om_new[i], keep[i], o_ntot[i], o_fx[i], o_fy[i], o_f[i], o_p[i], o_n[i],
              o_slide[i], o_mz[i], o_gamma[i]) = self._corner(i, geo[i], contacts[i], rot, W, ctl, h)
+        for i, q in (travel or {}).items():
+            if self.dof[i]:
+                qs[i] += q
 
         rhs6, sm, jj = self._body_forces(rows, rot, ext)
         mm, rhs = self._mass_matrix(geo, rot, sm, jj, rhs6, qs)

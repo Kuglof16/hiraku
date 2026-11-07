@@ -28,6 +28,17 @@
 //             .wordmark) or an agent's pet or bubble (.petbox .say) crosses the text of another
 //             element, or a pressable thing, by more than SLACK px on both axes (a badge drawn
 //             over the HIRAKU name). Text boxes are cut to the box that clips them.
+//   cut       a line of text cut across by the edge of a box that clips it and does not scroll
+//             (overflow hidden or clip): part of the line inside, more than SLACK px of it outside, up
+//             or down (a card's last line cut in half by its frame). Not inside a box cut on purpose
+//             with an ellipsis or a line clamp (text-overflow, -webkit-line-clamp). Let off with data-lint="cut".
+//             With opts.unseen (a film: nothing is opened or scrolled) a line wholly below the edge too.
+//   apart     (only with opts.apart: a list of selectors) two shown boxes matched by different
+//             selectors cross by more than SLACK px on both axes, each cut to the box that clips it.
+//             For the boxes laid over the 3D (the toggles, the colour legend, the いま: line, the
+//             graph, the cause note): a box with pointer-events: none (the いま: line) is not seen
+//             by the hit test, and a box wholly under another is not "visible" above, so neither
+//             overlap nor cover sees them cross. One inside the other is not counted.
 //
 // One line by kind or class (ONE_LINE): buttons, select, summary, tabs, table heads, headings, and the
 // screen's labels/states: .pill .chip .badge .tag .vb .cut .drv .def .tb .state, and an <a> drawn as
@@ -352,6 +363,58 @@
       const w = px(Math.min(lr.right, r.right) - Math.max(lr.left, r.left));
       const h = px(Math.min(lr.bottom, r.bottom) - Math.max(lr.top, r.top));
       if (w > SLACK && h > SLACK) add("cover", l, { with: sel(el), withText: words(el), by: `${w.toFixed(0)}x${h.toFixed(0)}px` });
+    }
+  }
+  // (e2) cut: a line cut across by a clipping box that does not scroll
+  const cutBy = (el) => {
+    // the nearest box with overflow hidden/clip on the way up, unless one on the way cuts on purpose
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.textOverflow === "ellipsis" || (cs.webkitLineClamp && cs.webkitLineClamp !== "none")) return null;
+      const o = [cs.overflowX, cs.overflowY];
+      if (o.includes("auto") || o.includes("scroll")) return null; // (a scroller: looked at as it scrolls)
+      if (o.includes("hidden") || o.includes("clip")) return e;
+    }
+    return null;
+  };
+  for (const n of textNodes(root)) {
+    const p = n.parentElement;
+    if (!p || exempt(p, "cut") || !shown(p)) continue;
+    const box = cutBy(p);
+    if (!box || !shown(box)) continue;
+    const c = box.getBoundingClientRect();
+    if (!inView(c)) continue;
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) {
+      if (!(r.width > 0.5 && r.height > 0)) continue;
+      const out = Math.max(c.top - r.top, r.bottom - c.bottom);
+      const inside = Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top);
+      if (inside > 0.5 && px(out) > SLACK && r.right > c.left && r.left < c.right) {
+        add("cut", p, { by: `${px(out).toFixed(0)}px`, with: sel(box) });
+        break;
+      }
+      // opts.unseen (a film, where nothing is opened or scrolled): a line wholly under the frame too
+      if (opts.unseen && r.top >= c.bottom && r.right > c.left && r.left < c.right) {
+        add("cut", p, { by: "unseen", with: sel(box) });
+        break;
+      }
+    }
+  }
+  // (f) apart: the boxes of opts.apart, by their own boxes (not the hit test)
+  const apart = (opts.apart ?? []).map((s, i) =>
+    [...root.querySelectorAll(s)]
+      .filter((e) => shown(e) && !exempt(e, "apart"))
+      .filter((e) => inView(e.getBoundingClientRect()))
+      .map((e) => ({ e, i, r: cut(e.getBoundingClientRect(), clipOf(e.parentElement ?? e)) }))
+      .filter(({ r }) => r.right - r.left > 0.5 && r.bottom - r.top > 0.5),
+  ).flat();
+  for (let i = 0; i < apart.length; i++) {
+    for (let j = i + 1; j < apart.length; j++) {
+      const a = apart[i], b = apart[j];
+      if (a.i === b.i || a.e.contains(b.e) || b.e.contains(a.e)) continue;
+      const w = px(Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left));
+      const h = px(Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top));
+      if (w > SLACK && h > SLACK) add("apart", a.e, { with: sel(b.e), withText: words(b.e), by: `${w.toFixed(0)}x${h.toFixed(0)}px` });
     }
   }
   }; // pass

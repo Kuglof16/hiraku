@@ -495,6 +495,18 @@ class IntakeTest(unittest.TestCase):
         self.assertEqual(contract.errors("tool_input.find_tradeoffs", {"design_version": 2, "variables": ["tower_t"]}), [])
         self.assertIn("find_tradeoffs", contract.MCP_TOOLS_LATER)
 
+    def test_cfd_tool_inputs(self):
+        self.assertIn("cfd_aero", contract.MCP_TOOLS_LATER)
+        self.assertIn("K6", contract.BASES)
+        ok = contract.errors
+        self.assertEqual(ok("tool_input.cfd_aero", {}), [])
+        self.assertEqual(ok("tool_input.cfd_aero", {"design_version": 5, "yaws_deg": [0, 5, -5], "speed_kmh": [40, 20], "dx_mm": 56}), [])
+        self.assertEqual(ok("tool_input.cfd_aero", {"replay": "cfd/v5/aero_record.json"}), [])
+        self.assertNotEqual(ok("tool_input.cfd_aero", {"yaws_deg": [91]}), [])
+        self.assertNotEqual(ok("tool_input.cfd_aero", {"dx_mm": 5}), [])
+        self.assertNotEqual(ok("tool_input.cfd_aero", {"replay": "cfd/v5/aero.txt"}), [])
+        self.assertNotEqual(ok("tool_input.cfd_aero", {"wind_ms": 0}), [])
+
     def test_cad_tool_inputs(self):
         for name in ("export_step", "import_step", "edit_step"):
             self.assertIn(name, contract.MCP_TOOLS_LATER)

@@ -164,7 +164,8 @@ DESIGNER_ROLES_JA = {"structure": "構造", "mechanism": "機構", "electric": "
 LEGACY_MODULE_DESIGNERS = tuple(f"designer.{m}" for m in MODULES if m != "package")
 MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "import_knowledge", "rule_check", "write_report", "find_tradeoffs",
                    "write_design", "edit_design", "check_design", "write_load_case", "add_tests",
-                   "export_step", "import_step", "edit_step")  # the CAD tools: hiraku/tools/cad_tools.py
+                   "export_step", "import_step", "edit_step",  # the CAD tools: hiraku/tools/cad_tools.py
+                   "cfd_aero")  # the flow tool: hiraku/tools/cfd_tools.py
 MCP_TOOLS_TOOLMAKER = ("make_tool", "check_tool")  # Claude writes a tool in the run and checks it (in RUN_TOOLS)
 
 

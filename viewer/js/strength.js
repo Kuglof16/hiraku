@@ -8,8 +8,15 @@ window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.strength = {
   label: HV.FIELD_LABEL.strength,   // js/names.js: the contract's 強度信頼性, with (静的強度) to tell it from 疲労
-  async init(D, ctx) { return D.model === 'shell' ? HV.strengthShell(D, ctx) : HV.strengthBeam(D, ctx); },
+  async init(D, ctx) {
+    return D.model === 'shell' ? HV.strengthShell(D, ctx) : D.model === 'load_path' ? HV.strengthLoadPath(D, ctx) : HV.strengthBeam(D, ctx);
+  },
 };
+// two more models built from one record (viewer/src/strength_records.py):
+//  shell with D.single (a frame_shell record): the shell model at the record's one instant (no time series)
+//  load_path (a load_path record, R7 / R8): the frame, the parts, the record's load arrows, the contacts (points) and
+//        the path from the loaded parts through the contacts to the members; free parts red; the record's
+//        max_stress / max_utilisation members coloured (the record has no per-member stresses)
 
 // typed arrays of strength.py's pack_np (f32, u32, u16, i16, u8); 'i16s' = the time-differenced, byte-shuffled
 // displacements, returned summed back as Int16Array T x N x 3 (q; times disp_scale = mm)
@@ -42,6 +49,7 @@ HV.strengthBeam = async function (D, ctx) {
   const beams = await ctx.addBeams();
   const boxes = ctx.addParts(D.parts, { opacity: 0.25 });
   const arrows = ctx.addArrows();
+  ctx.addScene();   // step_climb: the step under the climbing wheels (the record's scene)
   const n0 = beams.nodes0, disp = await HV.unpack(D.disp.per_node), cur = new Float32Array(n0.length);
   const [pc, pt, pw] = await Promise.all(['c', 't', 'w'].map(k => HV.unpack(D.part_motion[k])));
   const pm = D.stress.per_member, S = { scale: 100, log: false };
@@ -156,16 +164,22 @@ HV.strengthShell = async function (D, ctx) {
   const hotText = k => { const h = D.hot[k]; return h ? `ホットスポット ${HV.fmt(h.value)} MPa (${h.joint}, ${h.member})` : 'ホットスポットなし'; };
   const ctl = {
     nT, t0: S.k, playMs: 220, viewDir: [0.9, -1.05, 0.75],
-    timeNote: `保存した ${nT} 時刻 (各輪が段差に当たる前後、${HV.fmt(D.t[0])} - ${HV.fmt(D.t[nT - 1])} s)。最初はホットスポットが一番大きい時刻`,
+    timeNote: D.single || `保存した ${nT} 時刻 (各輪が段差に当たる前後、${HV.fmt(D.t[0])} - ${HV.fmt(D.t[nT - 1])} s)。最初はホットスポットが一番大きい時刻`,
     scale: { min: 0, max: 300, step: 5, value: S.scale, label: '変形の倍率', note: `最大の変位 ${HV.fmt(D.disp_max)} mm (実寸)` },
     setScale(v) { S.scale = v; update(); },
     setTime(i) { S.k = i; update(); },
     setLog(on) { S.log = on; update(); },
-    timeText(k) { return `t = ${D.t[k].toFixed(3)} s   ${hotText(k)}   要素の最大 ${HV.fmt(D.el_max[k][0])} MPa (${D.el_max[k][2]})`; },
-    hud() { return [`変形 ×${S.scale}、実寸ではない   矢印 = 取付の力 (t = ${D.forces_at_t_s} s、1 kN = 100 mm)、点 = その力を受け持つ節点`,
+    timeText(k) { return (D.single ? '記録の 1 時刻 (時系列なし)' : `t = ${D.t[k].toFixed(3)} s`) + `   ${hotText(k)}   要素の最大 ${HV.fmt(D.el_max[k][0])} MPa (${D.el_max[k][2]})`; },
+    hud() { return [D.single ? `変形 ×${S.scale}、実寸ではない   矢印 = 記録の輪の反力 (1 kN = 100 mm)   時系列は記録にない (1 時刻)`
+                             : `変形 ×${S.scale}、実寸ではない   矢印 = 取付の力 (t = ${D.forces_at_t_s} s、1 kN = 100 mm)、点 = その力を受け持つ節点`,
                     `色: 要素の相当応力   紫の球 = ホットスポット`]; },
     contour: spec,
     plot() {
+      if (D.single) {
+        const mp = D.member_plot || [];
+        return [{ title: '部材ごとのシェルの相当応力の最大 (記録、上位 20、横軸 = 順位)', unit: 'MPa', xlabel: '順位', x: mp.map((_, i) => i + 1),
+                  ys: [{ v: mp.map(r => r.value), col: '#2b59c3' }], marks: [], cursor: null }];
+      }
       const tx = D.t, c = D.t[S.k];
       return [{ title: 'ホットスポットの応力 (IIW)', unit: 'MPa', xlabel: 't [s]', x: tx, ys: [{ v: D.hot.map(h => h ? Math.abs(h.value) : NaN), col: '#8e6bbf' }], marks: [], cursor: c },
               { title: '要素の最大 (除外を除く)', unit: 'MPa', xlabel: 't [s]', x: tx, ys: [{ v: D.el_max.map(m => m[0]), col: '#e9893a' }], marks: [], cursor: c }];
@@ -182,6 +196,7 @@ HV.strengthShell = async function (D, ctx) {
     },
     panel(div) {
       const add = (tag, html) => { const e = document.createElement(tag); e.innerHTML = html; div.appendChild(e); return e; };
+      if (D.single) { add('h3', '記録の 1 時刻'); const n = add('div', ''); n.className = 'muted'; n.id = 'stSingle'; n.textContent = D.single; }
       add('h3', '色と表示 (シェル)');
       const r1 = add('div', `<label><input type="checkbox" id="stGrey" checked> 除外の要素を灰色</label> <select id="stRange"><option value="yield">降伏までで色</option><option value="all">全時刻の最大で色</option><option value="now">この時刻の最大で色</option></select>`);
       r1.className = 'row'; div.querySelector('#stRange').value = S.range;
@@ -200,6 +215,89 @@ HV.strengthShell = async function (D, ctx) {
           if (S.sel >= 0) { jump(m.hp); const b = document.getElementById('info'); b.innerHTML = `<b>${HV.esc(m.support)} ${HV.esc(m.mount)}</b><br>力 (${m.F.map(v => HV.fmt(v)).join(', ')}) N<br>${HV.esc(m.how)}、${m.n} 節点 (黒い点)`; b.style.display = 'block'; document.getElementById('infohint').style.display = 'none'; } };
         list.appendChild(d);
       });
+    },
+  };
+  update();
+  return ctl;
+};
+
+HV.strengthLoadPath = async function (D, ctx) {
+  const T = window.THREE, view = ctx.view;
+  const beams = await ctx.addBeams();
+  const boxes = ctx.addParts(D.parts, { opacity: 0.3 });
+  const arrows = ctx.addArrows();
+  const arr = D.vectors.map(v => ({ v, a: arrows.add('#e9893a') }));
+  const free = new Set(D.free || []), loaded = new Set(D.loaded || []), reached = new Set(D.members || []);
+  const pathParts = new Set();
+  for (const c of D.contacts) if (c.path) for (const e of [c.a, c.b]) if (e.startsWith('part:')) pathParts.add(e.slice(5));
+  const H = D.hot || {}, hotM = new Set([H.member, H.util_member].filter(Boolean));
+  const COL = { loaded: [0.91, 0.54, 0.23], free: [0.85, 0.1, 0.1], path: [0.55, 0.75, 0.95], other: [0.82, 0.82, 0.84] };
+  const partCol = id => free.has(id) ? COL.free : loaded.has(id) ? COL.loaded : pathParts.has(id) ? COL.path : COL.other;
+  const memCol = m => { const id = D.frame.member_ids[m]; return hotM.has(id) ? [0.85, 0.12, 0.12] : reached.has(id) ? [0.12, 0.36, 0.85] : [0.6, 0.6, 0.62]; };
+  // contacts: points (the path's dark), and the path's lines from each part's box centre to its contact point
+  const centre = Object.fromEntries(D.parts.map(p => [p.id, p.c]));
+  const pp = new Float32Array(D.contacts.length * 3), pc = new Float32Array(pp.length), seg = [];
+  D.contacts.forEach((c, i) => {
+    pp.set(c.p, 3 * i); pc.set(c.path ? [0.1, 0.1, 0.1] : [0.55, 0.55, 0.55], 3 * i);
+    if (c.path) for (const e of [c.a, c.b]) if (e.startsWith('part:') && centre[e.slice(5)]) seg.push(...centre[e.slice(5)], ...c.p);
+  });
+  const pg = new T.BufferGeometry(); pg.setAttribute('position', new T.BufferAttribute(pp, 3)); pg.setAttribute('color', new T.BufferAttribute(pc, 3));
+  const pts = new T.Points(pg, view.material(new T.PointsMaterial({ size: 7, sizeAttenuation: false, vertexColors: true, depthTest: false })));
+  pts.renderOrder = 7; arrows.group.add(pts);
+  const lg = new T.BufferGeometry(); lg.setAttribute('position', new T.BufferAttribute(new Float32Array(seg), 3));
+  const lines = new T.LineSegments(lg, view.material(new T.LineBasicMaterial({ color: 0x1a1a1a, depthTest: false, transparent: true, opacity: 0.8 })));
+  lines.renderOrder = 7; arrows.group.add(lines);
+  const S = { mmPerKN: 300 };
+  function update() {
+    beams.colourMembers(memCol);
+    if (ctx.partMode === 'field') { D.parts.forEach((p, j) => boxes.colour(j, partCol(p.id))); boxes.update(); }
+    for (const o of arr) arrows.set(o.a, o.v.o, o.v.f, S.mmPerKN / 1000);
+  }
+  const kindJa = { hand: '手で押す', foot: '足で踏む', inertia: '部品の慣性', push: '乗員が外へ押す' }[D.load_kind] || D.load_kind;
+  const nPath = D.contacts.filter(c => c.path).length;
+  const jump = c => { const t = view.controls.target, cam = view.camera.position, d = [cam.x - t.x, cam.y - t.y, cam.z - t.z], L = Math.hypot(...d) || 1;
+                      t.set(c[0], c[1], c[2]); cam.set(c[0] + d[0] / L * 1200, c[1] + d[1] / L * 1200, c[2] + d[2] / L * 1200); view.controls.update(); view.render(); };
+  const ctl = {
+    nT: 1, t0: 0, playMs: 100, viewDir: [0.9, -1.05, 0.75], partMode: 'field',
+    timeNote: '1 時刻 (静的)',
+    scale: { min: 50, max: 2000, step: 50, value: S.mmPerKN, label: '矢印の長さ (mm / kN)', note: '変形は記録にない (形は設計のまま)' },
+    setScale(v) { S.mmPerKN = v; update(); },
+    setTime() { update(); },
+    timeText() { return `荷重の経路 (${kindJa})   荷重 ${D.vectors.length} 本   触れている所 ${D.contacts.length} (経路 ${nPath})   浮いた部品 ${free.size}`; },
+    hud() {
+      return [`矢印 = 記録の荷重 (1 kN = ${S.mmPerKN} mm)   点 = 触れている所 (黒 = 経路の上)   線 = 部品の中心から触れている所`,
+              `部材: 青 = 経路が届く部材、赤 = 記録の応力の最大 / 許しに最も近い部材   部品: 橙 = 荷重の掛かる部品、水色 = 経路の部品、赤 = どこにも繋がらない部品`];
+    },
+    contour: () => null,
+    plot() { return []; },
+    plotClick() { return null; },
+    pickables: () => [beams.mesh],
+    info(hit) {
+      const m = beams.memberOf(hit), id = D.frame.member_ids[m];
+      const tag = id === H.member ? `記録の応力の最大 ${HV.fmt(H.stress)} ${HV.esc(H.unit)}` : id === H.util_member ? `許しに最も近い (使用率 ${HV.fmt(H.utilisation)})` :
+                  reached.has(id) ? '荷重の経路が届く部材' : '経路の外 (記録に部材ごとの応力はない)';
+      return `<b>${HV.esc(id)}</b> ${HV.esc(D.frame.member_names[m])}<br>${tag}`;
+    },
+    extraInputs() {
+      const ef = D.effects || [];
+      return (H.member ? `<div class="h" style="margin-top:4px">記録の応力</div><table><tr><td>最大</td><td>${HV.fmt(H.stress)} ${HV.esc(H.unit)} (${HV.esc(H.member)})</td></tr>` +
+              (H.utilisation !== null && H.utilisation !== undefined ? `<tr><td>使用率の最大</td><td>${HV.fmt(H.utilisation)} (${HV.esc(H.util_member)}、許し ${HV.fmt(H.allowable)} MPa)</td></tr>` : '') + '</table>' : '') +
+        (ef.length ? `<details><summary>記録の影響 (${ef.length})</summary><ul>${ef.map(e => `<li>${HV.esc(e)}</li>`).join('')}</ul></details>` : '');
+    },
+    panel(div) {
+      const add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; div.appendChild(e); return e; };
+      add('h3', `荷重の経路 (${kindJa})`);
+      add('div', `荷重の掛かる部品: ${[...loaded].join(', ') || '-'}`);
+      add('div', `浮いた部品 (どこにも繋がらない): ${[...free].join(', ') || 'なし'}`, free.size ? 'ng' : 'muted');
+      add('div', `経路が届く部材: ${[...reached].join(', ') || '-'}`);
+      add('div', `触れている所: ここで ${D.contacts.length}、記録 ${D.n_contacts_record ?? '-'}`, 'muted');
+      add('h3', '部位へ');
+      const row = add('div', '', 'row');
+      for (const id of [...loaded, ...free]) {
+        if (!centre[id]) continue;
+        const b = document.createElement('button'); b.textContent = id; b.onclick = () => jump(centre[id]); row.appendChild(b);
+      }
+      const all = document.createElement('button'); all.textContent = '全体'; all.onclick = () => { view.fit(ctx.lo, ctx.hi, ctl.viewDir); view.render(); }; row.appendChild(all);
     },
   };
   update();

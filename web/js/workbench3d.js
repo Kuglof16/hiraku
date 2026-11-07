@@ -41,7 +41,7 @@ import { overOf } from "./fields.js";
 import { maxTagClass } from "./judged.js"; // the largest-value tag's colour (one rule)
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { CONTOUR_FADE, DUMMY_JOINT, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
+import { CONTOUR_FADE, DUMMY_BODY, DUMMY_JOINT, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
 import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
@@ -517,6 +517,7 @@ export class Workbench3D {
     this.props.clear();
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
+    this.dummyDrawn = false; // set again below when an occupant is drawn as a dummy
     if (!design) return void this.joints.setDesign(null); // joints:
 
     const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
@@ -626,6 +627,13 @@ export class Workbench3D {
     // given as one box, or a torso box that still holds the head) keeps the torso drawn as a
     // capsule with a ball for the head, as before.
     const headed = new Set(occupants.filter((p) => segmentOf(p) === "head").map(personOf));
+    // each person's parts by segment ("torso" the torso): the real look's dummy takes the leg's
+    // scale from them (shapes.js occupantDummyPieces)
+    const bodies = new Map();
+    for (const p of occupants) {
+      if (!bodies.has(personOf(p))) bodies.set(personOf(p), {});
+      bodies.get(personOf(p))[segmentOf(p) ?? "torso"] = p;
+    }
     // the parts drawn here by their short name (one name tag for those that share it)
     const sameShort = new Map();
     for (const p of design.parts ?? []) {
@@ -647,13 +655,14 @@ export class Workbench3D {
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
-        // dressed by its segment in the real look (look.js occupantSub); one colour in the diagram.
-        // The real look draws a crash test dummy (shapes.js occupantDummyPieces): its joints dark
-        // (look.js DUMMY_JOINT), the pelvis in the legs' colour
-        const mat = this.look.partMaterial("occupant", this.look.real ? occupantSub(segmentOf(p)) : null);
-        const pieces = this.look.real ? occupantDummyPieces(p, segmentOf(p) === null) : occupantSegmentPieces(p);
+        // one colour in the diagram. The real look draws a crash test dummy (shapes.js
+        // occupantDummyPieces, its shape's ratios hybrid3.js): the body yellow (look.js DUMMY_BODY),
+        // the joints, the neck, the hands and the feet black (look.js DUMMY_JOINT)
+        const mat = this.look.partMaterial("occupant", this.look.real ? DUMMY_BODY : null);
+        const pieces = this.look.real ? occupantDummyPieces(p, segmentOf(p) === null, bodies.get(personOf(p))) : occupantSegmentPieces(p);
+        if (this.look.real) this.dummyDrawn = true;
         for (const pc of pieces) {
-          const m = pc.sub === "joint" ? this.look.partMaterial("occupant", DUMMY_JOINT) : pc.sub === "pelvis" ? this.look.partMaterial("occupant", occupantSub("thigh")) : mat;
+          const m = pc.sub === "joint" ? this.look.partMaterial("occupant", DUMMY_JOINT) : mat;
           const mesh = new THREE.Mesh(pc.geo, m);
           mesh.castShadow = this.look.real;
           holder.add(mesh);
@@ -1486,8 +1495,10 @@ export class Workbench3D {
   }
 
   // The analysis' vectors (a still: one moment). Hidden while a motion is shown.
-  // A wheel's forces (reaction, grip) carry words only at the picked wheel (pickWheel, else
-  // the one with the largest recorded force); the other wheels show their arrows alone.
+  // Words on an arrow only where it is chosen: the picked one (pickWheel / pickAt: a wheel's id,
+  // or `${kind}#${index}` for another force) or the one the pointer is near (hoverAt). With
+  // autoWords (the present mode, ?words=1) as before: a wheel's forces carry words at the wheel
+  // with the largest recorded force, every other force always.
   setVectors(vectors, keepPick = false) {
     if (vectors === this.keys.vectors) return;
     if (!keepPick && vectors) this.pickedWheel = null; // another analysis: its largest force again
@@ -1502,7 +1513,8 @@ export class Workbench3D {
       if (WHEEL_FORCES.has(v.kind) && v.at && (auto === null || mags[i] > auto.mag)) auto = { at: v.at, mag: mags[i] };
     });
     this.autoWheel = this.motion ? this.autoWheel : auto?.at ?? null;
-    const picked = this.pickedWheel ?? auto?.at ?? null;
+    const chosen = new Set([this.pickedWheel, this.hoverKey].filter((k) => k != null));
+    if (this.autoWords && this.pickedWheel == null && auto) chosen.add(auto.at);
     list.forEach((v, i) => {
       const mag = mags[i];
       if (!(mag > 0)) return;
@@ -1518,8 +1530,9 @@ export class Workbench3D {
       placeArrow(g, start, dir, len);
       this.arrows.add(g);
       const wheelForce = WHEEL_FORCES.has(v.kind) && v.at;
-      if (wheelForce) this.vecTips.push({ id: v.at, at: start.clone().addScaledVector(dir, len / 2) });
-      if (wheelForce && v.at !== picked) return; // the arrow alone
+      const key = wheelForce ? v.at : `${v.kind}#${i}`;
+      this.vecTips.push({ id: key, at: start.clone().addScaledVector(dir, len / 2) });
+      if (!chosen.has(key) && !(this.autoWords && !wheelForce)) return; // the arrow alone
       const text = `${esc(vectorName(v.kind))}${v.at ? ` ${esc(v.at)}` : ""}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`;
       const tag = wheelForce ? keyLabel(text, `lbl-vec lbl-${v.kind}`) : label(text, `lbl-vec lbl-${v.kind}`);
       // a wheel's force: its label is led from the arrow near the contact, a quarter of the way
@@ -1542,14 +1555,14 @@ export class Workbench3D {
     return true;
   }
 
-  // The wheel whose forces carry words now.
+  // The wheel whose forces carry words now (null: none; autoWords: the largest when none is chosen).
   wheelShown() {
-    return this.pickedWheel ?? this.autoWheel ?? null;
+    return this.pickedWheel ?? this.hoverKey ?? (this.autoWords ? this.autoWheel : null) ?? null;
   }
 
-  // The wheel whose arrows are nearest to a point of the view (px from its top left), within
-  // 60 px, picked; returns its id or null.
-  pickAt(x, y) {
+  // The arrow (a wheel's id or `${kind}#${index}`) nearest to a point of the view (px from its
+  // top left), within 60 px, or null.
+  arrowAt(x, y) {
     const cands = this.frame
       ? this.frame.wheels.filter((w) => w.contact && this.motionArrowObjs?.[w.id]).map((w) => ({ id: w.id, at: v3(w.contact) }))
       : this.vecTips ?? [];
@@ -1560,8 +1573,38 @@ export class Workbench3D {
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= 60 && (!best || d < best.d)) best = { id: c.id, d };
     }
-    if (best) this.pickWheel(best.id);
     return best?.id ?? null;
+  }
+
+  // A click: the arrow there picked (its words stay), or, away from every arrow, the pick
+  // dropped. Returns true when the words changed.
+  pickAt(x, y) {
+    return this.pickWheel(this.arrowAt(x, y));
+  }
+
+  // The pointer near an arrow: its words while it stays there. Returns true when they changed.
+  hoverAt(x, y) {
+    const id = x === null ? null : this.arrowAt(x, y);
+    if (id === (this.hoverKey ?? null)) return false;
+    this.hoverKey = id;
+    const v = this.keys.vectors;
+    this.keys.vectors = undefined;
+    this.setVectors(v, true);
+    for (const o of Object.values(this.motionArrowObjs ?? {})) o.text = null;
+    this.placeMotionArrows(this.frame);
+    return true;
+  }
+
+  // The present mode's words (and ?words=1): the largest wheel's forces and every other force
+  // carry words without being chosen.
+  setAutoWords(on) {
+    if (!!on === !!this.autoWords) return;
+    this.autoWords = !!on;
+    const v = this.keys.vectors;
+    this.keys.vectors = undefined;
+    this.setVectors(v, true);
+    for (const o of Object.values(this.motionArrowObjs ?? {})) o.text = null;
+    this.placeMotionArrows(this.frame);
   }
 
   // A point in the vehicle's frame of the iso group (ISO mm) on screen (px), or null behind the camera.

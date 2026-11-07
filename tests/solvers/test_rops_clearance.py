@@ -215,7 +215,7 @@ class KnownAnswerTest(unittest.TestCase):
 class DemoRollbarTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.lc = BUILDERS["R4"](load_catalog().test("R4"), requirements(), RB)
+        cls.lc = BUILDERS["R4"](load_catalog().test("R4"), requirements(), RB)[0]  # R4-rollover (the soil)
         cls.on = on_board(RB, cls.lc["params"]["loading"])
         cls.r = rops_inputs(RB, loading=cls.lc["params"]["loading"])
 

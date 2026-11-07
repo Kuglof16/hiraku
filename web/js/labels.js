@@ -226,6 +226,7 @@ const QUANTITY_JA = {
   // nvh
   first_body_mode: "車体の 1 次の固有振動数",
   first_frame_mode: "フレームの 1 次の固有振動数",
+  first_frame_involving_mode: "フレームが関わる最初の固有振動数",
   wheel_rotation_frequency: "車輪の回転の周波数",
   motor_rotation_frequency: "モーターの回転の周波数",
   excitation_gap: "加振との離れ",
@@ -543,7 +544,8 @@ export function channelPartName(id) {
 const PLAIN_JA = {
   max_hot_spot_stress: "つなぎ目の応力",
   min_side_load: "軽い側の輪の重さ",
-  first_frame_mode: "フレームのいちばん低い揺れの速さ",
+  first_frame_mode: "フレームが揺れやすい、いちばん低い揺れの回数 (1 秒あたり)",
+  first_frame_involving_mode: "フレームが揺れやすい、いちばん低い揺れの回数 (1 秒あたり)",
   fatigue_damage: "くり返しの力による傷み",
   // the known-answer checks of the use-count fatigue tool (N13) and its results
   cycles_at_FAT: "基準の強さで壊れるまでの回数",
@@ -718,6 +720,13 @@ export function quantityName(q) {
   }
   return q;
 }
+// A frame member's name for people: its design name before any bracket (as the parts' names on the
+// tiles and the assembly's steps), else 部材 and its id.
+export function memberName(design, id) {
+  const m = (design?.members ?? []).find((x) => x.id === id);
+  return m?.name ? String(m.name).replace(/\s*[（(].*$/, "") || `部材 ${id}` : `部材 ${id}`;
+}
+
 // The words that tell the judged number from a value shown for reference (the present card,
 // the workbench's comparison card, the colour bar and the 3D's largest-value tag).
 export const JUDGED_JA = {

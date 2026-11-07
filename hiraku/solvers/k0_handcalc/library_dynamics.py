@@ -206,6 +206,27 @@ def _crosswind() -> list[Formula]:
     return out
 
 
+# ---------------------------------------------------------------- air drag
+
+def _drag() -> list[Formula]:
+    s = _sym("C_d", "A", "v", "rho")
+    Cd, A, v, rho = s["C_d"], s["A"], s["v"], s["rho"]
+    return [Formula(
+        formula_id="drag.force",
+        title="空気抵抗の力",
+        domain="aero",
+        expression="F = 1/2 rho C_d A v^2",
+        inputs={"C_d": _in("1", "drag coefficient", min=0),
+                "A": _in("m^2", "frontal area", min=0),
+                "v": _in("m/s", "air speed relative to the vehicle, along it (the driving speed in still air)", min=0),
+                "rho": RHO_INPUT},
+        outputs={"F": ("N", "drag force", rho * Cd * A * v**2 / 2)},
+        assumptions=["steady flow along the vehicle", "still air"],
+        source="drag equation F = 1/2 rho C_d A v^2 (textbook fluid mechanics)",
+        symbols=s,
+    )]
+
+
 # ---------------------------------------------------------------- lane change
 
 def _lane_change() -> list[Formula]:
@@ -458,4 +479,4 @@ def _launch_formulas() -> list[Formula]:
 
 
 def all_formulas() -> list[Formula]:
-    return _tilt() + _crosswind() + _lane_change() + _braking() + _launch_formulas()
+    return _tilt() + _crosswind() + _drag() + _lane_change() + _braking() + _launch_formulas()

@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests.viewer import no_paths
 from types import SimpleNamespace
 
 import numpy as np
@@ -40,6 +42,38 @@ def make(field):
 
 FIELDS = {"thermal": "thermal", "fatigue": "fatigue", "strength_beam": "strength", "strength_shell": "strength"}
 
+# Run with the system Python (Playwright): opens <viewer dir>/index.html#thermal and prints, as JSON, the thermal
+# controller's probe (node boxes' opacity and colours, labels) at the first time and at the hottest one (the time of
+# the highest node temperature), whether the 熱の部品へ button is there, and the console errors.
+THERMAL_PROBE = r'''
+import json, sys
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+if __name__ == "__main__":
+    url = (Path(sys.argv[1]).resolve() / "index.html").as_uri() + "#thermal"
+    errors, out = [], {}
+    with sync_playwright() as p:
+        b = p.chromium.launch(headless=True, args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+        page = b.new_page(viewport={"width": 1480, "height": 900})
+        page.on("console", lambda m: errors.append(f"{m.type}: {m.text}") if m.type in ("error", "warning") else None)
+        page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+        page.goto(url)
+        page.wait_for_function("window.__ready === true", timeout=120000)
+        hot = page.evaluate("""async () => { const D = window.VIEW_DATA.thermal; let best = -1e9, k = 0;
+            for (const n of D.nodes) { if (!n.temp) continue; const v = await HV.unpack(n.temp);
+              v.forEach((x, i) => { if (x > best) { best = x; k = i; } }); } return k; }""")
+        for name, k in (("start", 0), ("hot", hot)):
+            page.eval_on_selector("#time", f"e => {{ e.value = {k}; e.dispatchEvent(new Event('input')); }}")
+            page.wait_for_timeout(300)
+            out[name] = {"k": k, **page.evaluate("HV.state.ctl.probe()")}
+        out["toHot"] = page.evaluate("!!document.getElementById('toHot')")
+        out["errors"] = errors
+        b.close()
+    sys.stdout.reconfigure(encoding="utf-8")
+    print(json.dumps(out, ensure_ascii=False))
+'''
+
 
 class TfsDataTest(unittest.TestCase):
     @classmethod
@@ -52,7 +86,7 @@ class TfsDataTest(unittest.TestCase):
                 self.assertTrue(COMMON_KEYS <= set(o), COMMON_KEYS - set(o))
                 self.assertEqual(o["field"], FIELDS[k])
                 self.assertTrue(o["inputs"])
-                self.assertNotRegex(json.dumps(o, ensure_ascii=False), r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+                self.assertNotRegex(json.dumps(o, ensure_ascii=False), no_paths.IN_JSON)
                 L = o["ledger"]
                 self.assertEqual([e["id"] for e in L["parts"]], [p["id"] for p in o["parts"]])
                 for e in L["parts"]:
@@ -181,9 +215,16 @@ class TfsDataTest(unittest.TestCase):
             used = set(re.findall(r"\bD\.([A-Za-z_]+)", (VIEWER / "js" / f"{name}.js").read_text(encoding="utf-8")))
             self.assertTrue(used <= set(objs[0]), used - set(objs[0]))
         js = (VIEWER / "js" / "strength.js").read_text(encoding="utf-8")
-        cut = js.index("HV.strengthShell = ")
-        for part, o in ((js[js.index("HV.strengthBeam = "):cut], self.obj["strength_beam"]), (js[cut:], self.obj["strength_shell"])):
-            used = set(re.findall(r"\bD\.([A-Za-z_]+)", part))
+        cut, cut2 = js.index("HV.strengthShell = "), js.index("HV.strengthLoadPath = ")
+        from viewer.src import build
+        gap = Path(__file__).resolve().parent / "fixtures" / "strength_gap"
+        rec_shell, path = (build.for_analysis(gap, a)["data"] for a in ("ana-0039", "ana-0017"))
+        # the shell keys only a record's one instant has (the saved frames' shell reads them guarded)
+        only_record = {"single", "member_plot"}
+        for part, o, extra in ((js[js.index("HV.strengthBeam = "):cut], self.obj["strength_beam"], set()),
+                               (js[cut:cut2], self.obj["strength_shell"], only_record), (js[cut:cut2], rec_shell, set()),
+                               (js[cut2:], path, set())):
+            used = set(re.findall(r"\bD\.([A-Za-z_]+)", part)) - extra
             self.assertTrue(used <= set(o), used - set(o))
 
     def test_registered_on_the_page(self):
@@ -290,7 +331,7 @@ class TfsPageTest(unittest.TestCase):
         self.assertEqual(out["over_view"], [])
         self.assertEqual(out["layout_overlap"], [])
         self.assertFalse(out["notes_open"])
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
         self.assertIn("部品と計算での扱い", out["panel"])
         # the ground is drawn and the tyres stand on it (their lowest point within 2 mm of it)
         self.assertIsNotNone(out["ground"])
@@ -306,6 +347,49 @@ class TfsPageTest(unittest.TestCase):
         out = self._check("thermal")
         self.assertIn("判定", out["hud"])
         self.assertIn("熱回路", out["panel"])
+
+    def _thermal_probe(self, d):
+        """The thermal page's node boxes and labels (ctl.probe) at the first time and at the hottest one."""
+        script = Path(self.tmp.name) / "thermal_probe.py"
+        script.write_text(THERMAL_PROBE, encoding="utf-8")
+        r = subprocess.run([self.py, str(script), str(d)], capture_output=True, text=True, encoding="utf-8", timeout=300)
+        self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+        return json.loads(r.stdout)
+
+    def test_thermal_node_parts(self):
+        out = self._thermal_probe(self.dirs["thermal"])
+        self.assertEqual(out["errors"], [])
+        self.assertTrue(out["toHot"])
+        o = make("thermal")
+        names = {n["name"] for n in o["nodes"] if n["temp"] and n["name"] in o["part_node"]}
+        for k in ("start", "hot"):
+            p = out[k]
+            self.assertGreaterEqual(p["opacity"], 0.8)
+            self.assertEqual({L["name"] for L in p["labels"]}, names)
+            for L in p["labels"]:
+                self.assertTrue(L["visible"])
+                self.assertRegex(L["text"], r"^(電池|モーター|制御器) -?\d+\.\d ℃")
+                self.assertNotIn("を超え", L["text"])   # the fixture is within its limits
+        cs, ch = dict(map(tuple, ((c[0], tuple(c[1])) for c in out["start"]["colours"]))), {c[0]: tuple(c[1]) for c in out["hot"]["colours"]}
+        self.assertTrue(any(max(abs(a - b) for a, b in zip(cs[n], ch[n])) > 0.05 for n in ch), (cs, ch))
+        red = (0.784, 0.251, 0.165)
+        for c in ch.values():
+            self.assertGreater(max(abs(a - b) for a, b in zip(c, red)), 0.02)   # no red within the limits
+
+    def test_thermal_over_limit_red(self):
+        o = make("thermal")
+        n0 = next(n for n in o["nodes"] if n["temp"] and n["name"] in o["part_node"])
+        n0["limit"] = {"value": (o["ambient_C"] + n0["max"]) / 2, "source": "test"}
+        d = Path(self.tmp.name) / "thermal_red" / "viewer"
+        shutil.copytree(VIEWER, d, ignore=shutil.ignore_patterns("data", "src", "__pycache__", "*.py"))
+        common.write_data("thermal", o, d / "data")
+        out = self._thermal_probe(d)
+        self.assertEqual(out["errors"], [])
+        col = {c[0]: c[1] for c in out["hot"]["colours"]}
+        for a, b in zip(col[n0["name"]], (0.784, 0.251, 0.165)):
+            self.assertAlmostEqual(a, b, places=3)
+        lab = next(L for L in out["hot"]["labels"] if L["name"] == n0["name"])
+        self.assertRegex(lab["text"], r"上限 [\d.]+ ℃ を超え$")
 
     def test_fatigue_page(self):
         out = self._check("fatigue")
