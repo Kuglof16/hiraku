@@ -25,7 +25,7 @@ export function emptyModel() {
     designVersion: 0,
     domains: null, // the domains_picked data, or the project's picks until one arrives
     domainsFromProject: false,
-    hearing: { asked: null, answered: null, ruleQuestions: [], tradeoffQuestions: [] },
+    hearing: { asked: null, answered: null, ruleQuestions: [], tradeoffQuestions: [], history: [], askedAt: null },
     requirements: [], // {key, name, value, unit, source, trust, basis, note, fresh}
     docs: new Map(), // doc_id -> {doc, rules}
     checks: new Map(), // rule_id -> rule_check
@@ -95,7 +95,12 @@ export function apply(m, e) {
         const freshT = d.tradeoff_questions || [];
         m.hearing.tradeoffQuestions = [...freshT, ...keptT.filter((k) => !freshT.some((f) => f.tradeoff_id === k.tradeoff_id))];
       }
+      // the round that was asked before is kept, with its answers, for the screen to show in the order it was asked
+      if (m.hearing.asked && (m.hearing.asked.questions?.length || m.hearing.asked.rule_questions?.length || m.hearing.asked.tradeoff_questions?.length)) {
+        m.hearing.history.push({ t: m.hearing.askedAt, asked: m.hearing.asked, answered: m.hearing.answered });
+      }
       m.hearing.asked = d;
+      m.hearing.askedAt = e.t ?? null;
       m.hearing.answered = null; // a new asking: the earlier answers are in the requirements already
       break;
     case "hearing.answered":
@@ -190,6 +195,32 @@ export function hearingRows(m) {
     // a question that needs an answer stays open until it has one (the answered event may have come without it)
     const unanswered = q.ask === "must" ? (m.finished ? "ended" : "asking") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking";
     return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : unanswered };
+  });
+}
+
+/** The rounds asked before the one on the screen, in the order they were asked: each with its questions as rows (an answered
+ *  one with its answer, one the person left to its standard value, one that got no answer), as they stood when the next round came. */
+export function pastRounds(m) {
+  return (m.hearing.history || []).map((r) => {
+    const a = r.answered || {};
+    const answers = new Map((a.answers || []).map((x) => [x.key, x]));
+    const rules = new Map((a.rule_answers || []).map((x) => [x.rule_id, x]));
+    const trades = new Map((a.tradeoff_answers || []).map((x) => [x.tradeoff_id, x]));
+    return {
+      t: r.t,
+      questions: (r.asked.questions || []).map((q) => {
+        const x = answers.get(q.req_key);
+        return { ...q, answer: x || null, state: x ? (x.source === "hearing" ? "answered" : "defaulted") : "open" };
+      }),
+      rules: (r.asked.rule_questions || []).map((q) => {
+        const x = rules.get(q.rule_id) || null;
+        return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: x, state: x ? "answered" : "open" };
+      }),
+      trades: (r.asked.tradeoff_questions || []).map((q) => {
+        const x = trades.get(q.tradeoff_id) || null;
+        return { ...q, choices: q.choices || ["favor_a", "favor_b", "keep_both"], answer: x, state: x ? "answered" : "open" };
+      }),
+    };
   });
 }
 

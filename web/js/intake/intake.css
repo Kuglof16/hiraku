@@ -270,3 +270,7 @@ body.video .in-pane.a1 .in-headrow .in-pet { width: 72px; height: 96px; font-siz
 body.video .in-pane.a1 .in-headrow .in-pet canvas { width: 72px; height: 72px; }
 .in-nobreak { white-space: nowrap; }
 .in-partname { margin-right: 8px; font-weight: 700; }
+.in-past { margin-top: 10px; border-top: 1px dashed var(--i-line); padding-top: 8px; }
+.in-past summary { cursor: pointer; color: var(--i-muted); }
+.in-round h3 { margin: 10px 0 4px; font-size: 15px; }
+.in-round h3 small { color: var(--i-muted); font-weight: 400; }

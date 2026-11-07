@@ -852,6 +852,38 @@ console.log(JSON.stringify({{ advice: pick(ruleState(mk('advice'), rule)), plain
 
 
 @unittest.skipUnless(NODE, "node is not installed")
+@unittest.skipUnless(NODE, "node is not installed")
+class PastRoundsTest(unittest.TestCase):
+    """A2 keeps the rounds asked before the one on the screen, in the order they were asked."""
+
+    def test_an_earlier_round_stays_with_its_answers_when_a_new_one_is_asked(self):
+        got = node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ pastRounds }} from "{url('model.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const q = (key) => ({{ req_key: key, name: 'n' + key, text: 'どうしますか ' + key, ask: 'confirm' }});
+const events = [
+  e(1, 10, 'hearing.asked', {{ questions: [q('Q03'), q('Q20')] }}),
+  e(2, 20, 'hearing.answered', {{ answers: [{{ key: 'Q03', name: 'n', value: '毎週', source: 'hearing', trust: 3, basis: 'b' }}] }}),
+  e(3, 30, 'hearing.asked', {{ questions: [q('Q34')], rule_questions: [{{ rule_id: 'AS-01', parts: ['battery'], text: '電池が重い' }}] }}),
+];
+const api = {{ events: () => events, onEvent: () => () => {{}} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2' }});
+const past = pastRounds(intake.model);
+const details = el.all('details').find((d) => d.className === 'in-past');
+console.log(JSON.stringify({{ n: past.length, t: past[0].t, states: past[0].questions.map((x) => [x.req_key, x.state]),
+  shown: !!details, text: details ? details.text() : '', current: el.text().includes('どうしますか Q34') }}));
+""")
+        self.assertEqual((got["n"], got["t"]), (1, 10))
+        self.assertEqual(got["states"], [["Q03", "answered"], ["Q20", "open"]])  # answered, and left without an answer
+        self.assertTrue(got["shown"])
+        self.assertIn("前に聞いたこと (1 回)", got["text"])
+        self.assertIn("1 回目", got["text"])
+        self.assertIn("どうしますか Q03", got["text"])
+        self.assertTrue(got["current"])  # the new round is on the screen as before
+
+
 class TradeoffQuestionTest(unittest.TestCase):
     """A2 draws a trade-off (two results that pull apart) with the code's numbers and sends the person's choice."""
 

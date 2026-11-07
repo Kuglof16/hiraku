@@ -2,7 +2,7 @@
 
 import { fill, h } from "./dom.js";
 import { ITEM_CHOICES, ITEM_CHOICES_ALT, ITEM_HELP } from "./data.js";
-import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, tradeoffChoiceJa, tradeoffRows, TRUST_JA } from "./model.js";
+import { assumptions, hearingRows, pastRounds, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, tradeoffChoiceJa, tradeoffRows, TRUST_JA } from "./model.js";
 
 const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました", ended: "実行が終わりました" };
 
@@ -192,6 +192,17 @@ export async function submit(api, ui, body) {
   ui.rerender();
 }
 
+/** The rounds asked before this one, in the order they were asked, each with what it asked and how it was answered (read only). */
+function pastBlock(m, api, ui) {
+  const rounds = pastRounds(m);
+  if (!rounds.length) return null;
+  return h("details", { class: "in-past", dataset: { rounds: String(rounds.length) } },
+    h("summary", {}, `前に聞いたこと (${rounds.length} 回)`),
+    rounds.map((r, i) => h("section", { class: "in-round" },
+      h("h3", {}, `${i + 1} 回目`, r.t != null ? h("small", {}, ` ${Math.round(r.t)} 秒のとき`) : null),
+      [...r.questions.map((q) => question(q, api, ui)), ...r.rules.map((q) => ruleQuestion(q, api, ui)), ...r.trades.map((q) => tradeoffQuestion(q, api, ui))])));
+}
+
 export function renderA2(el, m, api, ui) {
   // the questions that need an answer come first (and keep their order among themselves)
   const rows = hearingRows(m).map((r, i) => [r, i]).sort((a, b) => (b[0].ask === "must" && b[0].state === "asking") - (a[0].ask === "must" && a[0].state === "asking") || a[1] - b[1]).map(([r]) => r);
@@ -215,6 +226,7 @@ export function renderA2(el, m, api, ui) {
       h("div", { class: "in-qs", dataset: { keepScroll: "a2-qs" } },
         rows.length || rules.length || trades.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui)), ...trades.map((q) => tradeoffQuestion(q, api, ui))]
           : h("p", { class: "in-empty" }, m.requirements.length ? "足りない情報はないので、そのまま進みます" : "いまは聞くことがありません")),
+      pastBlock(m, api, ui),
       rows.length || rules.length || trades.length
         ? h("div", { class: "in-composer" },
             h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えたいこと", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !canSend }),
