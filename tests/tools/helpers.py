@@ -56,13 +56,16 @@ def stand_in_plan(product, requirements=None):
     for step in plan.get("steps") or []:
         retry = (step.get("expected_mismatch") or {}).get("retry")
         if step.get("load_case") in ("R1-step100", "R1-step250-beyond") and retry is not None:
-            for p in retry.get("predictions") or []:  # the stand-in design has no end cross member (cross_E)
+            # the stand-in tools have no load_path formulas: the retry's path check by hand is left out
+            retry["predictions"] = [p for p in retry.get("predictions") or []
+                                    if p.get("formula_id") != "load_path.free_parts"]
+            for p in retry["predictions"]:  # the stand-in design has no end cross member (cross_E)
                 if p.get("formula_id") == "frame_static.rail_joint_stress_closed":
                     p["formula_id"] = "frame_static.rail_joint_stress"
                     for k in ("a", "L_e", "b_e", "h_e", "t_e"):
                         p["inputs"].pop(k, None)
-            if "expected_mismatch" not in retry:
-                retry["expected_mismatch"] = copy.deepcopy(R1_RETRY_SAFE_SIDE)
+            # the stand-in frame tool's mismatch, not the real plan's (version 5's cross_B, tool_decides)
+            retry["expected_mismatch"] = copy.deepcopy(R1_RETRY_SAFE_SIDE)
     return plan
 
 
