@@ -144,29 +144,32 @@ def ring_plate(a: float, t: float, E: float, nu: float, Bp: float, Hp: float, tc
     """The rail's side wall (Strip of width a) under the end of a cross member of mid-surface sizes Bp (along
     the rail) x Hp (across), wall tc, carrying moment M (N*mm) about the rail's axis; the end centred at x = 0,
     z = a/2. flange_len: length along the rail over which the upper and lower walls' loads are spread
-    (default Bp). free_edge: the wall ends at x = -Bp/2.
+    (default Bp). free_edge: the wall ends at x = -Bp/2; the spread then runs from that edge to +flange_len/2 (the
+    gussets stand on the inboard side only: an end corner has one leg along the rail), the same total force.
 
     Returns sigma (largest surface von Mises, MPa), its place (x, z - a/2, mm), and theta (rotation, rad)."""
     I = _tube_I(Bp, Hp, tc)
     zc = a / 2.0
     zf = (zc + Hp / 2.0, zc - Hp / 2.0)
     L = flange_len or Bp
-    qf = M * (Hp / 2.0) * tc / I * Bp / L  # N/mm on each flange line (+ upper, - lower)
+    x_edge = -Bp / 2.0
+    x1, x2 = (x_edge, L / 2.0) if free_edge else (-L / 2.0, L / 2.0)  # nothing loads the plate past its free edge
+    Lf = x2 - x1
+    qf = M * (Hp / 2.0) * tc / I * Bp / Lf  # N/mm on each flange line (+ upper, - lower): the wall's force Bp q over Lf
     qw = M * (Hp / 2.0) * tc / I  # web line load at the flanges (linear through 0 at the centre)
     xw = (-Bp / 2.0, Bp / 2.0)
-    flanges = [(-L / 2.0, L / 2.0, zf[0], qf), (-L / 2.0, L / 2.0, zf[1], -qf)]
+    flanges = [(x1, x2, zf[0], qf), (x1, x2, zf[1], -qf)]
     webs = [(x, zf[1], zf[0], -qw, qw) for x in xw]
-    x_edge = -Bp / 2.0
     plate = Strip(a, t, E, nu, flanges, webs, x_edge if free_edge else None, n_terms)
     span = L / 2.0 + a
-    xs = np.unique(np.concatenate([np.linspace(x_edge if free_edge else -span, span, N_X), [-L / 2, L / 2, *xw]]))
+    xs = np.unique(np.concatenate([np.linspace(x_edge if free_edge else -span, span, N_X), [x1, x2, *xw]]))
     zs = np.unique(np.concatenate([np.linspace(0.0, a, N_Z), zf]))
     vm = plate.surface_von_mises(xs, zs)
     i, j = np.unravel_index(int(np.argmax(vm)), vm.shape)
     # rotation: work of the line loads on the deflection (midpoint rule along each line), over M
     u = (np.arange(N_LINE) + 0.5) / N_LINE
-    xf = -L / 2.0 + L * u
-    work = sum(q * L / N_LINE * float(np.sum(plate.deflection(xf, [z]))) for q, z in ((qf, zf[0]), (-qf, zf[1])))
+    xf = x1 + Lf * u
+    work = sum(q * Lf / N_LINE * float(np.sum(plate.deflection(xf, [z]))) for q, z in ((qf, zf[0]), (-qf, zf[1])))
     zw = zf[1] + Hp * u
     for x0 in xw:
         work += float(np.sum(qw * (zw - zc) / (Hp / 2.0) * Hp / N_LINE * plate.deflection([x0], zw)[0]))
