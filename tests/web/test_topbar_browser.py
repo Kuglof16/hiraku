@@ -1,5 +1,5 @@
 """The top and the footer kept short (web/js/domain_icons.js, web/js/hookline.js, web/css/topbar.css):
-「☰ 一覧へ」 at the top left by the wordmark on every tab (hidden on ?video=1); the domain chips at
+「☰ 記録の一覧へ」 at the top left by the wordmark on every tab (hidden on ?video=1); the domain chips at
 the top right and ④'s tile headings with the icons of the one definition; the footer's hooks list
 folded under 「くわしく」 (open on ?dev=1) and its activity line without a verdict's numbers or a
 rule's id; the moment a hook stops, one line near the middle that goes after a few seconds of the
@@ -95,11 +95,11 @@ class TopbarBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
         first = seen["A1"]
         for key, g in seen.items():
-            self.assertEqual((g["text"], g["href"], g["shown"], g["inBrand"]), ("☰ 一覧へ", "?list=1", True, True), key)
+            self.assertEqual((g["text"], g["href"], g["shown"], g["inBrand"]), ("☰ 記録の一覧へ", "?list=1", True, True), key)
             self.assertEqual((g["l"], g["t"]), (first["l"], first["t"]), key)  # the same place on every tab
             self.assertLess(g["rel"], 0.2, key)  # top left
             self.assertTrue(0 <= g["gap"] < 40, key)  # by the wordmark
-            self.assertNotIn("☰ 一覧へ", g["modeLinks"], key)  # not at the top right any more
+            self.assertNotIn("☰ 記録の一覧へ", g["modeLinks"], key)  # not at the top right any more
         page, errors = self.open("run=sample&pace=0&t=1e6&dev=1")
         dev = page.evaluate(BACK)
         page.close()
