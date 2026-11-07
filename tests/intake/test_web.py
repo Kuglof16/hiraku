@@ -177,7 +177,7 @@ console.log(JSON.stringify(out));
 """)
         by = dict(got)
         self.assertIn("mountIntake", by["index.js"])
-        self.assertEqual(by["a1.js"], ["REPLY_STEP_S", "inTurn", "renderA1"])
+        self.assertEqual(by["a1.js"], ["REPLY_STEP_S", "inTurn", "keepBrackets", "renderA1"])
         self.assertEqual(by["a2.js"], ["askingPanel", "renderA2", "submit"])
         self.assertEqual(by["a5.js"], ["renderA5"])
 
@@ -257,7 +257,7 @@ const asked = e(1, 'hearing.asked', {{ questions: [{{ req_key: 'Q34', name: 'x',
 const answered = e(2, 'hearing.answered', {{ answers: [], rule_answers: [{{ rule_id: 'U1-04', choice: 'drop_rule', note: '電池は替える' }}] }});
 let events = [asked];
 const sent = [], focused = [];
-const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => sent.push(b) }};
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => sent.push(b), partName: (id) => ({{ battery: '電池' }})[id] || null }};
 const el = new El('div');
 const intake = mountIntake(el, api, {{ screen: 'A2', onRuleFocus: (ids) => focused.push(ids) }});
 const texts = () => el.text();
@@ -272,8 +272,9 @@ const texts = () => el.text();
 const open1 = ruleRows(intake.model).map((r) => [r.rule_id, r.state, r.choices]);
 events = [asked, answered]; intake.update();
 const done = ruleRows(intake.model).map((r) => [r.rule_id, r.state, r.answer && r.answer.choice]);
-console.log(JSON.stringify({ open1, done, text: texts().includes('電池が重い') }));
+console.log(JSON.stringify({ open1, done, text: texts().includes('電池が重い'), who: texts().includes('あなたの答え') }));
 """)
+        self.assertTrue(got["who"])  # an answer says whose it is
         self.assertEqual(got["open1"], [["U1-04", "asking", ["revise_design", "drop_rule"]], ["SM-01", "asking", ["drop_rule"]]])
         self.assertEqual(got["done"], [["U1-04", "answered", "drop_rule"], ["SM-01", "open", None]])
         self.assertTrue(got["text"])
@@ -282,7 +283,7 @@ console.log(JSON.stringify({ open1, done, text: texts().includes('電池が重�
         got = self.run_body("""
 const card = (id) => el.all('article').find((a) => a.dataset.rule === id);
 const buttons = (id) => card(id).all('button').map((b) => b.text());
-const shown = { u1: buttons('U1-04'), sm: buttons('SM-01'), parts: card('U1-04').text().includes('battery') };
+const shown = { u1: buttons('U1-04'), sm: buttons('SM-01'), parts: card('U1-04').text().includes('電池'), noId: !el.text().includes('battery') && !el.text().includes('floor'), unnamed: card('SM-01').text().includes('ほか 1 個の部品') };
 card('U1-04').listeners.mouseenter[0]();
 card('U1-04').listeners.mouseleave[0]();
 card('U1-04').all('button').find((b) => b.text() === 'このルールを使わない').listeners.click[0]();
@@ -293,7 +294,9 @@ console.log(JSON.stringify({ shown, focused, sent }));
 """)
         self.assertEqual(got["shown"]["u1"], ["設計を直す", "このルールを使わない"])
         self.assertEqual(got["shown"]["sm"], ["このルールを使わない"])  # only the choices that were offered
-        self.assertTrue(got["shown"]["parts"])
+        self.assertTrue(got["shown"]["parts"])  # a part is named by the host (api.partName), not shown by its id
+        self.assertTrue(got["shown"]["noId"])
+        self.assertTrue(got["shown"]["unnamed"])  # a part the host has no name for: only how many
         self.assertEqual(got["focused"], [["battery"], []])  # the host is told which parts to light, then to stop
         self.assertEqual(got["sent"][0]["ruleAnswers"], [{"rule_id": "U1-04", "choice": "drop_rule"}])
 
@@ -729,9 +732,9 @@ console.log(JSON.stringify({ handling: say('handling'), aero: say('aero'), therm
 """)
         self.assertEqual(got["handling"], "悪路を走るので、旋回で倒れないかを確かめます")  # Claude's words, as the record has them
         self.assertEqual(got["aero"], "「風」を調べます")  # the code's sentence lists test ids: plain words instead
-        self.assertEqual(got["thermal"], "今回は見ません。この製品の性質では当てはまる試験が無い")
-        self.assertEqual(got["offCode"], "今回は見ません。要件のファイルの試験に、この分野の試験が無い")  # the list of test ids is taken out, the record's own words stay
-        self.assertEqual(got["nvhWait"], "今回は見ません")  # decided, and the record names no reason
+        self.assertEqual(got["thermal"], "この依頼では調べません。この製品の性質では当てはまる試験が無い")
+        self.assertEqual(got["offCode"], "この依頼では調べません。要件のファイルの試験に、この分野の試験が無い")  # the list of test ids is taken out, the record's own words stay
+        self.assertEqual(got["nvhWait"], "この依頼では調べません")  # decided, and the record names no reason
 
     def test_each_domain_has_one_pet_place_that_stays_when_the_screen_is_drawn_again(self):
         got = self.run_body("""
@@ -792,10 +795,18 @@ console.log(JSON.stringify({ none, thinking, role: lead().dataset.domain, done: 
         self.assertTrue(got["done"])
         self.assertEqual(got["none"], "done")  # the picks are in: the lead is not working any more
 
+    def test_a_short_bracketed_part_of_the_request_is_kept_on_one_line(self):
+        got = node(f"""{FAKE_DOM}
+import {{ keepBrackets }} from "{url('a1.js')}";
+const parts = keepBrackets('小さな車 (4 輪、最高 40 km/h、積載 150 kg)。守りたい');
+console.log(JSON.stringify(parts.map((x) => (typeof x === 'string' ? x : ['nobreak', x.className, x.text()]))));
+""")
+        self.assertEqual(got, ["小さな車 ", ["nobreak", "in-nobreak", "(4 輪、最高 40 km/h、積載 150 kg)"], "。守りたい"])
+
     def test_the_headline_counts_what_was_picked(self):
         got = self.run_body("""console.log(JSON.stringify({ text: el.text() }));""")
         self.assertIn("HIRAKU が調べることを選びました", got["text"])
-        self.assertIn("2 個を調べ、5 個は今回は見ません", got["text"])
+        self.assertIn("2 個を調べ、5 個はこの依頼では調べない分野です", got["text"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")

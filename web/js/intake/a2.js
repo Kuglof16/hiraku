@@ -41,9 +41,19 @@ function question(q, api, ui) {
     q.ask === "must" && !q.answer && q.state !== "ended" ? h("p", { class: "in-default must" }, "この質問に答えるまで先へ進めません") : null,
     q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この質問への答えは使われません") : null,
     q.answer
-      ? h("p", { class: "in-answer" }, h("b", {}, q.answer.source === "hearing" ? "答え" : "標準の値"), " ",
+      ? h("p", { class: "in-answer" }, h("b", {}, q.answer.source === "hearing" ? "あなたの答え" : "標準の値"), " ",
           choiceLabel(q, q.answer.value) || showValue(q.answer.value, q.answer.unit))
       : null);
+}
+
+/** The parts a rule hit, by name: the host gives the design's part names (api.partName(id) -> the part's name, or null); a part with no
+ *  name is not shown by its id (the ids light the part in the 3D, they are not for reading): only how many, with the ids in the tooltip. */
+function partsHit(parts, api) {
+  const names = parts.map((p) => api.partName?.(p) || null);
+  const known = names.filter(Boolean);
+  const unknown = parts.length - known.length;
+  const label = [...known, ...(unknown ? [`ほか ${unknown} 個の部品`] : [])];
+  return h("p", { class: "in-parts-hit", title: parts.join(", ") }, "どの部品か: ", label.map((n) => h("span", { class: "in-partname" }, n)));
 }
 
 /** A rule that hit: the parts, the sentence, and the two things a person can decide. Hovering a part tells the host. */
@@ -57,7 +67,7 @@ function ruleQuestion(q, api, ui) {
       h("span", { class: "in-badge" }, "ルールに引っかかりました"),
       h("span", { class: "in-state" }, STATE_JA[q.state])),
     h("p", { class: "in-qtext" }, q.text),
-    q.parts?.length ? h("p", { class: "in-parts-hit" }, "どの部品か: ", q.parts.map((p) => h("code", {}, p))) : null,
+    q.parts?.length ? partsHit(q.parts, api) : null,
     h("p", { class: "in-why" }, "守るなら設計を直します。守らなくてよい理由があれば、このルールを使わないことにできます。"),
     h("div", { class: "in-choices" }, q.choices.map((c) =>
       h("button", {
@@ -70,7 +80,7 @@ function ruleQuestion(q, api, ui) {
           oninput: (e) => { const v = e.target.value.trim(); if (v) ui.ruleAnswers[q.rule_id].note = v; else delete ui.ruleAnswers[q.rule_id].note; } })
       : null,
     q.answer
-      ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", RULE_CHOICE_JA[q.answer.choice] || q.answer.choice,
+      ? h("p", { class: "in-answer" }, h("b", {}, "あなたの答え"), " ", RULE_CHOICE_JA[q.answer.choice] || q.answer.choice,
           q.answer.note ? h("small", {}, ` (${q.answer.note})`) : null)
       : null,
     q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null,
@@ -95,7 +105,7 @@ function tradeoffQuestion(q, api, ui) {
         type: "button", disabled: !interactive,
         onclick: () => { ui.tradeoffAnswers[q.tradeoff_id] = { tradeoff_id: q.tradeoff_id, choice: c }; ui.rerender(); },
       }, tradeoffChoiceJa(q, c)))),
-    q.answer ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", tradeoffChoiceJa(q, q.answer.choice)) : null,
+    q.answer ? h("p", { class: "in-answer" }, h("b", {}, "あなたの答え"), " ", tradeoffChoiceJa(q, q.answer.choice)) : null,
     q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null,
     q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この判断は使われません") : null);
 }

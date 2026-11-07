@@ -268,3 +268,5 @@ body.video .in-pane.a1 .in-ask-top, body.video .in-pane.a1 .in-ask { display: no
 /* the lead's place beside the headline keeps its size in the video too (its rule comes after the domains') */
 body.video .in-pane.a1 .in-headrow .in-pet { width: 72px; height: 96px; font-size: 16px; }
 body.video .in-pane.a1 .in-headrow .in-pet canvas { width: 72px; height: 72px; }
+.in-nobreak { white-space: nowrap; }
+.in-partname { margin-right: 8px; font-weight: 700; }

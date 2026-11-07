@@ -151,7 +151,7 @@ export function saidOf(c) {
   if (c.state === "off") {
     // the part before the colon; the list of test ids in brackets ("(H1・R7)") is taken out, the rest is the record's own words
     const head = (reason.includes(":") ? reason.split(":")[0] : reason).replace(/\s*[(（][^()（）]*[A-Z][0-9]{1,2}[^()（）]*[)）]\s*/g, "").trim();
-    return { text: head && !TEST_ID.test(head) ? `今回は見ません。${head}` : "今回は見ません", full: reason }; // a sentence still naming tests stays in the details
+    return { text: head && !TEST_ID.test(head) ? `この依頼では調べません。${head}` : "この依頼では調べません", full: reason }; // a sentence still naming tests stays in the details
   }
   if (!reason || code) return { text: DOMAIN_PLAIN[c.domain] ? `「${DOMAIN_PLAIN[c.domain]}」を調べます` : "", full: reason, code };
   return { text: reason, full: reason, code };
