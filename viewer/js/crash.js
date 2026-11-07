@@ -150,7 +150,7 @@ HV.crashB = async function (D, ctx) {
     stress: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: '部材の軸応力 (− 圧縮、+ 引張)', note: `軸力 / 断面積、記録の各時刻の値そのまま。${rangeNote(m, ' MPa')}。灰色 = 破断` }),
     stress_avg: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: `部材の軸応力の ${HV.fmt(avgMs)} ms の平均 (− 圧縮、+ 引張)`,
                         note: `軸力 / 断面積を、その時刻の前後 ${HV.fmt(avgMs / 2)} ms の記録の値で平均。${rangeNote(m, ' MPa')}。灰色 = 破断` }),
-    hinge: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, scale: 'seq', unit: '°',
+    hinge: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°',   // the 5 colours of the other fields (one hue was hard to read, 11/7)
                    title: runMaxHinge ? '部材の端の塑性ヒンジ回転 (大きい方、その時刻までの最大)' : '部材の端の塑性ヒンジ回転 (大きい方)',
                    note: `${runMaxHinge ? '記録の回転は少し戻る時刻があるので、その時刻までの最大で色。' : ''}${rangeNote(m, '°')}。灰色 = 破断` }),
     strain: m => ({ min: -m, max: m, log: false, unit: '%', title: '要素の軸ひずみ (− 縮み、+ 伸び)', note: `${rangeNote(m, ' %')}。灰色 = 破断` }),
