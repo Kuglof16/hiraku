@@ -132,9 +132,7 @@ def build(args: argparse.Namespace) -> Record:
               {"label": "水の粒子", "value": f"{int(case['particles']):,} 個", "source": "計算の条件"},
               {"label": "いちばん低い部品", "value": f"{float(under['lowest_part_m']) * 1000.0:.0f} mm", "source": "部品の形から計算"},
               {"label": "積み方", "value": loading, "source": "計算の条件"}]
-    notes = [statement + "。",
-             "波の大きさは実験と比べていない。音速の設定を変えると、車が受ける力積はまだ動く。力の値としては読まない。",
-             "水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",
+    notes = ["水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",
              "床下の水の深さ: " + str(under.get("depth_definition", "")),
              "水が届いた床下の列: " + str(under.get("reach_definition", ""))]
     return {"field": "water", "title": "冠水路を渡る水", "statement": statement,
