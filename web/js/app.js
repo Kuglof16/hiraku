@@ -1169,29 +1169,8 @@ $("view-intake").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-static-replay]")) staticReplay();
 });
 
-// A static export (not the film): under the tabs, what HIRAKU is in one sentence and a large
-// 「▶ 再生して見る」 (the run from its first design on ③), while the replay is not playing. A judge
-// who opens the page sees the run as it ended (④) and how to watch it happen.
-if (STATIC && params.get("video") !== "1") {
-  const hero = document.createElement("div");
-  hero.className = "hero";
-  hero.id = "hero";
-  hero.innerHTML =
-    `<p class="hero-what"><b>HIRAKU</b> は、作りたいものを書くと、Claude が確かめる解析を選び、手計算で予想し、ツールで計算して比べ、NG の所の設計を直します。このページは、その 1 回の実行を記録から見せます。</p>` +
-    `<button class="hero-go" type="button" data-static-replay="1">▶ 再生して見る</button>` +
-    `<span class="hero-note">いま見ているのは、実行が終わった時点です。再生は約 2 分で、最初の設計から順に見せます。</span>`;
-  document.querySelector(".tabsrow")?.after(hero);
-  hero.addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-static-replay]")) staticReplay();
-  });
-  // (the stage's rows: the hero takes a row of its own under the tabs while shown, css .stage.has-hero)
-  const showHero = () => {
-    hero.hidden = player.playing;
-    $("stage").classList.toggle("has-hero", !hero.hidden);
-  };
-  showHero();
-  setInterval(showHero, 300);
-}
+// (A static export: what HIRAKU is and 「▶ 最初から再生して見る」 are the judges' card, js/judge_intro.js,
+// which export_static adds to the exported index.html.)
 
 // The picked domains are the final ones (the intake's picksFinal: its cards say 調べる, not
 // 候補 / 考えています, at any time of the replay) when the record is over and no later choice of
