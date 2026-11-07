@@ -150,12 +150,34 @@ def build(args: argparse.Namespace) -> Record:
     ids = {p["id"] for p in parts_on_board(design, loading)}
     on_board = [p["id"] in ids for p in parts]
     wheels = [{"c": [float(v) for v in s["position_mm"]], "r": float(s["radius_mm"]), "width": float(s.get("width_mm", 200.0))} for s in design.get("supports", []) if "radius_mm" in s]
-    records = [{"t": float(r["t"]), "depth_mean_mm": float(r["depth_mean_mm"]), "depth_max_mm": float(r["depth_max_mm"]), "reached_pct": 100.0 * float(r["reached_share"]), "top_m": float(r["top_m"])}
-               for r in case["records"]]
+    coupled = "coupling" in case and all("vehicle" in r for r in case["records"])
+    records = [{"t": float(r["t"]), "depth_mean_mm": float(r["depth_mean_mm"]), "depth_max_mm": float(r["depth_max_mm"]), "reached_pct": 100.0 * float(r["reached_share"]), "top_m": float(r["top_m"]),
+                "speed_kmh": float(r["vehicle"]["speed_ms"]) * 3.6 if coupled else float(inputs_case["speed_kmh"])} for r in case["records"]]
     checks = [{"name": CHECK_NAMES.get(k, k), "key": k} for k in case.get("tests_passed", {}) if k in ("still_water", "moving_box", "standing_vehicle")]
     under = case["underfloor"]
+    if coupled:  # the vehicle answered the water through K2: its speed and its motion come from the calculation
+        from hiraku.cfd.water_coupled import vehicle_summary
+
+        moved = vehicle_summary(case["records"])
+        speed_line = {"label": "車速", "value": f"目標 {float(inputs_case['speed_kmh']):g} km/h、計算で {moved['speed_kmh']['lowest']:.1f}〜{max(r['speed_kmh'] for r in records):.1f} km/h",
+                      "source": "水の力を K2 の車両に返す双方向の計算 (車が水で遅くなる)"}
+        motion = [{"label": "車の動き", "value": f"鼻上げ 最大 {moved['pitch_deg_nose_up_against_road']['max']:.1f}° ({moved['pitch_deg_nose_up_against_road']['max_at_s']:.2f} 秒)、路面に対する上下 {moved['height_mm_against_road']['min']:.0f}〜{moved['height_mm_against_road']['max']:+.0f} mm",
+                   "source": "K2 の車両の運動 (水の力を受けて)"}]
+    else:
+        speed_line = {"label": "車速", "value": f"{float(inputs_case['speed_kmh']):g} km/h", "source": "計算の条件 (一定の速さ)"}
+        motion = []
+    wheel_offsets = None
+    if coupled:  # each wheel where K2's suspension put it, in the design's axes (mm): shape x = mid - design x, shape y = -design y
+        ids = [s.get("id") for s in design.get("supports", []) if "radius_mm" in s]
+        mid = float(np.mean([w["c"][0] for w in wheels])) / 1000.0
+        order = ["FL", "FR", "RL", "RR"]
+        wheel_offsets = []
+        for r in case["records"]:
+            at = {name: c for name, c in zip(order, r["vehicle"]["wheel_centres"])}
+            wheel_offsets.append([[round(1000.0 * (mid - at[i][0]) - w["c"][0], 1), round(-1000.0 * at[i][1] - w["c"][1], 1), round(1000.0 * at[i][2] - w["c"][2], 1)] if i in at else [0.0, 0.0, 0.0]
+                                  for i, w in zip(ids, wheels)])
     inputs = [{"label": "水深", "value": f"{float(road['level_m']) * 1000.0:.0f} mm", "source": "計算の条件 (粒子の層の数で決まる)"},
-              {"label": "車速", "value": f"{float(inputs_case['speed_kmh']):g} km/h", "source": "計算の条件 (一定の速さ)"},
+              speed_line, *motion,
               {"label": "車輪", "value": "回す" if inputs_case.get("rotate_wheels") else "回さない", "source": "計算の条件"},
               {"label": "格子の大きさ", "value": f"{float(inputs_case['dx_m']) * 1000.0:.0f} mm", "source": "計算の条件"},
               {"label": "水の粒子", "value": f"{int(case['particles']):,} 個", "source": "計算の条件"},
@@ -176,7 +198,7 @@ def build(args: argparse.Namespace) -> Record:
             "frame": common.frame_of(design), "parts": parts, "on_board": on_board, "scene": [], "vectors": [], "results": [], "wheels": wheels,
             "centre_mm": moment_centre_mm(design), "assumptions": list(case.get("assumptions") or []), "inputs": inputs, "notes": notes,
             "ledger": ledger_of(design, parts, on_board, loading), "ground": None,
-            "frames": int(frames), "frame_s": frame_s, "poses": [[round(float(v), 6) for v in p] for p in poses],
+            "frames": int(frames), "frame_s": frame_s, "poses": [[round(float(v), 6) for v in p] for p in poses], "coupled": coupled, "wheel_offsets_mm": wheel_offsets,
             "columns": {"nx": int(nx), "ny": int(ny), "x0_mm": x0_m * 1000.0, "y0_mm": y0_m * 1000.0, "step_mm": column_m * 1000.0},
             "surface": _hex(common.pack_i16(surface.ravel().tolist(), 1.0, [int(frames), int(nx), int(ny)])), "road_mm": [round(float(v), 1) for v in road_mm],
             "spray": _hex(common.pack_i16(spray_mm.ravel().tolist(), 1.0, [len(spray_mm), 3])), "spray_start": _hex(common.pack_i32(spray_start.tolist())),

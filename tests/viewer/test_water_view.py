@@ -52,6 +52,38 @@ class Build(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.folder = write_case(Path(self.tmp.name) / "case")
 
+    def test_a_coupled_record_gives_the_speeds_and_the_wheels(self):
+        case = json.loads((self.folder / "case.json").read_text(encoding="utf-8"))
+        case["coupling"] = {"lift_ratio": 0.25}
+        centres = [[-1.01, -0.61, 0.30], [-1.01, 0.61, 0.30], [1.01, -0.61, 0.30], [1.01, 0.61, 0.30]]
+        for i, r in enumerate(case["records"]):
+            drop = [[c[0], c[1], c[2] - (0.05 if k < 2 and i == 2 else 0.0)] for k, c in enumerate(centres)]  # the front wheels hang 50 mm at frame 2
+            r["pose"] = [1.0 - 0.1 * i, 0.0, 0.0]
+            r["vehicle"] = {"speed_ms": 5.0 - 0.5 * i, "ground_m": [0.0] * 4, "wheel_centres": drop, "tyre_n": [1000.0] * 4, "travel_m": [0.0] * 4, "roll_deg": 0.0, "yaw_deg": 0.0}
+        (self.folder / "case.json").write_text(json.dumps(case, ensure_ascii=False), encoding="utf-8")
+        d = build(self.folder)
+        self.assertTrue(d["coupled"])
+        speed = next(r for r in d["inputs"] if r["label"] == "車速")
+        self.assertIn("目標 18 km/h、計算で 12.6〜18.0 km/h", speed["value"])
+        self.assertTrue(any(r["label"] == "車の動き" for r in d["inputs"]))
+        self.assertEqual([round(r["speed_kmh"], 1) for r in d["records"]], [18.0, 16.2, 14.4, 12.6])
+        self.assertEqual(len(d["wheel_offsets_mm"]), 4)
+        for k in range(4):
+            self.assertEqual(d["wheel_offsets_mm"][0][k], [0.0, 0.0, 0.0])
+        self.assertEqual([o[2] for o in d["wheel_offsets_mm"][2]], [-50.0, -50.0, 0.0, 0.0])
+
+    def test_a_record_at_one_speed_says_so(self):
+        d = build(self.folder)
+        self.assertFalse(d["coupled"])
+        self.assertIsNone(d["wheel_offsets_mm"])
+        self.assertEqual(next(r for r in d["inputs"] if r["label"] == "車速")["source"], "計算の条件 (一定の速さ)")
+
+    def test_the_page_keeps_the_road_still(self):
+        js = (ROOT / "viewer" / "js" / "water.js").read_text(encoding="utf-8")
+        self.assertIn("ctx.fixed.add(road)", js)
+        self.assertIn("ctx.root.matrix.copy(poseMatrix", js)
+        self.assertIn("wheel_offsets_mm", js)
+
     def test_the_statement_is_in_the_data_but_not_on_the_page(self):  # the owner's decision (11/7): the README keeps it
         d = build(self.folder)
         self.assertEqual(d["statement"], STATEMENT)
