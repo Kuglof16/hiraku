@@ -29834,10 +29834,10 @@ export const DEMOS = {
       "ask": "confirm",
       "allow_other": true,
       "default": {
-       "value": 10,
-       "unit": "h",
-       "trust": 1,
-       "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)"
+       "value": 43.2,
+       "unit": "km",
+       "trust": 3,
+       "basis": "computed: 10 h x Q50 1.2 m/s (4.32 km/h) = 43.2 km, the distance of one charge if the robot never stands still (an upper bound; HIRAKU's choice). The 10 h is the lower side of the makers' operating hours 9-18 h, https:\/\/www.keenon.com/en/product/T9 and others; the range 9-18 h read 2026-11-03 in a source check (Keenon). The builders (P4, T1, T2) read a distance in km, so the hours are turned into one here"
       }
      },
      {
@@ -30260,10 +30260,10 @@ export const DEMOS = {
       "key": "Q54",
       "name": "航続・稼働時間",
       "source": "default",
-      "trust": 1,
-      "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)",
-      "value": 10,
-      "unit": "h"
+      "trust": 3,
+      "basis": "computed: 10 h x Q50 1.2 m/s (4.32 km/h) = 43.2 km, the distance of one charge if the robot never stands still (an upper bound; HIRAKU's choice). The 10 h is the lower side of the makers' operating hours 9-18 h, https:\/\/www.keenon.com/en/product/T9 and others; the range 9-18 h read 2026-11-03 in a source check (Keenon). The builders (P4, T1, T2) read a distance in km, so the hours are turned into one here",
+      "value": 43.2,
+      "unit": "km"
      },
      {
       "key": "Q58",
