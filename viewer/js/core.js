@@ -113,16 +113,24 @@ window.HV = window.HV || {};
     } else {
       for (let i = 0; i <= 5; i++) ticks.push(c.min + (c.max - c.min) * i / 5);
     }
+    // the marks (e.g. a yield) carry their own value: a tick number within MARK_GAP px of a mark is left out, and a
+    // mark's words sit on its line as a tick's number does (they overlapped the tick of the same value before)
+    const MARK_GAP = 11;
+    const marks = (c.marks || []).filter(m => m.v >= c.min && m.v <= c.max)
+      .map(m => ({ ...m, y: y0 + h * (1 - HV.norm(c, m.v)) })).sort((a, b) => a.y - b.y);
     for (const v of ticks) {
       const y = y0 + h * (1 - HV.norm(c, v));
       g.beginPath(); g.moveTo(x0 + w, y); g.lineTo(x0 + w + 4, y); g.stroke();
+      if (marks.some(m => Math.abs(m.y - y) < MARK_GAP)) continue;
       g.fillStyle = '#1d1d1f'; g.fillText(HV.fmt(v), x0 + w + 7, y + 4);
     }
-    for (const m of c.marks || []) {
-      if (m.v < c.min || m.v > c.max) continue;
-      const y = y0 + h * (1 - HV.norm(c, m.v));
-      g.lineWidth = 2; g.beginPath(); g.moveTo(x0 - 4, y); g.lineTo(x0 + w + 4, y); g.stroke(); g.lineWidth = 1;
-      g.font = 'bold 10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.fillText(m.label, x0 + w + 7, y - 4); g.font = '11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
+    let lastText = -Infinity;
+    for (const m of marks) {
+      g.lineWidth = 2; g.beginPath(); g.moveTo(x0 - 4, m.y); g.lineTo(x0 + w + 4, m.y); g.stroke(); g.lineWidth = 1;
+      const ty = Math.max(m.y + 4, lastText + MARK_GAP);   // two marks close together: the lower one's words move down
+      lastText = ty;
+      g.fillStyle = '#1d1d1f';
+      g.font = 'bold 10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.fillText(m.label, x0 + w + 7, ty); g.font = '11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     }
     g.fillStyle = '#6b665c'; g.font = '10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     wrap(g, (c.log ? '対数目盛' : '線形目盛') + (c.note ? '、' + c.note : ''), 4, y0 + h + 14, W - 8, 11);
