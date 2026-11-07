@@ -1,7 +1,8 @@
 """The flow tool (cfd_aero): a thin adapter between the MCP tools and hiraku.cfd.
 
 The only module outside hiraku/cfd that imports it. hiraku/tools/mcp.py imports this module in one line, and on
-import it adds its tool to mcp's tables. Removing that line, this file and hiraku/cfd leaves the rest working.
+import it adds its tool to mcp's tables. The name is in RUN_TOOLS and in the aero CAE role's tools (roles.AERO_TOOLS);
+removing those, that line, this file and hiraku/cfd leaves the rest working.
 
 A sweep runs on the GPU only: with no GPU the tool says so and does not run; it never falls back to the CPU.
 Its record goes to <run folder>/cfd/v<N>/<speed>_<grid>/ (each case in its own folder). A replay reads a stored
@@ -277,7 +278,6 @@ def _input_schema() -> Record:
     return schema
 
 
-# No assert that the name is in contract.MCP_TOOLS_LATER yet: the contract is the lead's and gets it with the merge.
 TOOLS: dict[str, Record] = {NAME: {"description": DESCRIPTION, "input_schema": _input_schema(), "function": cfd_aero}}
 
 

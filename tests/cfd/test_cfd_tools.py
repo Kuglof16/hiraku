@@ -381,7 +381,7 @@ class RegistrationTest(unittest.TestCase):
             self.assertEqual(sorted(cfd_tools._input_schema()["properties"]), ["design_version", "dx_mm", "replay", "speed_kmh", "wind_ms", "yaws_deg"])
 
     @unittest.skipUnless(HAS_SDK, "this Python has no Agent SDK, so no MCP tables")
-    def test_it_is_registered_but_not_in_the_production_run(self):
+    def test_it_is_registered_and_in_the_production_run(self):
         from hiraku.tools import mcp
         from hiraku.tools.functions import RUN_TOOLS
 
@@ -389,7 +389,33 @@ class RegistrationTest(unittest.TestCase):
         self.assertIs(mcp.HANDLERS["cfd_aero"], t["function"])
         self.assertEqual(mcp.INPUT_SCHEMAS["cfd_aero"], t["input_schema"])
         self.assertEqual(mcp.DESCRIPTIONS["cfd_aero"], t["description"])
-        self.assertNotIn("cfd_aero", RUN_TOOLS)
+        self.assertIn("cfd_aero", RUN_TOOLS)
+
+
+class RoleTest(unittest.TestCase):
+    def test_only_the_aero_cae_role_has_the_wind_tunnel(self):
+        from hiraku.agent import roles
+
+        self.assertIn("cfd_aero", roles.cae_tools("aero"))
+        for domain in contract.DOMAINS:
+            if domain != "aero":
+                self.assertNotIn("cfd_aero", roles.cae_tools(domain), domain)
+        self.assertNotIn("cfd_aero", roles.PACKAGER_TOOLS)
+        self.assertNotIn("cfd_aero", roles.DESIGNER_TOOLS)
+
+    def test_the_aero_role_is_told_how_to_read_it(self):
+        from hiraku.agent import prompts
+
+        text = prompts.cae_prompt("aero")
+        for word in ("cfd_aero", "確かめていない", "GPU が無い", "判定 (verdict) の根拠にしない", "1 つの版で 1 回まで"):
+            self.assertIn(word, text)
+        self.assertNotIn("cfd_aero", prompts.cae_prompt("nvh"))
+
+    def test_the_plugins_aero_agent_has_the_tool(self):
+        agent = (Path(__file__).resolve().parents[2] / "plugins" / "hiraku" / "agents" / "cae-aero.md").read_text(encoding="utf-8")
+        self.assertIn("cfd_aero", agent.split("---")[1])
+        other = (Path(__file__).resolve().parents[2] / "plugins" / "hiraku" / "agents" / "cae-nvh.md").read_text(encoding="utf-8")
+        self.assertNotIn("cfd_aero", other)
 
 
 if __name__ == "__main__":

@@ -142,7 +142,7 @@ MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp
 
 ## 流れの解析 (2026-11-06)
 
-`cfd_aero` (`MCP_TOOLS_LATER`、実行の中で使うツールにはまだ入れない) は、設計の v の流れを GPU で解き、`<実行のフォルダ>/cfd/v<N>/` に各ケースの記録と `aero_record.json` を書く。GPU が無ければ回さないと答え、CPU では回さない。GPU のメモリが足りなければ待つように答える。`replay` は保存した記録を GPU なしで読む。解析の記録の `physically_validated` が false の値は、実験と比べて確かめていない (`assumptions` にも 確かめていない と書く)。
+`cfd_aero` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役だけが使う。`analyze` を通らないので HK1〜HK5 の外で、値は判定の根拠にしない) は、設計の v の流れを GPU で解き、`<実行のフォルダ>/cfd/v<N>/` に各ケースの記録と `aero_record.json` を書く。GPU が無ければ回さないと答え、CPU では回さない。GPU のメモリが足りなければ待つように答える。`replay` は保存した記録を GPU なしで読む。解析の記録の `physically_validated` が false の値は、実験と比べて確かめていない (`assumptions` にも 確かめていない と書く)。
 
 ## Claude が書く設計 (2026-11-06)
 

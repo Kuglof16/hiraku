@@ -2805,4 +2805,5 @@ INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check", "f
 # intake tools.
 RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, *contract.MCP_TOOLS_PACKAGER, "propose_design",
              "write_design", "edit_design", "check_design", "make_tool", "check_tool", "get_tool_template", "write_report",
-             *INTAKE_TOOLS, "write_load_case")  # write_load_case: hiraku.tools.load_case_writer (mcp.py registers it)
+             *INTAKE_TOOLS, "write_load_case",  # write_load_case: hiraku.tools.load_case_writer (mcp.py registers it)
+             "cfd_aero")  # the wind tunnel on the GPU: hiraku.tools.cfd_tools (mcp.py registers it); with no GPU it says so and does not run

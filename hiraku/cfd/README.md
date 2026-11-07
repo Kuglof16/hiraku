@@ -2,6 +2,8 @@
 
 設計の形を入れると、GPU の流体計算で空気抵抗と横風の 6 分力を出すパッケージ。外から使うのは `hiraku/tools/cfd_tools.py` (ツール `cfd_aero`) だけで、`hiraku/tools/mcp.py` の 1 行がそれを読み込む。このフォルダ・アダプタ・その 1 行を消しても、ほかは動く (`tests/cfd/test_coupling.py` が確かめる)。
 
+本番の実行では、空力の CAE 役とまとめ役がこのツールを呼べる (`RUN_TOOLS`)。`analyze` を通らないので、値は判定の根拠にしない。
+
 ここで出す値は、実験と比べて確かめたものではない。記録の `physically_validated` は false で、`assumptions` に「確かめていない」と書く。既定の Cd 0.8・Cy 1.0 は置き換えない。
 
 ## 解き方
