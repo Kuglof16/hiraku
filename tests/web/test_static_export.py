@@ -349,9 +349,19 @@ class StaticBrowserTest(unittest.TestCase):
                 self.clean(page, seen)
 
     def test_first_screen_is_the_request(self):
-        """A bare page: ① of the picked run with its request; ② has its hearing; the run list is 一覧へ at the top left;
-        「この記録を再生する」 goes to ③ and plays."""
-        page, seen = self.open("")
+        """A bare page: the picked run as it ended, on ④, with the judges' card (js/judge_intro.js); ① of that run
+        (?tab=A1) has its request; ② has its hearing; the run list is 一覧へ at the top left; 「この記録を再生する」
+        goes to ③ and plays."""
+        bare, bare_seen = self.open("")
+        end = bare.evaluate("""() => ({ on: [...document.querySelectorAll('.tab.on')].map((b) => b.dataset.tab),
+          atEnd: window.hiraku.player.playhead >= window.hiraku.player.duration - 1e-6, playing: window.hiraku.player.playing,
+          card: !!document.getElementById('judge-intro'), play: document.getElementById('ji-play')?.textContent ?? null })""")
+        self.assertEqual((end["on"], end["atEnd"], end["playing"], end["card"]), (["grid"], True, False, True), end)
+        self.assertIn("再生", end["play"])
+        # (the export's name of that run, as the bare page opened it: data/static.json's first)
+        run_id = bare.evaluate("fetch('data/static.json').then((r) => r.json()).then((j) => j.first.run)")
+        self.clean(bare, bare_seen)
+        page, seen = self.open(f"?run={run_id}&tab=A1")
         state = """() => ({
           on: [...document.querySelectorAll('.tab.on')].map((b) => b.dataset.tab),
           intake: !document.getElementById('view-intake').hidden,
