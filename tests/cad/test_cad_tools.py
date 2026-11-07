@@ -42,7 +42,8 @@ class CadToolsTest(unittest.TestCase):
         from hiraku.tools import mcp
 
         for name in ("export_step", "import_step", "edit_step"):
-            self.assertIn(name, contract.MCP_TOOLS_LATER)
+            self.assertIn(name, contract.MCP_TOOLS_CAD)
+            self.assertIn(name, mcp.RUN_TOOLS)  # in the run: the designers use them (roles.DESIGNER_TOOLS)
             self.assertIs(mcp.HANDLERS[name], TOOLS[name]["function"])
             self.assertEqual(mcp.INPUT_SCHEMAS[name], TOOLS[name]["input_schema"])
             self.assertFalse(TOOLS[name]["input_schema"]["additionalProperties"])

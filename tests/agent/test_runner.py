@@ -7,6 +7,7 @@ from unittest import mock
 
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 
+from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.runner import MessageLog, MissingApiKey, build_options, final_status, require_api_key, run_with_claude
@@ -45,8 +46,11 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__get_tool_template", o.allowed_tools)
         self.assertIn("mcp__hiraku__build_version", o.allowed_tools)  # the run tools (the tool refuses designs without modules)
         self.assertIn("mcp__hiraku__write_load_case", o.allowed_tools)  # the lead may write a load case
-        # with find_tradeoffs and add_tests (intake), write_design, edit_design, check_design and write_load_case
-        self.assertEqual(len(o.allowed_tools), 26)
+        for name in contract.MCP_TOOLS_CAD:  # the CAD tools (hiraku/tools/cad_tools.py), the designers'
+            self.assertIn(f"mcp__hiraku__{name}", o.allowed_tools)
+        # with find_tradeoffs and add_tests (intake), write_design, edit_design, check_design, write_load_case and the
+        # three CAD tools
+        self.assertEqual(len(o.allowed_tools), 29)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])

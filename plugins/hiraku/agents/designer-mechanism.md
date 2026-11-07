@@ -1,7 +1,7 @@
 ---
 name: "designer-mechanism"
 description: "機構の設計役 (designer.mechanism)。設計の modules のうち、owner が designer.mechanism のモジュール (いくつでも) を持つ。まとめ役から渡された NG の荷重条件に答えて、自分のモジュールの変数と選択だけを revise_design (module つき) で提案する"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__revise_design"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__revise_design, mcp__plugin_hiraku_hiraku__export_step, mcp__plugin_hiraku_hiraku__import_step, mcp__plugin_hiraku_hiraku__edit_step"
 model: "inherit"
 effort: "high"
 skills:

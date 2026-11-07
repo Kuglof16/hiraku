@@ -14,7 +14,7 @@
 
 道筋は実行のフォルダからの相対だけ。フォルダの外 (`..`・絶対の道筋) と、`.step` / `.stp` 以外のファイルは断る。
 ほかの記録 (`project.json`・`events.jsonl` など) は読みも書きもしない。今あるファイルの上には書かない。
-ツールの名前は `MCP_TOOLS_LATER` にあり、実行の中で使うツール (`RUN_TOOLS`) にはまだ入れていない。
+ツールの名前は `MCP_TOOLS_CAD` にあり、実行の中で使うツール (`RUN_TOOLS`) と、設計役の使えるツール (`DESIGNER_TOOLS`・`MODULE_DESIGNER_TOOLS`) に入っている。
 
 ## 動くこと (数はテストから)
 
