@@ -6,17 +6,21 @@
 //       lit working, with pet3d's pass hop for MOTIONS.pass.react seconds from the time the card
 //       answers (the record's pick; in the video layout then REPLY_STEP_S apart: a1Times). Off is grey by
 //       the intake's CSS. The place "lead" beside the headline holds the lead's pet (leadMotionAt).
-//   A2: the row at the top of the left column (intake.petsSlot): one pet per CAE agent of the record
-//       (an event's agent or data.agent_id cae.<domain>, <domain> one of labels.js DOMAINS), in the
-//       order of their first analysis.started, each with its domain's name under it. Idle before
-//       that agent's first analysis.started, working from it on. A record without a CAE agent leaves
-//       the slot empty (the intake's CSS hides it then).
+//   A2: the pet of the agent that asked the questions shown (askerRow: the newest hearing.asked at t,
+//       its record's agent, e.g. the lead), its name under it, working from the asking until the
+//       answer, then idle; into the host's place beside its heading (app.js renderA2When, .a2-askers).
+//       In the video layout (?video=1, its frames as before) the row at the top of the left column
+//       (intake.petsSlot): one pet per CAE agent of the record (an event's agent or data.agent_id
+//       cae.<domain>, <domain> one of labels.js DOMAINS), in the order of their first
+//       analysis.started, each with its domain's name under it. Idle before that agent's first
+//       analysis.started, working from it on. A record without a CAE agent leaves the slot empty (the
+//       intake's CSS hides it then).
 // Which pet and when it moves come from the record's events only, at the replay's time t (display
 // time, as the agents' pets: ?t= draws the same picture). Drawing is the app's AgentPets (one
 // PetStage, its pixel ratio, its still pictures without a GPU unless ?petmotion=on), so a pet is
 // drawn again only when its pose or size changes, at most PET_FPS times a second while it moves.
 
-import { DOMAINS, DOMAIN_JA } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, agentName } from "./labels.js";
 import { MOTIONS, PET_FPS, petPose } from "./agent_pets.js";
 import { inTurn, REPLY_STEP_S } from "./intake/a1.js";
 import { domainCards } from "./intake/model.js";
@@ -68,9 +72,28 @@ export function caeRow(events) {
   return [...met.values()].sort((x, y) => key(x) - key(y) || x.n - y.n).map(({ id, domain, startAt }) => ({ id, domain, startAt }));
 }
 
-// An A2 pet's motion at t: idle before its first analysis.started, working from it.
-export function a2MotionAt(startAt, t) {
-  return startAt !== null && t >= startAt ? { motion: "working", since: startAt } : { motion: "idle", since: 0 };
+// The A2 pet of the questions shown at t: the agent of the newest hearing.asked by then ([] when none),
+// as [{ id, domain, name, startAt, endAt }] (endAt: the hearing.answered after it, null while none).
+export function askerRow(events, t) {
+  let asked = null;
+  let endAt = null;
+  for (const ev of events ?? []) {
+    if (ev.t > t + 1e-9) break;
+    if (ev.kind === "hearing.asked") {
+      asked = ev;
+      endAt = null;
+    } else if (ev.kind === "hearing.answered" && asked && endAt === null) endAt = ev.t;
+  }
+  if (!asked) return [];
+  const id = asked.agent || "lead";
+  return [{ id, domain: id.startsWith("cae.") ? id.slice(4) : "", name: agentName(id), startAt: asked.t, endAt }];
+}
+
+// An A2 pet's motion at t: idle before its first analysis.started (the asker: its asking), working
+// from it (the asker: until the answer, endAt).
+export function a2MotionAt(startAt, t, endAt = null) {
+  const on = startAt !== null && t >= startAt && (endAt === null || t < endAt);
+  return on ? { motion: "working", since: startAt } : { motion: "idle", since: 0 };
 }
 
 // An A1 pet's motion at t from its card's state and the time its domain was picked (litAt).
@@ -82,6 +105,7 @@ export function a1MotionAt(state, litAt, t, hop) {
 }
 
 const CSS = `
+.a2-askers.ipets { display: flex; align-items: flex-end; flex: none; width: 92px; height: ${A2_PETS_H}px; overflow: hidden; }
 .a2-pets.ipets { display: flex; align-items: flex-end; gap: 6px; height: ${A2_PETS_H}px; margin: 0 0 8px; overflow: hidden; }
 .ipet { flex: 0 1 92px; min-width: 0; display: flex; flex-direction: column; align-items: center; }
 .ipet .ipet-box { position: relative; width: 100%; height: 92px; }
@@ -159,7 +183,7 @@ export class IntakePets {
       box.className = "ipet-box";
       const name = document.createElement("span");
       name.className = "ipet-name";
-      name.textContent = DOMAIN_JA[a.domain] ?? a.domain;
+      name.textContent = a.name ?? DOMAIN_JA[a.domain] ?? a.domain;
       el.append(box, name);
       const canvas = this.canvas(a.id);
       box.append(canvas);
@@ -169,19 +193,25 @@ export class IntakePets {
   }
 
   // Draw the pets of the shown intake screen at t. intake: mountIntake's object; events: the
-  // player's (display time); budget: pets drawn in this frame (playing: PET_PAINTS; stopped: all).
-  tick(intake, events, t, budget = Infinity) {
-    if (this.rowOf.events !== events || this.rowOf.n !== events.length || this.rowOf.last !== events.at(-1)) {
-      this.rowOf = { events, n: events.length, last: events.at(-1), row: caeRow(events) };
+  // player's (display time); budget: pets drawn in this frame (playing: PET_PAINTS; stopped: all);
+  // askersHost: A2's place for the asker's pet (askerRow), null: the CAE row in intake.petsSlot.
+  tick(intake, events, t, budget = Infinity, askersHost = null) {
+    let row;
+    if (askersHost) row = askerRow(events, t);
+    else {
+      if (this.rowOf.events !== events || this.rowOf.n !== events.length || this.rowOf.last !== events.at(-1)) {
+        this.rowOf = { events, n: events.length, last: events.at(-1), row: caeRow(events) };
+      }
+      row = this.rowOf.row;
     }
-    const row = this.rowOf.row;
-    if (intake.petsSlot) this.mountA2(intake.petsSlot, row);
+    const a2Host = askersHost ?? intake.petsSlot;
+    if (a2Host) this.mountA2(a2Host, row);
     this.mountA1(intake.petSlots);
     const hop = this.pets.motion.hop_period_s;
     const todo = [];
     row.forEach((a, k) => {
       const b = this.a2.boxes.find((x) => x.id === a.id);
-      if (b) todo.push({ b, m: a2MotionAt(a.startAt, t), mark: b.el, k });
+      if (b) todo.push({ b, m: a2MotionAt(a.startAt, t, a.endAt ?? null), mark: b.el, k });
     });
     const times = this.a1.size ? a1Times(intake.model, t, replyInTurn()) : null;
     for (const [domain, b] of this.a1) {

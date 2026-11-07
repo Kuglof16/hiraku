@@ -44,6 +44,18 @@ CHECK_1 = json.dumps({"tool": "rollbar", "checks": []})
 README_START = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"
 
 
+# ①'s first screen: the top row, the footer, ①'s いま and its domain cards (js/app.js opensAtRequest)
+ONE_MOMENT = """() => ({
+  openedAt: document.documentElement.dataset.openedAt ?? null,
+  pill: document.getElementById('pill-version').textContent,
+  mode: document.getElementById('mode').innerText,
+  activity: document.getElementById('activity').innerText.trim(),
+  now: document.getElementById('tab-head-intake')?.innerText ?? '',
+  cards: [...document.querySelectorAll('.in-pane.a1 .in-card')].map((c) => [...c.classList].find((k) => ['lit', 'off', 'draft', 'wait'].includes(k))),
+  head: document.querySelector('.in-pane.a1 .in-headtext')?.innerText ?? '',
+})"""
+
+
 def fake_shelf() -> Shelf:
     return Shelf(lambda: {"tools": SHELF_TOOLS, "formulas": FORMULAS, "archetypes": ARCHETYPES})
 
@@ -338,6 +350,18 @@ class StaticBrowserTest(unittest.TestCase):
         self.assertIn(want, got["bar"])
         self.assertIn("この記録を再生する", got["bar"])
         self.assertIn(want, page.inner_text("#intake-host"))
+        # one moment, the request's: no design yet (v —), the status of then, no footer line, the
+        # domain cards picked (not 候補 / 考えています)
+        moment = page.evaluate(ONE_MOMENT)
+        self.assertEqual(moment["openedAt"], "request", moment)
+        self.assertTrue(moment["pill"].startswith("v—"), moment)
+        self.assertIn("依頼の時点", moment["mode"])
+        self.assertNotIn("記録の途中", moment["mode"])
+        self.assertEqual(moment["activity"], "")
+        self.assertIn("lit", moment["cards"])
+        self.assertFalse({"draft", "wait"} & set(moment["cards"]), moment)
+        self.assertNotIn("考えています", moment["head"])
+        self.assertNotIn("候補", moment["head"])
         # the steps in order; the run list is 「☰ 一覧へ」 at the top left, not a tab
         order = page.evaluate("[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.tab ?? t.getAttribute('href'))")
         self.assertEqual(order[:3], ["A1", "A2", "bench"])
@@ -356,6 +380,9 @@ class StaticBrowserTest(unittest.TestCase):
         first_design = page.evaluate("window.hiraku.player.events.find((e) => e.kind === 'design.created').t")
         self.assertGreaterEqual(got["playhead"], first_design)
         self.assertLess(got["playhead"], page.evaluate("window.hiraku.player.duration") / 2)
+        # the top row goes on with the replay (the first design in: v1)
+        page.wait_for_function("document.getElementById('pill-version').textContent.startsWith('v1')")
+        self.assertNotIn("依頼の時点", page.inner_text("#mode"))
         # 「☰ 一覧へ」 at the top left opens the list (no tab of its own beside the domain chips)
         self.assertIsNone(page.query_selector("#tabs a.tab-list"))
         page.click("#back-link")

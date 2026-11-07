@@ -85,8 +85,14 @@ SCREENS = (
     Screen("A1", "?new=1", wait="document.querySelector('#view-intake textarea')"),
     Screen("A2", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6"),
     Screen("A5", f"?run={HEARING}&tab=A5&live=0&pace=0&t=1e6"),
-    # the CAE agents' pets on the intake screens (js/intake_pets.js): A2's row of every domain's agent, and the video's A1 and A2
-    Screen("A2 (ペット)", f"?run={DOMAINS}&tab=A2&live=0&pace=0&t=1e6", wait=f"{READY} && document.querySelector('.a2-pets .ipet canvas')"),
+    # ① opened as it is: stopped at the request's moment (app.js opensAtRequest)
+    # Known (found when this row was added; the intake's chat bubble, js/intake/a1.js): the request's
+    # bracket "(4 輪、最高 40 km/h、積載 150 kg)" breaks inside it at every width.
+    Screen("A1 (依頼の時点)", f"?run={HEARING}&tab=A1&live=0&pace=0", wait=f"{READY} && document.documentElement.dataset.openedAt === 'request'",
+           known=(".in-msg.user",)),
+    # the pets on the intake screens (js/intake_pets.js): A2's asker beside the heading of when it asked
+    # (app.js renderA2When), and the video's A1 and A2 (A2: the row of every domain's CAE agent)
+    Screen("A2 (ペット)", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6", wait=f"{READY} && document.querySelector('.a2-askers .ipet canvas') && document.querySelector('#a2-when h3')"),
     # Known (found when this row was added; the intake's name under the pet, not the pet): the fixture's shown_name is
     # the id "powertrain", 18 px bold in the video, wider than the 104 px place (overflow by 4-9 px).
     Screen("A1 (ペット・動画)", f"?run={DOMAINS}&tab=A1&live=0&pace=0&t=1e6&present=1&video=1", wait=f"{READY} && document.querySelector('.in-pet canvas')",
@@ -160,6 +166,10 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     asked = json.loads((contract.EXAMPLES_DIR / "hearing_asked.json").read_text(encoding="utf-8"))
     events.insert(1, {"seq": 0, "ts": events[0]["ts"], "t": events[0]["t"] + 0.1, "run_id": events[0]["run_id"],
                       "kind": "hearing.asked", "agent": "lead", "data": asked})
+    # (and the domains picked before it: ① opened as it is stops at the request's moment)
+    picked = json.loads((contract.EXAMPLES_DIR / "domains_picked.json").read_text(encoding="utf-8"))
+    events.insert(1, {"seq": 0, "ts": events[0]["ts"], "t": events[0]["t"] + 0.05, "run_id": events[0]["run_id"],
+                      "kind": "domains.picked", "agent": "lead", "data": picked})
     _write_run(runs, HEARING, events)
     _write_run(runs, REPORT_RUN, report_events(REPORT))
     _write_run(runs, ASSEMBLY, assembly_events())

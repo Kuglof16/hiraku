@@ -54,7 +54,8 @@ import { AssemblyPanel, assemblyRecord } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
-import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1 and A2
+import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1, the asker's on A2
+import { hearingRounds, plainHearingEvents, roundAt, roundLine, roundTitle } from "./hearing_rounds.js"; // ②: when each hearing was
 import { reportNextHtml } from "./report_next.js";
 import { analysisEdge, assumptionText, edgeFlips, edgeLineHtml, edgeRaw, edgeText, nearLineHtml } from "./edge_note.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
@@ -129,8 +130,9 @@ function bootFailed(why, links = []) {
 }
 // A static export opened with no parameters starts at ① of the run its export picked (data/static.json
 // first: a saved run whose record has the request, the picked domains and the hearing), stopped at the
-// record's end so ① and ② show all of it; 「この記録を再生する」 plays it (STATIC_REPLAY). Without such a
-// run: the run list, as before.
+// request's moment (requestMoment: the domains picked, no design yet), so the top row, the footer and
+// ① tell one moment; 「この記録を再生する」 plays it (STATIC_REPLAY). Without such a run: the run list,
+// as before.
 async function staticFirst() {
   try {
     return (await (await fetch(getUrl("/data/static.json"))).json()).first ?? null;
@@ -139,7 +141,7 @@ async function staticFirst() {
   }
 }
 const FIRST = STATIC && !location.search ? await staticFirst() : null;
-const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}&tab=A1&t=1e6` : location.search);
+const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}&tab=A1` : location.search);
 // ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
@@ -198,6 +200,7 @@ const ui = {
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true, grip: false }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis; grip: タイヤ (grip_panel.js)
   frozen: params.has("t"),
+  moment: null, // ① opened at the request's moment (requestMoment): its time, while the replay stays there
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
   anim: { key: null, local: false, playing: false, tau: 0 },
@@ -684,8 +687,19 @@ function renderDomainHead(span) {
 const intakeListeners = new Set();
 let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
 let intake = null;
+// The record's events with the hearings' sentences in the screen's words (hearing_rounds.js: v2,
+// a requirement's name, a part's name), made again when the record changes; the video's frames
+// keep the record's words.
+let plainMemo = { n: -1, last: null, list: [] };
+function plainEvents() {
+  if (VIDEO_LAYOUT) return player.events;
+  if (plainMemo.n !== player.events.length || plainMemo.last !== player.events.at(-1)) {
+    plainMemo = { n: player.events.length, last: player.events.at(-1), list: plainHearingEvents(player.events) };
+  }
+  return plainMemo.list;
+}
 const intakeApi = {
-  events: () => (draft ? draftEvents() : player.events.slice(0, player.applied)),
+  events: () => (draft ? draftEvents() : plainEvents().slice(0, player.applied)),
   onEvent(fn) {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
@@ -1029,6 +1043,44 @@ function renderReplayBar() {
   }
 }
 
+// ② 確認したいこと: over its questions (in the place the intake leaves for the host, intake.petsSlot),
+// the pet of the agent that asked them (intake_pets.js, into .a2-askers), a heading that says when
+// they were asked and by whom (the newest hearing at the replay's time), and the record's hearings
+// in time order, the first one (before the first design) said so, the one shown marked, the ones
+// still ahead of the replay faint. Nothing of it in the video's frames (its pets as before).
+const a2When = { host: null, el: null, html: "" };
+function renderA2When(tab) {
+  const slot = intake?.petsSlot;
+  if (!slot || VIDEO_LAYOUT || draft) return;
+  if (!a2When.host || a2When.host.parentElement !== slot) {
+    a2When.host = document.createElement("div");
+    a2When.host.className = "a2-askers";
+    a2When.el = document.createElement("div");
+    a2When.el.className = "a2-when";
+    a2When.el.id = "a2-when";
+    a2When.html = "";
+    slot.replaceChildren(a2When.host, a2When.el);
+  }
+  if (tab !== "A2") return;
+  const rounds = hearingRounds(player.events);
+  const shown = roundAt(rounds, player.playhead);
+  const items = rounds.map((r) => {
+    const cls = r === shown ? "shown" : r.t > player.playhead + 1e-9 ? "later" : "past";
+    const tail = r === shown ? " ← 下に出ているもの" : cls === "later" ? " (再生がこの時刻になると出ます)" : "";
+    return `<li class="${cls}" data-version="${r.version ?? ""}">${esc(roundLine(r))}${tail}</li>`;
+  });
+  const html = rounds.length
+    ? `<h3 class="a2-when-title">${esc(shown ? roundTitle(shown) : "HIRAKU はまだ何も聞いていません")}</h3>` +
+      `<div class="a2-when-sub">聞いた順</div><ol class="a2-rounds">${items.join("")}</ol>`
+    : "";
+  if (html !== a2When.html) {
+    a2When.html = html;
+    a2When.el.innerHTML = html;
+  }
+  slot.classList.toggle("has-when", !!html);
+  a2When.el.hidden = !html;
+}
+
 function staticReplay() {
   const t0 = player.events.find((e) => e.kind === "design.created")?.t ?? 0;
   if (ui.gridDomain) closeDomain();
@@ -1044,19 +1096,37 @@ $("view-intake").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-static-replay]")) staticReplay();
 });
 
+// The picked domains are the final ones (the intake's picksFinal: its cards say 調べる, not
+// 候補 / 考えています, at any time of the replay) when the record is over and no later choice of
+// Claude's (a domains.picked with the flags' reasons) replaced the code's picks. The video's frames
+// as before.
+function picksFinal() {
+  if (VIDEO_LAYOUT || draft || player.live || !player.finished) return false;
+  return !player.events.some((e) => e.kind === "domains.picked" && Object.keys(e.data?.flag_reasons ?? {}).length);
+}
+let intakeFinal = false;
+
 function renderIntake(tab) {
+  if (intake && intakeFinal !== picksFinal()) {
+    // (the record turned out to be over: mounted again with the picks as the final ones)
+    intake.destroy();
+    intake = null;
+    intakeTimeSent = undefined;
+  }
   if (!intake) {
     // in a new request the bar (renderDraft) sits above the screens
     $("view-intake").innerHTML =
       `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}${STATIC ? `<div class="draftbar replaybar" id="replaybar"></div>` : ""}` +
       `<div class="tab-head" id="tab-head-intake"></div><div class="intake-host" id="intake-host"></div>`;
     // (mounted with the events applied so far: not drawn again at once for the same events)
-    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
+    intakeFinal = picksFinal();
+    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus, picksFinal: intakeFinal });
     intakeApplied = `${player.state.runId}|${player.applied}|${runGoing()}`;
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
   renderReplayBar();
+  renderA2When(tab);
   syncDraftAsk();
   syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
@@ -1206,7 +1276,12 @@ function renderTop(s, domainAt = null) {
   const live = player.live;
   // a replay says where the record is at the playhead (not that something runs now)
   // (a followed run that is over while the replay is still behind its end: said so, not 記録の途中)
-  const status = s.status === "running" && runOver() ? "実行は終わった" : ({ running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status);
+  // (a replay before the record's end says the moment it shows: 依頼の時点 before the first design,
+  // else 「v3 の時点」; a record that ends with no run.finished says so, with the last version it has;
+  // the video's frames keep 記録の途中)
+  const status = s.status === "running" && runOver() ? "実行は終わった"
+    : s.status === "running" && !live && !VIDEO_LAYOUT ? (player.finished ? (s.currentVersion == null ? "依頼の時点" : `${verLabel(s.currentVersion)} の時点`) : `この記録は途中で終わっています (${verLabel(wholeState().currentVersion)} まで)`)
+    : ({ running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status);
   $("mode").innerHTML =
     (domainAt
       ? `<span class="domain-playing" id="domain-playing" data-domain="${esc(domainAt.domain)}">${esc(TAB_JA.grid.no)} で <b>${esc(DOMAIN_JA[domainAt.domain] ?? domainAt.domain)}</b> を再生中 (${esc(verLabel(domainAt.version))})</span>`
@@ -1692,10 +1767,16 @@ const TAB_HEADS = {
     const qs = cards.length;
     const open = [...cards].filter((c) => c.classList.contains("open")).length;
     const byDefault = s.intake.answers.filter((a) => a.source === "default").length;
+    // (the questions shown were answered and the run went on: which versions it made after them;
+    // the video's frames as before)
+    const shown = VIDEO_LAYOUT ? null : roundAt(hearingRounds(player.events), player.playhead);
+    const after = shown?.answered && s.currentVersion != null && s.currentVersion > (shown.version ?? 0)
+      ? `答えのあと ${shown.version == null ? verLabel(1) : verLabel(shown.version + 1)}${s.currentVersion > (shown.version ?? 0) + 1 ? ` から ${verLabel(s.currentVersion)}` : ""} を作った`
+      : null;
     return [
       qs ? `質問 ${qs} 件・答えが無いもの ${open} 件` : "聞くことはまだ無い",
       ["標準の値", byDefault ? `${byDefault} 件は答えずに標準の値のまま (確かめていない値は報告に載る)` : "答えずに標準の値にしたものは無い", byDefault ? "warn" : ""],
-      !qs ? "足りない値があれば、ここで聞く" : open ? "質問に答える (答えなければ標準の値)" : "③ 解析へ (答えはそろった)",
+      after ?? (!qs ? "足りない値があれば、ここで聞く" : open ? "質問に答える (答えなければ標準の値)" : "③ 解析へ (答えはそろった)"),
     ];
   },
   A5(s) {
@@ -2359,8 +2440,11 @@ function renderGrid(s) {
   nx.hidden = !html;
 }
 
+// ① opened at the request's moment and still there (ui.moment): no footer line (what an agent did
+// last belongs to a later moment of the run, not to the request)
+const atMoment = () => ui.moment !== null && !player.playing && Math.abs(player.playhead - ui.moment) < 1e-6;
 function renderStatus(s) {
-  const act = s.activity;
+  const act = atMoment() ? null : s.activity;
   $("activity").innerHTML = act ? `<span class="dot"></span>${esc(footerActivity(s, { dev: DEV }))}` : ""; // short (hookline.js)
 }
 
@@ -2777,7 +2861,8 @@ function drawNow() {
   // (a static export: once the assembly shown is read)
   if (tab === "A7" && !(STATIC && waitsForHeavy(() => assemblyRecord(s)))) (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("asm-host"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
-  if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS);
+  // (② outside the video: the asker's pet beside renderA2When's heading)
+  if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS, VIDEO_LAYOUT || draft ? null : a2When.host);
   if (TAB_HEADS[tab]) renderTabHead(s, tab);
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
@@ -3093,10 +3178,27 @@ function startPlayback() {
 }
 // A saved run that is over, opened with nothing saying where or what to show (no ?t=, ?tab=, ?tabs=,
 // ?autoplay=, ?video=1): it opens at its end, where ④ has every domain's verdict and ⑤ the vehicle
-// built. The static export's first screen (?t= set for it, FIRST) and a followed run are as before.
+// built. The static export's first screen (FIRST, ?tab=A1: opensAtRequest) and a followed run are not.
 function opensAtEnd() {
   if (player.live || !player.finished || VIDEO_LAYOUT) return false;
   return !["t", "tab", "tabs", "autoplay", "domain", "play"].some((k) => params.has(k));
+}
+// ① opened as it is (?tab=A1, or the static export's first screen) on a replay: it stops at the
+// request's moment, so the top row (v —, the status of then), the footer (none), ①'s いま and its
+// domain cards (picked) tell one moment; ▶ or 「この記録を再生する」 goes on from there.
+function opensAtRequest() {
+  if (player.live || VIDEO_LAYOUT || params.get("tab") !== "A1") return false;
+  return !["t", "tabs", "autoplay", "domain", "play"].some((k) => params.has(k));
+}
+// The request's moment: the domains picked and the run's first hearing in, no design yet (just
+// before the first design.created; at the last domains.picked when there is none). null: the record
+// has no domains.picked before its first design.
+function requestMoment() {
+  const evs = player.events;
+  const k = evs.findIndex((e) => e.kind === "design.created");
+  const pick = evs.findLast((e, i) => e.kind === "domains.picked" && (k < 0 || i < k));
+  if (!pick) return null;
+  return k < 0 ? pick.t : Math.max(pick.t, evs[k].t - 1e-6);
 }
 
 async function play() {
@@ -3128,7 +3230,15 @@ async function play() {
     player.seek(span.t0);
     player.playing = params.get("autoplay") !== "0";
   } else if (player.live) player.attachLive();
-  else if (opensAtEnd()) {
+  else if (opensAtRequest() && requestMoment() !== null) {
+    const t = requestMoment();
+    ui.building = true;
+    await player.seekInSteps(t);
+    ui.building = false;
+    player.pause();
+    ui.moment = player.playhead;
+    document.documentElement.dataset.openedAt = "request";
+  } else if (opensAtEnd()) {
     // a finished run opened as it is: at its end, every verdict in (▶ plays it from its start).
     // The frame is fixed there as at ?t= (seekAndDraw: ④'s tile pictures drawn at once, now and
     // when ④ is pressed), and ready once ④'s pictures have the real look's files (looksReady)
