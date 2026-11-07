@@ -57,7 +57,7 @@ HIRAKU: Claude agents predict each result by hand calculation before running the
 画面を開くと、まず一覧「HIRAKU でできること」が出ます (`?list=1` も同じ一覧)。「まずはこれ」の「見る」を押すと、リポジトリの `showcase/` に保存した実行のうちいちばん新しいもの (実行の名前の順) を再生します。何も計算せず、無料です。Claude の運転で v7 まで直して全部 OK で終わった実行は `20261105-160725-offroad-4w` で、一覧の「記録を見る」か `?run=20261105-160725-offroad-4w` で開きます。
 
 - 再生は長いので、下の時間の棒を右端まで送ると、終わったときの判定 (④ 解析結果) と組み立て (⑤ 組み立て) が見られます。棒の横の「1×」を押すと、速さが 0.5× から 8× まで変わります。
-- `showcase/` には 8 つの実行 (Claude が回したもの 7 つ、台本の運転 1 つ) と、動画の N10 の場面の記録 (`n10/`) があります。オフロードの車のほかに、依頼の文から 7 分野を選んで v5 まで直した実行 (`20261107-164004-free-utv`)、合う型が無く設計役が設計そのものを書いた配膳ロボットの実行 (`20261107-190633-serving-robot-claude`)、介護ベッドの実行 (`20261104-011628-care-bed`) があります。ほかの実行は、一覧の「記録を見る」か、URL の `?run=<実行の名前>` で開きます。実行ごとの中身と見る順のおすすめは [showcase/README.md](showcase/README.md)。
+- `showcase/` には 8 つの実行 (Claude が回したもの 7 つ、台本の運転 1 つ) と、動画の N10 の場面の記録 (`n10/`) があります。オフロードの車のほかに、依頼の文から 7 分野を選んで v5 まで直した実行 (`20261107-164004-free-utv`)、合う型が無く「設計」が設計そのものを書いた配膳ロボットの実行 (`20261107-190633-serving-robot-claude`)、介護ベッドの実行 (`20261104-011628-care-bed`) があります。ほかの実行は、一覧の「記録を見る」か、URL の `?run=<実行の名前>` で開きます。実行ごとの中身と見る順のおすすめは [showcase/README.md](showcase/README.md)。
 - 解析の「ビューアで見る」は、結果のビューア (`viewer/`) を開きます。`showcase/` の実行は記録のフォルダ (`v00N/`) を持たないので、ビューアに出るのはその分野の見本で、その解析の絵ではありません (`hiraku/webserve/viewer_link.py` の冒頭)。
 - `20261105-160725-offroad-4w` で、合わないように見える所:
   - 記録の最後の「まだ確かめていない 45」は、要件の値のうち出典を確かめていない (仮定を含む) ものの数です。
@@ -153,9 +153,10 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
    .venv\Scripts\python -m hiraku run data/requirements/offroad-4w-n12.yaml --scripted
    ```
 
-3. Claude Code を、プラグインを指定して起こします。`--allowedTools` を付けないと、役がツールを呼ぶたびに許可を聞かれます。
+3. Claude Code を、プラグインを指定して起こします。`--allowedTools` を付けないと、エージェントがツールを呼ぶたびに許可を聞かれます。MCP サーバーの起動を待つ時間は、環境変数 `MCP_TIMEOUT` (ミリ秒) で長くしておきます。込み合った PC で HIRAKU の MCP サーバーの読み込みに 35.7 秒かかり、待ち時間を長くしないとつながらなかったことがあります (2026-11-07)。
 
    ```
+   set MCP_TIMEOUT=300000
    claude --plugin-dir <リポジトリ>/plugins/hiraku --allowedTools "mcp__plugin_hiraku_hiraku"
    ```
 
@@ -180,7 +181,7 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
 | ツール | CAE のツール (解析のプログラム)。答えの分かっている例と合ってから使う |
 | hooks | 実行の途中で、順番を守らせるために止める決まり (HK1〜HK6)。たとえば「予測が先」「不一致は原因が先」 |
 | 台本の運転 / Claude の運転 | 決まった順にツールを呼ぶ運転 (Claude を呼ばない) / Claude が自分で考えて進める運転 (API キーが要る) |
-| 役 | エージェントの役目: まとめ役・設計役 (設計がモジュールに分かれているときは、モジュールごとの設計役)・パッケージ役・分野ごとの CAE 役 |
+| エージェント | 仕事を分けて受け持つエージェント: 「まとめ」・「設計」 (設計がモジュールに分かれているときは、モジュールごとの「設計」)・「パッケージ」・分野ごとの「CAE」 |
 | K0〜K5 | 解析の土台: K0 手計算の式・K1 梁と板の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度。これとは別に、GPU の流れの計算 (`hiraku/cfd/`) と STEP の出し入れ (`hiraku/cad/`) がある |
 | 記録 (events.jsonl) | 実行の中で起きたことを 1 行ずつ書いたファイル。画面はこれだけから描く |
 | 要件 | 作りたいものの条件 (使う場所・荷・速さ・基準など)。`data/requirements/` にある |
@@ -211,16 +212,16 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 ## いま動くもの
 
 - デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 11 の試験 (段差越え P1・強度 R1・レールの継ぎ目の局所の応力 R1s・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「予測 → 解析 → 比べる → 判定」で回す流れ。基準のある試験は OK か NG かまで出す (P1 は基準が無く、予測と比べるまで)。予測の無い解析は hooks が止め、不一致は原因を書くまで先へ進めない。説明できて安全側と判断できる不一致は、不利な方の値で OK か NG かを出す
-- 設計役が設計の変数を変えて次の設計を作る (`revise_design`)。合う型の無い製品では、設計役が設計そのもの (節点・部材・断面・材料・部品・支え) を書き (`write_design`)、版にする前に `check_design` で確かめ、次の v を変える所だけで作る (`edit_design`。skill `write-a-design`)。v ごとに何が NG で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
+- 「設計」が設計の変数を変えて次の設計を作る (`revise_design`)。合う型の無い製品では、「設計」が設計そのもの (節点・部材・断面・材料・部品・支え) を書き (`write_design`)、版にする前に `check_design` で確かめ、次の v を変える所だけで作る (`edit_design`。skill `write-a-design`)。v ごとに何が NG で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
 - 解析のツール 31 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 18 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 13 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`)。数は `hiraku.solvers.builtin_tools()` の長さ、2026-11-07)。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 18 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 13 には付かない)。報告 (`write_report`) で感度を求めると、設計の変数は設計を組み直して測る (`hiraku/tools/report.py` の `sensitivities`、試験は `tests/solvers/test_k5.py`)
-- GPU の流れの計算のツール 2 つ (`cfd_aero`・`cfd_water`。NVIDIA の GPU とそのドライバが要る。GPU が無ければ回さず、CPU では回さない。保存した記録の再生は GPU 無しで動く)。空力の CAE 役とまとめ役が呼べる。どちらの値も実験と比べていない (記録の `physically_validated` は false。`hiraku/cfd/README.md`、`hiraku/tools/cfd_tools.py`)
+- GPU の流れの計算のツール 2 つ (`cfd_aero`・`cfd_water`。NVIDIA の GPU とそのドライバが要る。GPU が無ければ回さず、CPU では回さない。保存した記録の再生は GPU 無しで動く)。空力の 「CAE」と「まとめ」が呼べる。どちらの値も実験と比べていない (記録の `physically_validated` は false。`hiraku/cfd/README.md`、`hiraku/tools/cfd_tools.py`)
   - `cfd_aero` (風洞): 設計の形のまわりの空気を格子ボルツマン法で解き、ヨーの角ごとの力と係数を出す。`judge` を付けると、試験 F4 (止まった車が横風を受けたとき、風上の輪が浮く風速が F1 の限度 (要件 Q18) 以上か) の荷重条件・手計算・解析・比べるまでを進めて判定する
   - `cfd_water` (冠水路): 水の入った窪みを通る車のまわりの水を MLS-MPM で解く。車は K2 で水に答えて動く (遅くなる・鼻が上がる)。`judge` を付けると、試験 F5 (電池・モーター・制御器のどれにも水が届かない) を判定まで進める。水深 200 mm と 18 km/h は HIRAKU の仮定で、要件から来ていない。見るのは水が届くかだけで、水の力の値としては読まない。水深を振ると、電池・モーター・制御器が水に浸からない深さ (渡れる水深、計算) を速さごとに出す (しぶきは数えない)。動画の車 (v5) では、5 km/h で 50 mm、18 km/h で 50 mm 未満 (要件に水深が無いので OK / NG は出さない)
-- STEP (ISO 10303-21) の出し入れのツール 3 つ。設計役とモジュールの設計役が実行の中で呼べる (`hiraku/agent/roles.py` の `DESIGNER_TOOLS`・`MODULE_DESIGNER_TOOLS`、`hiraku/cad/README.md`)
+- STEP (ISO 10303-21) の出し入れのツール 3 つ。「設計」とモジュールの「設計」が実行の中で呼べる (`hiraku/agent/roles.py` の `DESIGNER_TOOLS`・`MODULE_DESIGNER_TOOLS`、`hiraku/cad/README.md`)
   - `export_step`: 設計の v を STEP (AP214) に書く。部材と部品が 1 つずつ名前つきの立体になる
   - `import_step`: STEP を読み、設計の記録の形 (部材・節点・断面・部品) と、立体ごとに部材か部品か (理由つき) を返す。寸法・体積・質量はコードが形から測る。v は作らない
   - `edit_step`: 立体を名前で選び、動かす・回す・消す・箱や筋かいを足す・断面や肉厚を変える。別のファイルに書き、元は書き換えない
-- 試験ごとの荷重条件の作り方は、カタログ (`data/catalog/tests.yaml`) の 44 試験のうち 31 試験ぶんある。要件のファイルに並べれば実行に乗る。作り方の無い試験は、分野の役かまとめ役が `write_load_case` で荷重条件を書ける (限度は式で書き、数はコードが計算する)。F4・F5 は流れのツールが `judge` で書く。最近足したもの:
+- 試験ごとの荷重条件の作り方は、カタログ (`data/catalog/tests.yaml`) の 44 試験のうち 31 試験ぶんある。要件のファイルに並べれば実行に乗る。作り方の無い試験は、分野の「CAE」か「まとめ」が `write_load_case` で荷重条件を書ける (限度は式で書き、数はコードが計算する)。F4・F5 は流れのツールが `judge` で書く。最近足したもの:
   - S2 (旋回での転倒): 半径 25 m の円を、最高速度 (Q50) まで速さを上げて回り、内側の 2 輪が浮かない (`steady_circle`。半径は HIRAKU の仮定。`hiraku/catalog/builders/k2_tests.py`)
   - R4 (横転時の保護枠): 傾斜台で倒れる角を越えて傾けた車が床に落ち、ロールバーで着地する。その骨組みを降伏する梁として解き、どの部材も乗員の空間に入らない (隙間 ≥ 0 mm)。地面は土 (R4-rollover) と舗装 (R4-rollover-pavement) の 2 通りで、両方 OK のときだけ R4 は OK。HIRAKU 独自の計算の確かめで、規格の試験ではない (`rollover_beam`、`hiraku/catalog/builders/analysis.py` の `r4_rops`)。着地の形は触れる順番で大きく変わるので、隙間は計算機の浮動小数の差でも動く: 同じコードと同じ設計 (デモの v1) で、Windows では土 +48.2 mm・舗装 +45.4 mm の OK、Linux では直した v2 でも −4.2 mm・−10.5 mm の NG だった (差の大きさは確かめていない)。境目に近い設計の R4 の判定は、計算機が変わると入れ替わることがある。動画の車 (v5) は余裕があり、両方で OK: Windows で土 +77.1 mm・舗装 +83.4 mm、Linux (EC2) で +72.8 mm・+80.8 mm (`studies/k2_r4_ec2` の枝で回した、2026-11-07)
   - F2 (空気抵抗): 最高速度 (Q50) で受ける空気抵抗の力が、その速さで使える駆動力から転がり抵抗を引いた残り以下 (平らな道で無風。作者の決め、2026-11-07。`hiraku/catalog/builders/drag.py`)。棚に F2 を解くツールは無い
@@ -238,12 +239,12 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 | hooks が実行を止める | Claude の 6 つの実行で止めたのは HK3・HK5・HK6 (`hook.denied`) と HK4 (終わりを断る `hook.blocked_stop`)。160725 では HK5 が seq 260・436、HK4 が seq 276・277、HK3 が seq 953。「予測が無い」の HK1 で止めた例は、Claude の実行の記録には無い。台本の 150416 は、わざと予測の前に `analyze` を呼んで HK1 を見せる (seq 50。`data/catalog/scripted.yaml` の `show_hk1`) | `hiraku/tools/rules.py`、`hiraku/agent/hooks.py`、`plugins/hiraku/hooks/hooks.json` | `tests/agent/test_hooks.py` の `test_hk1_denial_is_recorded_and_explained`、`tests/agent/test_plugin_path.py` の `test_hk1_deny_as_the_sdk_hook_and_recorded_by_the_server` |
 | Claude が実行の中でツールを書き、確かめてから使った | 160725: `tools/rops_pushover-1.py` と `tools/rops_pushover-1.check.json`。`tool.checked` (seq 265、cae.strength、使える) のあと、ana-0022 (seq 266) で使った。ほかに `tools/` に 091217 は 1 つ、094333 は 2 つ、164004 は 3 つ | `hiraku/tools/functions.py` の `check_tool`・`make_tool`、HK2 (`rules.py`) | `tests/tools/test_tool_template.py` の `test_the_example_passes_check_tool` |
 | 設計を、解析の結果から v1 → v7 と直した | 160725: `design.created` が 7 つ (v7 は seq 966)。v7 の `module_changes` は、v6 の R1-step100 の NG (ver-0077、シェルの解析 ana-0083) に答えて `rail_t` を 2.3 → 3.2 mm にした。v ごとの NG は [showcase/README.md](showcase/README.md) | `hiraku/tools/functions.py` の `revise_design`・`build_version`、`hiraku/designgen/` | `tests/tools/test_functions.py` の `test_revise_design_builds_the_load_cases_again_for_the_new_version` |
-| CAE の役は、作るものに合わせて決まる | 160725: 選んだ分野は強度信頼性と組み立て (`domains.picked`、seq 1)、CAE 役は `cae.strength` だけ (`project.json` の `agents`)。011628 (介護ベッド): 5 分野を選び、CAE 役は `cae.handling`・`cae.powertrain`・`cae.strength`・`cae.thermal` (音振は荷重条件が作られなかった)。164004: 依頼の文から 7 分野を選び、まとめ役が `add_tests` で見直した (足した試験は無く、理由は seq 17 の `no_addition_reason`) | `hiraku/intake/domains.py` の `pick_domains`、`hiraku/catalog/project.py` の `agents_for` | `tests/intake/test_domains.py` の `test_which_domains` (ギターは強度信頼性と音振、介護ベッドは 5 分野) |
+| 「CAE」のエージェントは、作るものに合わせて決まる | 160725: 選んだ分野は強度信頼性と組み立て (`domains.picked`、seq 1)、「CAE」は `cae.strength` だけ (`project.json` の `agents`)。011628 (介護ベッド): 5 分野を選び、「CAE」は `cae.handling`・`cae.powertrain`・`cae.strength`・`cae.thermal` (音振は荷重条件が作られなかった)。164004: 依頼の文から 7 分野を選び、「まとめ」が `add_tests` で見直した (足した試験は無く、理由は seq 17 の `no_addition_reason`) | `hiraku/intake/domains.py` の `pick_domains`、`hiraku/catalog/project.py` の `agents_for` | `tests/intake/test_domains.py` の `test_which_domains` (ギターは強度信頼性と音振、介護ベッドは 5 分野) |
 | 数はツールが出す | 160725 の `report.json`: 分野ごとの数はコードが記録から入れ、Claude が書いたのは `summary` と `next` だけ | `hiraku/agent/prompts.py` の `COMMON_RULES`、`hiraku/tools/report.py` の `unknown_numbers` (記録に無い数のある報告を断る) | `tests/tools/test_report.py` の `test_numbers_with_units_must_be_recorded` |
 
 ## 中身
 
-- `hiraku/agent/` エージェントのループ・hooks・役 (まとめ役・設計役・パッケージ役・分野ごとの CAE 役)、`plugins/hiraku/` skills
+- `hiraku/agent/` エージェントのループ・hooks・エージェントの種類 (「まとめ」・「設計」・「パッケージ」・分野ごとの「CAE」)、`plugins/hiraku/` skills
 - `hiraku/tools/` エージェントが呼ぶツール (MCP)。数値はツールが計算し、モデルには書かせない
 - `hiraku/solvers/` 手計算の式 (K0) と CAE の土台 (K1 梁の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度)
 - `hiraku/cfd/` GPU の流れの計算 (空気と冠水路の水)、`hiraku/cad/` STEP の出し入れ。どちらも外からはツールのアダプタ (`hiraku/tools/cfd_tools.py`・`cad_tools.py`) だけが使う
@@ -259,22 +260,22 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 ### エージェントのループ (Claude Agent SDK)
 
-- 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の v1 とツールの棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときはv0 から始め、設計役が `propose_design` で v1 を作る (同)。
-- 役は 5 種類ある (設計がモジュールに分かれているときは、設計役がモジュールごとに 1 人になる) (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
-  - まとめ役 (lead): メインのエージェント。仕事を役に渡し、判定を確かめ、最後に `write_report` を呼ぶ (`prompts.py` の `LEAD_PROMPT`)。
-  - 分野ごとの CAE 役 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。作り方の無い試験の荷重条件を `write_load_case` で書ける。空力の CAE 役は、流れのツール `cfd_aero`・`cfd_water` も呼べる (`roles.py` の `CAE_TOOLS`・`AERO_TOOLS`)。
-  - パッケージ役 (`packager`): 組み立ての荷重条件を受け持つ。ナレッジの規則を当てる `rule_check` も使う (`roles.py` の `PACKAGER_TOOLS`)。 設計がモジュールに分かれているときは、`build_version` で、その回の提案を 1 つの v にまとめる (`roles.py`)。
-  - 設計役 (`designer`): `propose_design` と `revise_design` で設計の v を作る。合う型が無いときは `write_design`・`edit_design` で設計そのものを書く (確かめは `check_design`、skill は `write-a-design`)。STEP のツール (`export_step`・`import_step`・`edit_step`) も呼べる。effort は high (`roles.py` の `DESIGNER_TOOLS`)。
-  - モジュールの設計役 (`designer.<モジュール>`): 設計がモジュールに分かれているときの設計役で、モジュールごとに 1 人。自分のモジュールの変数か選択を `revise_design` (module つき) で直す提案を出し、v は作らない。直せないものはパッケージ役に渡す。STEP のツールも呼べる (`roles.py` の `MODULE_DESIGNER_TOOLS`、skill は `revise-a-module`)。
-- サブエージェントはどれも前景で動く (`background=False`)。まとめ役はその報告を待つ (`roles.py`、`runner.py` の `FOREGROUND_ROLES_ENV`)。
-- 荷重条件 1 つの進め方は CAE 役の指示に書いてある (`prompts.py` の `cae_prompt`)。
+- 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の v1 とツールの棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときはv0 から始め、「設計」が `propose_design` で v1 を作る (同)。
+- エージェントは 5 種類ある (設計がモジュールに分かれているときは、「設計」がモジュールごとに 1 人になる) (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
+  - 「まとめ」 (lead): メインのエージェント。仕事をほかのエージェントに渡し、判定を確かめ、最後に `write_report` を呼ぶ (`prompts.py` の `LEAD_PROMPT`)。
+  - 分野ごとの 「CAE」 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。作り方の無い試験の荷重条件を `write_load_case` で書ける。空力の 「CAE」は、流れのツール `cfd_aero`・`cfd_water` も呼べる (`roles.py` の `CAE_TOOLS`・`AERO_TOOLS`)。
+  - 「パッケージ」 (`packager`): 組み立ての荷重条件を受け持つ。ナレッジの規則を当てる `rule_check` も使う (`roles.py` の `PACKAGER_TOOLS`)。 設計がモジュールに分かれているときは、`build_version` で、その回の提案を 1 つの v にまとめる (`roles.py`)。
+  - 「設計」 (`designer`): `propose_design` と `revise_design` で設計の v を作る。合う型が無いときは `write_design`・`edit_design` で設計そのものを書く (確かめは `check_design`、skill は `write-a-design`)。STEP のツール (`export_step`・`import_step`・`edit_step`) も呼べる。effort は high (`roles.py` の `DESIGNER_TOOLS`)。
+  - モジュールの「設計」 (`designer.<モジュール>`): 設計がモジュールに分かれているときの「設計」で、モジュールごとに 1 人。自分のモジュールの変数か選択を `revise_design` (module つき) で直す提案を出し、v は作らない。直せないものは「パッケージ」に渡す。STEP のツールも呼べる (`roles.py` の `MODULE_DESIGNER_TOOLS`、skill は `revise-a-module`)。
+- サブエージェントはどれも前景で動く (`background=False`)。「まとめ」はその報告を待つ (`roles.py`、`runner.py` の `FOREGROUND_ROLES_ENV`)。
+- 荷重条件 1 つの進め方は 「CAE」の指示に書いてある (`prompts.py` の `cae_prompt`)。
   1. `get_context` で荷重条件と設計の値を読む。
   2. `list_tools` と `list_formulas` でツールと式を選ぶ。
   3. `record_prediction` で手計算の予測を記録する。
   4. `analyze` で解析する。
   5. `compare` で予測と比べて判定する。
   6. 不一致なら `record_cause` に原因と直し方を書き、予測を記録し直してやり直す。
-- NG の分野が残り、直す回数 (`round_limit`) も残っていれば、まとめ役が設計役に渡す。新しい v では、全部の荷重条件をやり直す (`LEAD_PROMPT` の 4、`hiraku/agent/hooks.py` の `next_step`)。
+- NG の分野が残り、直す回数 (`round_limit`) も残っていれば、「まとめ」が「設計」に渡す。新しい v では、全部の荷重条件をやり直す (`LEAD_PROMPT` の 4、`hiraku/agent/hooks.py` の `next_step`)。
 - 使える組み込みのツールは `Agent` と `Skill` だけ。`permission_mode="dontAsk"` で、名前を並べたツールのほかは止まる (`hiraku/agent/runner.py` の `build_options`)。
 - この PC の CLAUDE.md・設定・hooks は読まない (`setting_sources=[]`)。MCP サーバーは `hiraku` だけ (`strict_mcp_config=True`) (同)。
 
@@ -284,7 +285,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 なぜ要ったか:
 - 予測を解析のあとに書けば、結果に合わせた予測になる。手計算で先に予測し、それと比べるのが確かめの芯なので、順番をプロンプトに頼まずに止める (HK1)。
-- 判定がそろう前に終わらせない (HK4)。ただし数え方も要った: 2026-11-03 01:31 の本物の運転 (API キー) で、まとめ役が役を後ろで走らせたまま「報告を待ちます」と番を終えるたびに HK4 が数え、3 回で上限に達して、役がまだ動いている 71 秒で打ち切られた。役が走っている間は数えないようにした。
+- 判定がそろう前に終わらせない (HK4)。ただし数え方も要った: 2026-11-03 01:31 の本物の運転 (API キー) で、「まとめ」がほかのエージェントを後ろで走らせたまま「報告を待ちます」と番を終えるたびに HK4 が数え、3 回で上限に達して、ほかのエージェントがまだ動いている 71 秒で打ち切られた。ほかのエージェントが走っている間は数えないようにした。
 - レイアウトや軽い計算で直しが要る v に重い有限要素を回すと、時間が無駄になり、数も動く。軽い段から確かめ、NG が出たらそこで設計を直す順番にした (HK5、作者の決まり)。
 
 | ID | hook | 止めるもの・守らせるもの |
@@ -292,9 +293,9 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 | HK1 | PreToolUse | 同じ v・同じ荷重条件の予測が無い `analyze` を止める (`rules.py` の `check_analyze`) |
 | HK2 | PreToolUse | 答えの分かっている例に通っていないツールの `analyze` を止める (同) |
 | HK3 | PreToolUse | 原因の書かれていない不一致がある分野では、`analyze` と `compare` を止める (`rules.py` の `_h3`) |
-| HK4 | Stop / SubagentStop | 選んだ分野に判定の無いものが残っている間は、終わらせない。止めた回数には上限がある (まとめ役 3 回、役ごとに 2 回。`hooks.py` の `MAX_STOP_BLOCKS`・`MAX_SUBAGENT_STOP_BLOCKS`) |
+| HK4 | Stop / SubagentStop | 選んだ分野に判定の無いものが残っている間は、終わらせない。止めた回数には上限がある (「まとめ」 3 回、ほかのエージェントはそれぞれ 2 回。`hooks.py` の `MAX_STOP_BLOCKS`・`MAX_SUBAGENT_STOP_BLOCKS`) |
 | HK5 | PreToolUse | 軽い計算から確かめる。その v で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) のツールで確かめる荷重条件に NG か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
-| HK6 | PreToolUse | 設計がモジュールに分かれているとき、`revise_design` は module を付けて、そのモジュールの設計役だけが、自分のモジュールの中だけを変える提案として出す。レイアウトの変数・空間・取付点を変えるのはパッケージ役の `build_version` だけ (`rules.py` の HK6) |
+| HK6 | PreToolUse | 設計がモジュールに分かれているとき、`revise_design` は module を付けて、そのモジュールの「設計」だけが、自分のモジュールの中だけを変える提案として出す。レイアウトの変数・空間・取付点を変えるのは「パッケージ」の `build_version` だけ (`rules.py` の HK6) |
 
 - 止めたときは `hook.denied` か `hook.blocked_stop` の event を出す。理由の文には「足りないもの」と「次に呼ぶもの」を書き、それが Claude に返る (`hooks.py`、`rules.py` の冒頭)。
 - ツールの関数も、同じ確かめをもう一度する。だから hook を通らずに呼んでも、規則は抜けない (`rules.py` の冒頭、`hiraku/tools/functions.py` の `_gate`)。
@@ -304,7 +305,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### MCP のツール (`hiraku/tools/`)
 
-サーバーの名前は `hiraku`。ツールの名前は、API キーの道では `mcp__hiraku__<名前>`、プラグインの道では `mcp__plugin_hiraku_hiraku__<名前>` (`hiraku/agent/hooks.py` の `PREFIX`・`PLUGIN_PREFIX`)。実行で呼べるツールは 29 (`hiraku/tools/functions.py` の `RUN_TOOLS` の長さ。受付の 6 を含む、2026-11-07)。説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。プラグインの道には、ほかに `start_run` (実行を始める)・`open_run` (走っている実行を開き直す)・`wait_for_roles` (役が終わるのを待つ) がある (`hiraku/agent/plugin.py` の `OWN_TOOLS`)。
+サーバーの名前は `hiraku`。ツールの名前は、API キーの道では `mcp__hiraku__<名前>`、プラグインの道では `mcp__plugin_hiraku_hiraku__<名前>` (`hiraku/agent/hooks.py` の `PREFIX`・`PLUGIN_PREFIX`)。実行で呼べるツールは 29 (`hiraku/tools/functions.py` の `RUN_TOOLS` の長さ。受付の 6 を含む、2026-11-07)。説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。プラグインの道には、ほかに `start_run` (実行を始める)・`open_run` (走っている実行を開き直す)・`wait_for_roles` (ほかのエージェントが終わるのを待つ) がある (`hiraku/agent/plugin.py` の `OWN_TOOLS`)。
 
 - 読むツール
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
@@ -315,28 +316,28 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - `analyze`: 全部の解析のツールをこの 1 つから呼ぶ。
   - `compare`: 予測と解析を比べる。予想通りで基準があれば、OK か NG かも出す。
   - `record_cause`: 不一致の原因と直し方を書く。分野の止まりがこれで解ける。
-- 設計 (設計役だけ)
+- 設計 (「設計」だけ)
   - `propose_design`: v0 から最初の v (v1) を作る。
   - `revise_design`: 設計の変数を変えて、次の設計を作る。モジュールに分かれた設計では、module をつけて提案として記録する (v は作らない)。
-  - `build_version`: パッケージ役だけが使う (モジュールに分かれた設計)。その回の提案を全部まとめ、次の v を組み直して記録する。
+  - `build_version`: 「パッケージ」だけが使う (モジュールに分かれた設計)。その回の提案を全部まとめ、次の v を組み直して記録する。
   - `write_design`: 合う型が無い製品で、設計そのもの (節点・部材・断面・材料・部品・支え) を書いて v にする。通らない設計は問題を全部挙げて断る。
   - `edit_design`: Claude が書いた設計の次の v を、変える所 (`edits`) だけで作る。
   - `check_design`: 書いた設計を v にせずに確かめる (形・参照・支えまでつながるか・干渉の数・質量の和)。数はコードが出す。
-- STEP (設計役とモジュールの設計役)
+- STEP (「設計」とモジュールの「設計」)
   - `export_step`・`import_step`・`edit_step`: 上の「いま動くもの」。道は実行のフォルダの中だけで、ほかの記録は読みも書きもしない (`hiraku/cad/README.md`)。
 - 荷重条件
   - `write_load_case`: カタログに作り方の無い試験の荷重条件を書く。限度の数は書かず、式 (`limit_from`) からコードが計算する。
-- 流れの計算 (空力の CAE 役とまとめ役。NVIDIA の GPU が要る)
+- 流れの計算 (空力の 「CAE」と「まとめ」。NVIDIA の GPU が要る)
   - `cfd_aero`・`cfd_water`: 上の「いま動くもの」。`replay` で、保存した記録を GPU 無しで読む。
 - ツールを作る
   - `get_tool_template`: ツールを書くときの見本。強度のツール 1 つ分の通して動くコードと、決まりの説明。
   - `check_tool`: Claude が書いたツールのコードを、別のプロセスで、答えの分かっている例と比べて確かめる。
   - `make_tool`: 確かめに通ったツールを棚に入れる。
 - 報告
-  - `write_report`: まとめ役が最後に 1 回呼ぶ。文の中の「数 + 単位」が記録と合わなければ断る。
+  - `write_report`: 「まとめ」が最後に 1 回呼ぶ。文の中の「数 + 単位」が記録と合わなければ断る。
 - 受付 (`hiraku/intake/tools.py`)
   - `pick_domains`: 分野を選ぶ。分野と試験はカタログからコードが決める。
-  - `add_tests`: コードが選んだ分野と試験を、まとめ役が見直す。要ると判断した試験をカタログから足す (足すだけで外せない)。足さないときも、見直した理由を書いて呼ぶ。
+  - `add_tests`: コードが選んだ分野と試験を、「まとめ」が見直す。要ると判断した試験をカタログから足す (足すだけで外せない)。足さないときも、見直した理由を書いて呼ぶ。
   - `ask_user`: 足りない要件をまとめて 1 回聞く。
   - `import_knowledge`: 渡されたファイルを規則にする。
   - `rule_check`: 規則を設計の部品に当てる。
@@ -346,11 +347,11 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 - ローカルの plugin `hiraku` が 1 つある (`plugins/hiraku/.claude-plugin/plugin.json`)。実行で読む skill はこの plugin のものだけ (`runner.py` の `plugins`・`skills`、`roles.py` の `plugin_skills`)。
 - skill は 5 つ (`plugins/hiraku/skills/*/SKILL.md` の数)。
-  - `take-the-request`: まとめ役が依頼を受ける手順。分野を選び、要件を聞き、ナレッジを規則にし、規則を当てる。途中で届く伝言の受け方も書いてある (`plugins/hiraku/skills/take-the-request/SKILL.md`)。
+  - `take-the-request`: 「まとめ」が依頼を受ける手順。分野を選び、要件を聞き、ナレッジを規則にし、規則を当てる。途中で届く伝言の受け方も書いてある (`plugins/hiraku/skills/take-the-request/SKILL.md`)。
   - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 比べる → 判定 (OK か NG) まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
   - `find-the-cause`: 不一致のときに原因を探し、`record_cause` に書く手順 (`.../find-the-cause/SKILL.md`)。
-  - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの設計役が、NG の荷重条件を読んで自分のモジュールの直しを提案し、直せないものをパッケージ役に渡す手順 (`.../revise-a-module/SKILL.md`)。
-  - `write-a-design`: 合う型が無い製品で、設計役が設計そのものを書き、`check_design` で確かめ、`write_design` で v にし、NG に答えて次の v を `edit_design` で作る手順 (`.../write-a-design/SKILL.md`)。
+  - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの「設計」が、NG の荷重条件を読んで自分のモジュールの直しを提案し、直せないものを「パッケージ」に渡す手順 (`.../revise-a-module/SKILL.md`)。
+  - `write-a-design`: 合う型が無い製品で、「設計」が設計そのものを書き、`check_design` で確かめ、`write_design` で v にし、NG に答えて次の v を `edit_design` で作る手順 (`.../write-a-design/SKILL.md`)。
 
 ### 台本の運転と Claude の運転
 
