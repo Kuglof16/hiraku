@@ -1436,3 +1436,31 @@ body.present.present-detail .chain { height: 100%; }
 .card .edge-near { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
 .tile .edge-line { font-size: 12px; margin-top: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .tiles.dense .tile .edge-line { font-size: 11px; -webkit-line-clamp: 2; }
+
+/* ① ② : the hooks' line would sit on the request's bar at the top: it goes to the bottom instead */
+body[data-intake-tab="A1"]:not(.video) .hookline, body[data-intake-tab="A2"]:not(.video) .hookline { top: auto !important; bottom: 70px; }
+
+/* Buttons that change the screen: large, shaped as buttons, saying where they go (not the video) */
+body:not(.video) .tab { font-size: 20px; padding: 6px 8px; border-color: var(--rule); background: var(--card, #fffdf8); color: var(--ink); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08); }
+body:not(.video) .tab.on { border-color: var(--ink); border-width: 2px; background: var(--ink); color: var(--card, #fffdf8); }
+body:not(.video) .tab:hover { border-color: var(--ink); }
+body:not(.video) .tabflow { gap: 2px; }
+body:not(.video) .back-link { font-size: 18px; padding: 4px 12px; font-weight: 600; background: var(--card, #fffdf8); }
+body:not(.video) .runlist a { font-size: 18px; padding: 5px 16px; }
+body:not(.video) .grid-viewer .gv-back { font-size: 20px; font-weight: 600; padding: 8px 20px; border-width: 2px; }
+/* ④: a tile that opens its analysis in the viewer (app.js GRID_FIXED, .can-open) says so */
+body.grid-fixed .grid-view .tile.can-open { position: relative; }
+body.grid-fixed .grid-view .tile.can-open::after {
+  content: "▶ 押すとビューアで見られます"; position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  font-size: 17px; font-weight: 600; padding: 5px 16px; border-radius: 999px; background: var(--ink); color: var(--card, #fffdf8);
+  pointer-events: none; white-space: nowrap;
+}
+body.grid-fixed .grid-view .tile.can-open:hover { box-shadow: 0 0 0 3px var(--ink); }
+body:not(.video) .chips { gap: 4px; }
+body:not(.video) .chip { padding: 3px 8px 3px 7px; }
+body.grid-fixed .grid-view .replay-tag { display: none; }
+/* a narrow window (a phone): one line on top; the screen is made for a PC's width */
+.narrow-note { display: none; }
+@media (max-width: 900px) {
+  .narrow-note { display: block; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 12px 16px; font-size: 18px; font-weight: 600; text-align: center; background: var(--ink, #1c1c1c); color: #fff; }
+}
