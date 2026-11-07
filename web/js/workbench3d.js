@@ -1433,6 +1433,7 @@ export class Workbench3D {
   // the result). It swings once a second of replay, so a frame at a given ?t=
   // is always the same.
   setModeShape(contour) {
+    if (this.modeShape) this.poseParts(0);
     this.modeShape = null;
     this.poseMembers(0);
     for (const o of Object.values(this.shellObjs)) this.poseShell(o, null, 0);
@@ -1443,7 +1444,77 @@ export class Workbench3D {
     if (!(dmax > 0)) return;
     const size = this.bboxIso.getSize(new THREE.Vector3()).length();
     const scale = (0.08 * size) / dmax;
-    this.modeShape = shellModes ? { shell: this.shellObj(contour.mesh.rec), shellModes, scale } : { modes: contour.modes, scale };
+    this.modeShape = shellModes
+      ? { shell: this.shellObj(contour.mesh.rec), shellModes, scale, ...(contour.kind === "mode_shape" ? this.modeParts(contour.field.per_node) : {}) }
+      : { modes: contour.modes, scale };
+  }
+
+  // A shell mode shape's per_node (modal_shell: the design nodes, on the mesh's scale, and the
+  // linkage's points) as each part's and each wheel's move (unscaled), as the model carries
+  // their masses: a part by the mean of its carried_by nodes' vectors, moved without turning
+  // (its mass shared equally on them, no rotary inertia); an occupant's segment without
+  // carried_by as its person's part that has them; a part without carried_by at a wheel (inside
+  // its radius) and the wheel drawn from a support by "<support>.wheel_center". A part with none
+  // of these in per_node stays put. { parts: {id: [x, y, z]}, wheels: {support id: [x, y, z]} }.
+  modeParts(perNode) {
+    const vec = (n) => {
+      const d = perNode?.[n];
+      return Array.isArray(d) && d.length === 3 && d.every(Number.isFinite) ? d : null;
+    };
+    const mean = (names) => {
+      const ds = (names ?? []).map(vec);
+      if (!ds.length || ds.some((d) => !d)) return null;
+      return [0, 1, 2].map((j) => ds.reduce((s, d) => s + d[j], 0) / ds.length);
+    };
+    const wheels = {};
+    for (const s of this.design?.supports ?? []) {
+      const d = vec(`${s.id}.wheel_center`);
+      if (d) wheels[s.id] = d;
+    }
+    const parts = {};
+    const byPerson = {};
+    const design = this.design?.parts ?? [];
+    for (const p of design) {
+      const d = mean(p.carried_by);
+      if (d) parts[p.id] = d;
+      if (d && p.kind === "occupant" && !byPerson[personOf(p)]) byPerson[personOf(p)] = d;
+    }
+    for (const p of design) {
+      if (parts[p.id] || p.carried_by?.length) continue;
+      if (p.kind === "occupant" && byPerson[personOf(p)]) {
+        parts[p.id] = byPerson[personOf(p)];
+        continue;
+      }
+      const c = v3(p.box.center_mm);
+      let near = null;
+      for (const s of this.design?.supports ?? []) {
+        const dist = v3(s.position_mm).distanceTo(c);
+        if (wheels[s.id] && dist < (s.radius_mm ?? 0) && (!near || dist < near.dist)) near = { dist, d: wheels[s.id] };
+      }
+      if (near) parts[p.id] = near.d;
+    }
+    for (const id of Object.keys(parts)) if (!this.partObjs[id]) delete parts[id];
+    for (const id of Object.keys(wheels)) if (!this.wheelObjs[id]) delete wheels[id];
+    return { parts, wheels };
+  }
+
+  // Move the parts and the wheels of a shell mode shape by s times their vectors (s = 0: at
+  // rest); a wheel from where the motion's frame (or the design) puts it.
+  poseParts(s) {
+    const ms = this.modeShape;
+    for (const [id, d] of Object.entries(ms?.parts ?? {})) {
+      const o = this.partObjs[id];
+      if (o) o.group.position.set(d[0] * s, d[1] * s, d[2] * s);
+    }
+    if (!ms?.wheels || !Object.keys(ms.wheels).length) return;
+    const byId = Object.fromEntries((this.frame?.wheels ?? []).map((w) => [w.id, w]));
+    for (const [id, d] of Object.entries(ms.wheels)) {
+      const o = this.wheelObjs[id];
+      if (!o) continue;
+      o.group.matrix.copy(this.wheelPose(id, byId[id], this.body.matrix));
+      for (let j = 0; j < 3; j += 1) o.group.matrix.elements[12 + j] += d[j] * s;
+      o.group.matrixWorldNeedsUpdate = true;
+    }
   }
 
   // Move a shell's nodes by k times their scaled vectors (k = 0: at rest).
@@ -1471,8 +1542,10 @@ export class Workbench3D {
   // A mode shape (or displacement) at k of its swing, on the beams or on a shell.
   poseShape(k) {
     const ms = this.modeShape;
-    if (ms?.shell) this.poseShell(ms.shell, ms.shellModes, k * ms.scale);
-    else this.poseMembers(k);
+    if (ms?.shell) {
+      this.poseShell(ms.shell, ms.shellModes, k * ms.scale);
+      this.poseParts(k * ms.scale);
+    } else this.poseMembers(k);
   }
 
   poseMembers(k) {
