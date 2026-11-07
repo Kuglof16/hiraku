@@ -134,7 +134,7 @@ def build(args: argparse.Namespace) -> Record:
              "床下の水の深さ: " + str(under.get("depth_definition", "")),
              "水が届いた床下の列: " + str(under.get("reach_definition", ""))]
     return {"field": "water", "title": "冠水路を渡る水", "statement": statement,
-            "source": {"run": folder.resolve().name, "version": f"v{design.get('design_version')}", "analysis_id": "", "tool": TOOL, "load_case_id": "", "design_name": design.get("name", ""),
+            "source": {"run": "", "version": f"v{design.get('design_version')}", "analysis_id": "", "tool": TOOL, "load_case_id": "", "design_name": design.get("name", ""),
                        "design_version": design.get("design_version"), "design_key": common.design_key(design)},
             "frame": common.frame_of(design), "parts": parts, "on_board": on_board, "scene": [], "vectors": [], "results": [], "wheels": wheels,
             "centre_mm": moment_centre_mm(design), "assumptions": list(case.get("assumptions") or []), "inputs": inputs, "notes": notes,
