@@ -854,13 +854,19 @@ _OPTION_VARS_ENTRY = {
                         "the clear room between the grip and the post's face: the default is the 75 mm hand clearance "
                         "of ISO 2867:1994 Table 2 C as the intake department read it (not a requirement item here; "
                         "borrowed, not checked by the analysis department)"),
+    "grab_bar_inboard": Var("1", 0.0, 0.0, 1.0,
+                            "1: the grab bar on the inner side of the side frame's front post (inside the roll bar's "
+                            "line), 0: on its outer side. R4 (the rollover): a grip out beyond the roll bar's line can "
+                            "reach the ground first and change how the vehicle lands (the K2 team's R4-rollover on the "
+                            "o2 design with the seats back, 2026-11-07: the right grip's top node 119 mm outside the "
+                            "line, the side bar into the occupant's torso at 1000 N/mm ground)"),
 }
 _OPTION_VARS.update(_OPTION_VARS_ENTRY)
 VARIABLES.update(_OPTION_VARS_ENTRY)
 INTEGERS = INTEGERS + ("side_opening",)
-SWITCHES = SWITCHES + ("grab_bar",)
+SWITCHES = SWITCHES + ("grab_bar", "grab_bar_inboard")
 OPTIONAL.update({"side_opening": ("side_opening", "side_bar_reach"),
-                 "grab_bar": ("grab_bar", "grab_bar_d", "grab_bar_t", "grab_bar_gap")})
+                 "grab_bar": ("grab_bar", "grab_bar_d", "grab_bar_t", "grab_bar_gap", "grab_bar_inboard")})
 _PLATE_WORDS = {"floor_t": "the footwell floor and the floor under the seats (the seats, the people, the pedals and the "
                            "steering wheel stand on its top, so they move up or down with it)",
                 "deck_t": "the deck (the cargo on it)", "bulkhead_t": "the front bulkhead"}
@@ -2344,7 +2350,8 @@ def build_grab_bars(frame: Frame, v: dict[str, float], guard: dict) -> None:
     if len(guard["z"]) < 2:
         raise DesignGenError("grab_bar runs between the lowest and the highest side bar: side_bar_count >= 2")
     sec = frame.section(*round_tube(d, t))
-    out_y = guard["y"] + guard["d"] / 2.0 + v["grab_bar_gap"] + d / 2.0
+    off = guard["d"] / 2.0 + v["grab_bar_gap"] + d / 2.0  # the grip's centre line from the post's centre line
+    out_y = guard["y"] - off if v.get("grab_bar_inboard", 0.0) == 1 else guard["y"] + off
     for side, sy in (("L", 1.0), ("R", -1.0)):
         lo, hi = guard["front"][side][0], guard["front"][side][-1]
         a = frame.node(f"{side}GB1", [frame.nodes[lo][0], sy * out_y, frame.nodes[lo][2]])

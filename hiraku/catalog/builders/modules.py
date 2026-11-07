@@ -21,7 +21,8 @@ BY_TEST = {
     "P1": ["powertrain"], "P2": ["powertrain"], "P3": ["powertrain"], "P4": ["powertrain"], "P5": ["powertrain"],
     # the cases over every frame member also name steering: the dash members (dash_post_*, dash_cross) and the
     # bulkhead are steering's (ladder_4w_modules: a part is in the module of the variables that place it)
-    "C1": ["frame", "body", "steering"], "C2": ["body"], "C3": ["occupant", "frame"],
+    # C1 also names package: the seats and the pedals set the room left to the occupants in the front crash
+    "C1": ["frame", "body", "steering", "package"], "C2": ["body"], "C3": ["occupant", "frame"],
     "R1": ["frame", "steering"], "R1s": ["frame", "steering"], "R2": ["frame", "suspension"],
     "R3": ["frame", "steering"], "R4": ["occupant", "frame"],
     "R5": ["frame"], "R6": ["powertrain", "frame"], "R7": ["steering", "frame"], "R8": ["frame", "occupant", "steering"],

@@ -125,6 +125,7 @@ VARIABLE_NAMES_JA = {
     "rollbar_front_posts": "前の柱 (4 本柱にするか)", "side_opening": "乗り降りの開口 (なし・網・扉)",
     "side_bar_reach": "横の守りの前の柱の位置 (肩と腰の点より前へ)", "grab_bar": "握り棒 (あり・なし)",
     "grab_bar_d": "握り棒の太さ", "grab_bar_t": "握り棒の管の厚さ", "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
+    "grab_bar_inboard": "握り棒を柱の内側に付けるか (1 は内側、ロールバーの線より内)",
     "motor_peak_power": "モーターの最大出力", "motor_peak_torque": "モーターの最大トルク",
     "motor_max_speed": "モーターの最高回転数", "gear_ratio": "減速比", "battery_capacity": "電池の容量",
     "driveshafts": "駆動軸 (あり・なし)", "battery_split": "電池を 2 つに分けるか",
