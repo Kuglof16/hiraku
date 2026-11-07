@@ -18,6 +18,7 @@ The data (viewer/data/aero_cfd.js, window.VIEW_DATA["aero_cfd"]), on top of what
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import math
 import os
@@ -282,5 +283,31 @@ def for_record(run: Path, vdir: Path, rec: Record) -> Record | str:
     return f"この解析の流れの記録 (cfd/v{version} の aero_record.json) が run のフォルダにない"
 
 
+def to_hex(packed: Record) -> Record:
+    """A packed array with its bytes as hex, not base64. A stored file is scanned for private words in any letter case, and megabytes
+    of base64 hold such letter runs by chance; hex has only 0-9 and a-f. The page turns it back (js/aero_cfd.js)."""
+    out = dict(packed)
+    out["hex"] = base64.b64decode(out.pop("b64")).hex()
+    return out
+
+
+def stored_form(obj: Record) -> Record:
+    """The data in the form of viewer.src.build's --json ({field, data, title, source}, for index.html?data=<url>#aero_cfd), large arrays in hex."""
+    data = dict(obj)
+    data["source"] = {**obj["source"], "run": ""}  # no working folder's name in a file kept in the repository
+    data["nets"] = to_hex(obj["nets"])
+    data["yaws"] = [{**y, "lines": {k: (to_hex(v) if isinstance(v, dict) and "b64" in v else v) for k, v in y["lines"].items()}} for y in obj["yaws"]]
+    return {"field": "aero_cfd", "data": data, "title": obj["title"], "source": data["source"]}
+
+
 if __name__ == "__main__":
-    common.main("aero_cfd", build, extra=extra, argv=sys.argv[1:])
+    if "--stored" in sys.argv:  # the sample kept in the repository: viewer/fixtures/aero_cfd.json
+        argv = [a for a in sys.argv[1:] if a != "--stored"]
+        ap = common.parser("aero_cfd", extra)
+        args = ap.parse_args(argv)
+        target = common.VIEWER / "fixtures" / "aero_cfd.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(stored_form(build(args)), ensure_ascii=True, separators=(",", ":")), encoding="ascii")
+        print(f"wrote {target.name} ({target.stat().st_size} bytes)")
+    else:
+        common.main("aero_cfd", build, extra=extra, argv=sys.argv[1:])
