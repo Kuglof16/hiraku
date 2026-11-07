@@ -47,12 +47,15 @@ VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice
 # load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
 # so the run stops not_judged with every other tile of the last version green. None at present: R7-hand and
 # R7-foot are both judged on their hand bounds (load_path.grip_bound, pedal_bound_inputs; safe side), the plans'
-# rev_controls answers R7-hand, and the demo and N15 runs end done (tests/agent/test_scene_n15.py).
+# rev_controls answers R7-hand, and the demo run ends done; N15 is in BEHIND_RED.
 ENDED: dict[str, set[str]] = {}
 # requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
-# the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
-BEHIND_RED: set[str] = set()
-LOWER_RED = "低い段の NG が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5; contract 98669325)
+# the red's modules, so the run stops not_judged and says the lower stage's red is left. N15: its plan has no
+# design fix left for v5's C1-40kmh (crash NG), so it stops not_judged; the submission v5 puts this back
+# (統括部's decision, 11/7: main goes first with the runs' actual endings)
+BEHIND_RED: set[str] = {"offroad-4w-n15.yaml"}
+# what the stop reason says then (docs/contract.md, HK5); the second: the wording before contract 98669325
+LOWER_RED = ("低い段の NG が残るので判定していない", "低い段の赤が残るので判定していない")
 # Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
 # has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
 # qa.run_tests' 3600 s per-class timeout.
@@ -171,7 +174,7 @@ class _ScriptedRunTests:
                 self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
             elif name in BEHIND_RED:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
-                self.assertIn(LOWER_RED, project.get("stop_reason") or "", why)
+                self.assertTrue(any(p in (project.get("stop_reason") or "") for p in LOWER_RED), why)
                 last = max(int(d.name[1:]) for d in run.glob("v[0-9][0-9][0-9]") if d.is_dir())
                 tiles = json.loads((layout.version_dir(run, last) / layout.JUDGEMENTS_FILE).read_text(encoding="utf-8"))
                 self.assertIn("red", [j.get("state") for j in tiles if j.get("design_version") == last], why)
