@@ -35,7 +35,7 @@ import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
-import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
+import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldLabel, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
@@ -71,7 +71,9 @@ import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 import { domainIconSvg } from "./domain_icons.js";
-import { footerActivity, mountHookLine, withoutRuleIds } from "./hookline.js";
+import { footerActivity, hookLineText, mountHookLine, withoutRuleIds } from "./hookline.js";
+import { markRecordWords, mountBenchNote, noteKind } from "./benchnote.js"; // ③'s sentence card under the 3D
+import { roundSeq } from "./proposals.js";
 import { boardHtml } from "./test_board.js"; // ③'s tests at a glance
 import { askAll, heavyPending, heavyReady, heavyWaiting, onHeavy, prefetch, quietly, tracked } from "./heavy.js"; // a static export's heavy parts, read when drawn
 
@@ -146,6 +148,8 @@ if (STATIC) {
 }
 const hookLine = mountHookLine($("stage"), { dev: DEV, showS: 5, avoid: () => [$("tests")] }); // the hooks' stop in one line (kept clear of ③'s board); the footer's list folded
 $("back-link").href = DEV ? "?list=1&dev=1" : "?list=1";
+document.body.classList.toggle("dev", DEV); // (③'s strip shows the record's ids and English words)
+const benchNote = mountBenchNote($("benchnote"), $("viewport"));
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
@@ -1703,7 +1707,7 @@ function fieldContour(s, chain, withCompare = ui.compare) {
     return {
       ana: a.analysis_id,
       buttons: own.map((x) => {
-        const name = variantName(x.f, own.map((y) => y.f));
+        const name = variantName(x.f, own.map((y) => y.f), DEV);
         return { key: keyOf(x), name: many ? `${toolTitle(s, a.tool)}・${name}` : name, on: x === pick };
       }),
     };
@@ -1812,8 +1816,8 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "1 つ前の設計と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
-    ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
-    : `${ct.reference ? `${esc(JUDGED_JA.refBar)}: ` : ""}${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
+    ? `${esc(fieldLabel(ct.field, DEV))}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
+    : `${ct.reference ? `${esc(JUDGED_JA.refBar)}: ` : ""}${esc(fieldLabel(ct.field, DEV))} [${esc(unit || "1")}]`;
   // before / after: each version's largest recorded value on the one scale above
   const cmp = ct.compare
     ? `<div class="cmp" data-compare="${ct.compare.version}-${ct.compare.nowVersion}">` +
@@ -1878,10 +1882,29 @@ function setCompare(s, chain, ct) {
   // The right view keeps clear the strip under the legend (from the legend's left edge to
   // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
   // left view looks through the same camera, so its vehicle sits the same way in its half.
+  keepLegendRoom(was);
+}
+
+// One view too: the vehicle is framed left of the legend, not under it (in steps of
+// LEGEND_ROOM_STEP_PX, so a legend a few px wider does not move the camera). Also each frame (the
+// heat's legend comes after the record is drawn). was: the view was in halves before (setCompare).
+function keepLegendRoom(was = null) {
+  const c = viewport.classList.contains("compare");
+  if (was === null) was = c;
+  // (the colour legend, or the heat's legend in its place: the legends in the right half of the view)
+  let legendLeft = Infinity;
+  for (const e of viewport.querySelectorAll(':scope > [data-kind="legend"]'))
+    if (!e.hidden && e.offsetWidth && getComputedStyle(e).display !== "none" && e.offsetLeft > viewport.clientWidth / 2) legendLeft = Math.min(legendLeft, e.offsetLeft);
+  const legendRoom = legendLeft < Infinity ? Math.ceil((viewport.clientWidth - legendLeft + LEGEND_GAP_PX) / LEGEND_ROOM_STEP_PX) * LEGEND_ROOM_STEP_PX : 0;
+  // (the present mode and the video (?video=1): framed as before, the legend's strip in the compare
+  // view only; in the present mode the legend is beside the view; grip: the tyre panel's strip)
   const lg = $("legend");
-  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : c ? 0 : grip.reserved; // (in the present mode the legend is beside the view; grip: the tyre panel's strip)
-  if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
-    if (was !== !!c) resize3d();
+  const room = ui.present || VIDEO_LAYOUT
+    ? c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : c ? 0 : grip.reserved
+    : c ? legendRoom : Math.max(legendRoom, grip.reserved ?? 0);
+  bench.fitWidth = !ui.present && !VIDEO_LAYOUT;
+  if (was !== c || room !== (bench.reserveRight ?? 0)) {
+    if (was !== c) resize3d();
     bench.setReserve(room);
     // the half-wide (or whole) view: frame the vehicle again, or the focus for the new shape
     if (bench.design && !bench.focused) bench.fitPoints(bench.contentPoints(), VIEWS[bench.view ?? "default"], 1.08);
@@ -1889,6 +1912,7 @@ function setCompare(s, chain, ct) {
   }
 }
 const LEGEND_GAP_PX = 12;
+const LEGEND_ROOM_STEP_PX = 40;
 
 // The boxes over the 3D keep apart (tests/web/test_overlay_fit_browser.py), in the stage's px:
 // - the colour legend starts under the toggles' row and the full-screen button; its list of
@@ -1921,7 +1945,7 @@ function fitOverlays() {
   } else setStyle(lg, "maxHeight", "");
 
   const nowEl = $("now");
-  if (!nowEl.hidden && tg.offsetWidth) {
+  if (!nowEl.hidden && tg.offsetWidth && nowEl.parentElement === viewport) {
     const room = tg.offsetLeft - nowEl.offsetLeft - 12;
     const under = room < 360;
     // (under: below the toggles and the full-screen button, which is the taller; 10: .now's own top)
@@ -2215,7 +2239,15 @@ function renderTransient(s, playhead, chain, resolved) {
   b.style.opacity = sa;
   if (said && b.dataset.seq !== String(said.seq)) {
     b.dataset.seq = String(said.seq);
-    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div><div class="tx">${esc(said.text)}</div>`;
+    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div><div class="tx">${markRecordWords(said.text)}</div>`;
+  }
+  // the hooks' stop as ③'s strip card (benchnote.js; over the other tabs the stage's line, hookline.js)
+  const den = s.denied;
+  const hn = $("hooknote");
+  hn.hidden = !den;
+  if (den && hn.dataset.seq !== String(den.seq)) {
+    hn.dataset.seq = String(den.seq);
+    hn.innerHTML = `<span class="hn-head">hooks が止めた</span> ${esc(hookLineText(den.rule, { dev: DEV }))}`;
   }
   // the hooks' stop: one line near the middle of the screen on every tab (hookline.js; the recorded words are in the log)
   hookLine.render(s, playhead);
@@ -2531,7 +2563,9 @@ function drawNow() {
     }
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = withoutRuleIds(nowSentence(s, chain, (tool) => toolTitle(s, tool)), { dev: DEV });
-    $("now").textContent = now;
+    // (the record's ids and English words in span.rec: ③'s strip leaves them to くわしく)
+    const nowHtml = markRecordWords(now);
+    if ($("now").innerHTML !== nowHtml) $("now").innerHTML = nowHtml;
     $("now").title = now;
     $("now").hidden = !now;
     const scene = presentScene({ s, chain, contour, tab: view, toolTitle: (tool) => toolTitle(s, tool) });
@@ -2544,10 +2578,17 @@ function drawNow() {
   nodeView.set(nm, nm ? nodeMotionAt(nm, nodeMotionTau(nm, player.playhead, s.tOf[nm.analysisId])) : null);
   // modules: the round's proposals (or the version built from them) at the replay's time, under the now line
   const rc = renderRoundCard(viewport, tab === "bench" ? roundCardHtml(s, player.playhead) : "");
-  if (!rc.hidden) rc.style.top = `${$("now").hidden ? 10 : $("now").offsetTop + $("now").offsetHeight + 8}px`;
+  if (!rc.hidden && rc.parentElement === viewport) rc.style.top = `${$("now").hidden || $("now").parentElement !== viewport ? 10 : $("now").offsetTop + $("now").offsetHeight + 8}px`;
   if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
   heat.show(heatOn ? heatIn : null, player.playhead); // heat:
+  if (view === "bench" && !ui.present && !VIDEO_LAYOUT) keepLegendRoom();
   renderTransient(s, player.playhead, chain, resolved);
+  // ③'s workbench (not the present mode): the sentence cards out of the 3D, one at a time
+  // (not in the video, ?video=1: its frames are filmed as they were)
+  const notesOn = view === "bench" && !ui.present && !VIDEO_LAYOUT;
+  document.body.classList.toggle("bench-notes", notesOn);
+  benchNote.place(notesOn);
+  if (notesOn) benchNote.pick(noteKind(s, { cause: CAUSE_OFF ? null : openCause(s), round: tab === "bench" ? roundSeq(s, player.playhead) : null }));
   fitOverlays();
   if (ZOOM) zoomTransform(stage, stageBase, ZOOM, player.playhead, STAGE_W, STAGE_H); // ?zoom=
   renderPlaybar(span);

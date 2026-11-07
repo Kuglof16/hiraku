@@ -968,6 +968,20 @@ export function keepAsides(s, max = 40) {
   return esc(s).replace(re, '<span class="aside">($1)</span>');
 }
 
+// A design generator's choices (revise_design choices; their meaning: hiraku/designgen/ladder_4w.py
+// JOINT_VALUES and OPTION_VALUES) in the screen's words: the choice by its name, an option by
+// "name=option". One not here is said as recorded.
+export const CHOICE_JA = {
+  joints: "T 字の継ぎ目", "joints=butt": "突き合わせ溶接", "joints=gusset": "三角の当て板つき", "joints=through": "横の部材を通す形",
+  part_mounts: "部品の取付", "part_mounts=none": "取付金具なし", "part_mounts=brackets": "取付金具つき",
+  pedal_mount: "ペダルの取付", "pedal_mount=none": "なし", "pedal_mount=floor": "床", "pedal_mount=bulkhead": "前の仕切り", "pedal_mount=post": "柱",
+  side_guard: "横の守り", "side_guard=none": "なし", "side_guard=bars": "横の棒", "side_guard=bars_net": "横の棒と網", "side_guard=net": "網だけ",
+  rops: "ロールバーの形", "rops=hoop": "アーチだけ", "rops=hoop_stays": "アーチと後ろの支え", "rops=four_post": "4 本の柱", "rops=four_post_stays": "4 本の柱と後ろの支え",
+  fenders: "泥よけ", "fenders=none": "なし", "fenders=wheel": "車輪ごと",
+  side_opening: "横の乗り口", "side_opening=none": "なし", "side_opening=clip_net": "留め具の網", "side_opening=door": "ドア",
+  grab_bar: "つかまる棒", "grab_bar=none": "なし", "grab_bar=front_post": "横の枠の前の柱",
+};
+
 // Words from the record (a judgement's summary written by hiraku/tools/judge.py, what an agent
 // or the scripted driver said, a proposal's reason) in the screen's words: OK / NG for 合格 /
 // 不合格 and for 緑 / 赤 meaning a verdict, 判定 for 合否, 比べ for 照合 (a prediction against an

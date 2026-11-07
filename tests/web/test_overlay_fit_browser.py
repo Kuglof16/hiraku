@@ -5,11 +5,11 @@ The layout lint's apart rule (tests/web/layout_lint.js) on:
 - showcase/20261105-160725-offroad-4w (N13, done at version 7; its legend lists eight fields of
   the frame's static analyses) at its end (t=1e6) and at the version 7 verdict of R1 (t=4641),
   at 1440 x 900 and at 1920 x 1080 with video=1;
-- the grip shape example (tests.web.grip_fixture: a motion, so the graph is out) with a cause
-  of a mismatch written (shape example), so the cause note is out over the bottom of the 3D, with
-  the tyre panel (on=grip) and without, at 1440 x 900, 1280 x 720 and 1920 x 1080 with video=1;
-- the cause note beside the colour legend: the showcase at a cause still open while a field is
-  coloured (t=3893.75), and the scripted showcase run at two such causes.
+- the grip shape example (tests.web.grip_fixture: a motion, so the graph is out) at the cause
+  of a mismatch written (shape example): the cause note in the strip under the 3D (benchnote.js),
+  with the tyre panel (on=grip) and without, at 1440 x 900, 1280 x 720 and 1920 x 1080 with video=1;
+- the showcase at a cause still open while a field is coloured (t=3893.75), and the scripted
+  showcase run at two such causes: the legend shown, no cause note over the 3D.
 The boxes are the lint's (APART) and the tyre panel (.grip-panel).
 Then that the いま: line keeps to one line, cut, with the whole sentence in its title, when the
 legend is beside it.
@@ -174,28 +174,34 @@ class OverlayFitBrowserTest(unittest.TestCase):
                 finally:
                     page.close()
 
-    def test_the_cause_note_goes_above_the_graph_and_left_of_the_tyre_panel(self):
+    # (the cause note is ③'s strip card under the 3D now, web/js/benchnote.js: it shows at its own
+    # event and is never over the 3D; tests/web/test_clear_3d_browser.py walks the showcase's events)
+    def test_the_cause_note_is_under_the_3d_beside_the_graph_and_the_tyre_panel(self):
+        t_cause = next(e["t"] for e in grip_cause_events() if e["kind"] == "cause.recorded")
         for w, h, extra in (*SIZES, (1280, 720, "")):
             for grip in ("", "&on=grip"):
-                with self.subTest(width=w, grip=bool(grip)):
-                    page = self.open(f"run={GRIP_CAUSE}&tab=bench&pace=0&t=7{grip}{extra}", w, h)
+                with self.subTest(width=w, grip=bool(grip), video=bool(extra)):
+                    # (the video, ?video=1, is filmed as before: the note over the bottom of the 3D,
+                    # above the graph and left of the tyre panel, fitCauseNote)
+                    page = self.open(f"run={GRIP_CAUSE}&tab=bench&pace=0&t={t_cause if not extra else 7}{grip}{extra}", w, h)
                     try:
-                        shown = page.evaluate("() => ['graph', 'causenote'].map((id) => !document.getElementById(id).hidden)")
-                        self.assertEqual(shown, [True, True])
-                        if grip:
-                            self.assertTrue(page.evaluate("() => !!document.querySelector('.grip-panel')?.offsetWidth"))
+                        got = page.evaluate("""() => { const n = document.getElementById('causenote');
+                          return { shown: n.checkVisibility() && n.offsetWidth > 0, strip: n.closest('#benchnote') !== null }; }""")
+                        self.assertEqual(got, {"shown": True, "strip": not extra})
+                        if not extra:
+                            self.assertEqual(page.evaluate("document.getElementById('benchnote').dataset.kind"), "causenote")
                         self.assertEqual(self.crossings(page), [])
                     finally:
                         page.close()
 
-    def test_the_cause_note_keeps_left_of_the_legend(self):
+    def test_the_cause_note_is_not_over_the_legend(self):
         for run, t in ((SHOWCASE, 3893.75), (SCRIPTED, 127.656), (SCRIPTED, 137.031)):
             for w, h, extra in SIZES:
                 with self.subTest(run=run, t=t, width=w):
                     page = self.open(f"run={run}&tab=bench&pace=0&t={t}{extra}", w, h)
                     try:
-                        shown = page.evaluate("() => ['legend', 'causenote'].map((id) => { const e = document.getElementById(id); return !e.hidden && e.offsetWidth > 0; })")
-                        self.assertEqual(shown, [True, True])
+                        got = page.evaluate("() => { const l = document.getElementById('legend'); return [!l.hidden && l.offsetWidth > 0, !!document.querySelector('#viewport #causenote')]; }")
+                        self.assertEqual(got, [True, bool(extra)])  # (the video as before: over the 3D, kept left of the legend)
                         self.assertEqual(self.crossings(page), [])
                     finally:
                         page.close()

@@ -39,11 +39,37 @@ export function variantOf(field) {
 
 // The words on a field's button among the fields of its kind (sameKind); a label is
 // added only where two would read the same.
-export function variantName(field, sameKind) {
+export function variantName(field, sameKind, dev = false) {
   const base = (f) => (f.mesh_id ? ["メッシュ", f.surface ? SURFACE_JA[f.surface] ?? f.surface : null] : ["梁"]).filter(Boolean).join("・");
   const own = base(field);
   const twins = sameKind.filter((f) => base(f) === own).length > 1;
-  return twins && field.label ? `${own}・${field.label}` : own;
+  return twins && field.label ? `${own}・${fieldLabel(field, dev)}` : own;
+}
+
+// The English labels the tools write on their fields (hiraku/solvers/shelf/frame_static.py,
+// bed_tools.py ...), in the screen's words; "mode N (what)" by its number. von Mises as it is.
+const FIELD_LABEL_JA = {
+  "von Mises (max along each member)": "部材ごとの最大の von Mises 応力",
+  "frame deflection (wheel-centre rigid motion removed)": "フレームのたわみ (輪の中心の剛体の動きを除く)",
+  "highest temperature in the run": "走った間の最も高い温度",
+  "battery used (share of capacity)": "使った電池 (容量の割合)",
+  "Miner damage over 5000 km (largest weld point)": "5000 km 走った疲労度 (Miner 則、溶接の点の最大)",
+};
+const MODE_WHAT_JA = { "body on springs": "ばねの上の車体", frame: "フレーム", "roll bar": "ロールバー" };
+// A field's label as the legend says it: the record's words under ?dev=1; a tool's English label in
+// Japanese (FIELD_LABEL_JA, mode N); a label still holding English words or ids: the kind's name
+// (FIELD_JA), with the label's Japanese words before its first bracket when it has some.
+export function fieldLabel(field, dev = false) {
+  const label = field?.label;
+  if (!label) return FIELD_JA[field?.kind] ?? field?.kind ?? "";
+  if (dev) return label;
+  if (FIELD_LABEL_JA[label]) return FIELD_LABEL_JA[label];
+  const m = /^mode (\d+)(?: \(([^)]*)\))?$/.exec(label);
+  if (m) return `${m[1]} 番目の揺れの形${m[2] ? ` (${MODE_WHAT_JA[m[2]] ?? m[2]})` : ""}`;
+  // (an aside naming a record's value, "(max_stress はそれを外した最大)": dropped)
+  const t = label.replace(/\s*[(（][^()（）]*[A-Za-z]+_[A-Za-z_]+[^()（）]*[)）]/g, "");
+  if (!/\b[a-z]{3,}\b|[A-Za-z]+_[A-Za-z]/.test(t.replace(/\bvon\b/g, ""))) return t;
+  return FIELD_JA[field.kind] ?? label;
 }
 
 // The field of a kind shown first: on a mesh whose record has come (the larger surface

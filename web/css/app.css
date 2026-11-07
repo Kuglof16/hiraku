@@ -1183,6 +1183,42 @@ body.video .mode .stop-btn { display: none; }
 .now[hidden] { display: none; }
 /* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
 .now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
+/* ③'s sentence card under the 3D (js/benchnote.js): one card at a time (the いま line, the round's
+   proposals, the cause of a mismatch, an agent's words, a hooks' stop), two lines; 「くわしく」 opens
+   the whole card under it. The 3D keeps the toggles, the legends and the graph only. */
+.benchnote { flex: none; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); padding: 6px 10px 6px 14px; }
+.benchnote[hidden] { display: none; }
+.bn-row { display: flex; align-items: center; gap: 12px; }
+.bn-card { flex: 1; min-width: 0; font-size: 18px; line-height: 26px; height: 52px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--ink); }
+.bn-card > * { display: none !important; }
+.bn-card > .bn-pick { display: inline !important; position: static !important; transform: none !important; inset: auto !important; width: auto !important;
+  max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important;
+  opacity: 1 !important; font-size: inherit !important; line-height: inherit !important; white-space: normal !important; color: var(--ink) !important; }
+.bn-card > .now.bn-pick { font-weight: 600; }
+.bn-pick small, .bn-pick .tx, .bn-pick .rc-head, .bn-pick .rc-list, .bn-pick .rc-list li, .bn-pick .rc-foot, .bn-pick .who, .bn-pick .pw, .bn-pick b { display: inline !important; margin: 0; padding: 0; font-size: inherit; white-space: normal; }
+.bn-pick small, .bn-pick .rc-head, .bn-pick .who { font-weight: 700; margin-right: 0.5em !important; }
+.bn-pick .rc-list li + li::before { content: " ／ "; color: var(--muted); }
+.bn-pick .rc-foot { color: var(--muted); margin-left: 0.5em !important; }
+.bn-pick .pr { display: none !important; }
+.bn-pick .who .pet { display: inline-block; vertical-align: -4px; margin-right: 4px; }
+.bn-pick .hn-head { color: var(--orange); font-weight: 700; margin-right: 0.5em; }
+.bn-card .rec { display: none; }
+body.dev .bn-card .rec { display: inline; }
+.bn-more { flex: none; font-size: 14px; padding: 3px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.bn-more[hidden] { visibility: hidden; display: inline-block; }
+.bn-full { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rule); max-height: 260px; overflow: auto; font-size: 15px; line-height: 1.5; color: var(--ink); }
+.bn-full[hidden] { display: none; }
+.bn-full small, .bn-full .rc-head, .bn-full .who { display: block; font-weight: 700; }
+.bn-full .rc-list { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
+.bn-full .pr { display: block; color: var(--muted); margin-left: 20px; }
+.bn-full .rc-foot { color: var(--muted); }
+.bn-full .tx { white-space: pre-line; }
+.bn-full .pet { display: none; }
+.bn-full .hn-head { display: block; font-weight: 700; color: var(--orange); }
+/* the hooks' line over the screen is not drawn on ③'s workbench: its card is in the strip */
+body.bench-notes .hookline { display: none !important; }
+/* nor the 「… で解析中」 chip: the いま line in the strip says it */
+body.bench-notes .viewport .running { display: none; }
 /* app.js loadingNote: while a record is read */
 .loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
   border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }

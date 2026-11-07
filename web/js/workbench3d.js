@@ -113,6 +113,7 @@ function paintTwin(mesh, color) {
   t.material.color.set(vertex ? "#ffffff" : color);
 }
 // Camera directions (ISO, from the target) for the scenes that need their own view.
+const SCREEN_RECT_VERTS = 20000; // Workbench3D.screenRect: the vertices looked at, per geometry
 export const VIEWS = {
   default: [0.85, 0.95, 0.62],
   table: [1, 0.14, 0.2], // a tilt table from the front, low: the table's turn reads as a turn
@@ -1048,6 +1049,13 @@ export class Workbench3D {
 
   // Frame the design from a direction (VIEWS).
   fit(view = VIEWS.default) {
+    // a strip kept clear at the right (setReserve: ③'s legend): framed by the outline's points in the
+    // free part's width (the sphere below sees the height only, and the vehicle ran under the legend)
+    // (fitWidth: set by app.js on ③'s workbench; the video's frames are framed as before)
+    if (this.fitWidth && this.reserveRight > 0 && this.design) {
+      this.fitPoints(this.contentPoints(), view, 1.08);
+      return;
+    }
     const b = this.bboxIso;
     const center = isoToThree(b.getCenter(new THREE.Vector3()).toArray());
     const radius = b.getSize(new THREE.Vector3()).length() * 0.0005;
@@ -2074,6 +2082,48 @@ export class Workbench3D {
       }
     }
     return pts;
+  }
+
+  // The vehicle's outline on the screen (client px: left, top, right, bottom), cut to the canvas: what
+  // is drawn of the body and the wheels (their meshes and lines as they stand now, a motion's pose too)
+  // through the camera: each vertex (every n-th of a large geometry, SCREEN_RECT_VERTS at most), an
+  // instanced mesh by each instance's box. null when nothing is drawn. (The tests keep the boxes over
+  // the 3D off it: tests/web/test_clear_3d_browser.py.)
+  screenRect() {
+    this.scene.updateMatrixWorld();
+    this.camera.updateMatrixWorld();
+    const r = this.renderer.domElement.getBoundingClientRect();
+    let l = Infinity, t = Infinity, rt = -Infinity, b = -Infinity;
+    const p = new THREE.Vector3();
+    const m = new THREE.Matrix4();
+    const at = (mat) => {
+      p.applyMatrix4(mat).project(this.camera);
+      if (p.z < -1 || p.z > 1) return; // (behind the camera or past its far plane)
+      const sx = r.left + ((p.x + 1) / 2) * r.width;
+      const sy = r.top + ((1 - p.y) / 2) * r.height;
+      l = Math.min(l, sx); rt = Math.max(rt, sx); t = Math.min(t, sy); b = Math.max(b, sy);
+    };
+    for (const g of [this.body, this.wheels]) {
+      g.traverseVisible((o) => {
+        if (!(o.isMesh || o.isLine || o.isPoints) || !o.geometry?.attributes?.position) return;
+        if (o.isInstancedMesh) {
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+          const bb = o.geometry.boundingBox;
+          for (let i = 0; i < o.count; i += 1) {
+            o.getMatrixAt(i, m);
+            m.premultiply(o.matrixWorld);
+            for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) at((p.set(x, y, z), m));
+          }
+          return;
+        }
+        const pos = o.geometry.attributes.position;
+        const step = Math.max(1, Math.ceil(pos.count / SCREEN_RECT_VERTS));
+        for (let i = 0; i < pos.count; i += step) at((p.fromBufferAttribute(pos, i), o.matrixWorld));
+      });
+    }
+    if (!(rt > l)) return null;
+    const out = { left: Math.max(l, r.left), top: Math.max(t, r.top), right: Math.min(rt, r.right), bottom: Math.min(b, r.bottom) };
+    return out.right > out.left && out.bottom > out.top ? out : null;
   }
 
   // Frame a box (ISO mm) from a direction so it fills the view's width or height,

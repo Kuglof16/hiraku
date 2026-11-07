@@ -122,6 +122,14 @@
           <button class="pb-live" id="pb-live" title="実行中の最新に戻る">LIVE</button>
         </div>
       </div>
+      <!-- the sentence card out of the 3D: one at a time, two lines, くわしく opens it under (js/benchnote.js) -->
+      <div class="benchnote" id="benchnote" hidden>
+        <div class="bn-row">
+          <div class="bn-card" id="bn-card"><div class="hooknote" id="hooknote" hidden></div></div>
+          <button class="bn-more" id="bn-more" type="button" title="この札の全文 (記録の ID・英語の文も) を開く">くわしく</button>
+        </div>
+        <div class="bn-full" id="bn-full" hidden></div>
+      </div>
       <p class="hint" id="hint">カメラ: ドラッグで回す・右ドラッグで動かす・ホイールで寄る ／ Space 再生・← → 前後のイベント</p>
       <!-- the workbench's notes (js/app.js): what the real look's dummy is drawn from -->
       <details class="more bench-more" id="bench-more" hidden><summary>くわしく</summary><div class="sub" id="bench-dummy-note" data-role="dummy-note"></div></details>

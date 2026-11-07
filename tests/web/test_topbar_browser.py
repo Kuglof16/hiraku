@@ -3,7 +3,8 @@
 the top right and ④'s tile headings with the icons of the one definition; the footer's hooks list
 folded under 「くわしく」 (open on ?dev=1) and its activity line without a verdict's numbers or a
 rule's id; the moment a hook stops, one line near the middle that goes after a few seconds of the
-replay (the same t, the same picture).
+replay (the same t, the same picture), on the tabs other than ③'s workbench; there the same words
+are the card of the strip under the 3D (web/js/benchnote.js) while the stop is the newest event.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -166,6 +167,16 @@ class TopbarBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=0&tab=bench")
         self.seek(page, 1e6)
         t_hook = page.evaluate("() => window.hiraku.player.state.hooks.denied[0].t")
+        # ③'s workbench: the stop is the strip's card under the 3D, the stage's line is not drawn
+        self.seek(page, t_hook + 0.001)
+        bench = page.evaluate("""() => { const n = document.getElementById('hooknote'), s = document.getElementById('benchnote');
+          return { line: LINE_SHOWN(), kind: s.dataset.kind, text: n.innerText.replace(/\\s+/g, ' ').trim(), inStrip: n.closest('#benchnote') !== null,
+                   shown: n.checkVisibility(), color: getComputedStyle(n.querySelector('.hn-head')).color }; }""".replace(
+            "LINE_SHOWN()", "(() => { const l = document.getElementById('hookline'); return !l.hidden && l.checkVisibility(); })()"))
+        foot = page.evaluate(FOOT)
+        # the stage's line on ④
+        page.click('.tab[data-tab="grid"]')
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'grid'")
         before = (self.seek(page, t_hook - 0.5), page.evaluate(LINE))[1]
         at = (self.seek(page, t_hook + 1.0), page.evaluate(LINE))[1]
         shot1 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
@@ -174,37 +185,27 @@ class TopbarBrowserTest(unittest.TestCase):
         page.evaluate(LINE)
         shot2 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
         box = page.evaluate("() => { const r = document.getElementById('hookline').getBoundingClientRect(); return { cx: (r.left + r.right) / 2, h: r.height }; }")
-        # ③'s board of tests: the line is not on any of its boxes (it goes under the board)
-        over = page.evaluate("""() => { const l = document.getElementById('hookline').getBoundingClientRect();
-          const cut = (r) => !(r.right <= l.left || l.right <= r.left || r.bottom <= l.top || l.bottom <= r.top);
-          const board = document.getElementById('tests');
-          return { board: board.checkVisibility() && board.querySelectorAll('button.test').length > 0,
-                   hit: [...board.querySelectorAll('.tb-group, .tb-tail')].filter((x) => cut(x.getBoundingClientRect())).map((x) => x.className) }; }""")
-        foot = page.evaluate(FOOT)
-        # on ④ too
-        page.click('.tab[data-tab="grid"]')
-        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'grid'")
-        on_grid = page.evaluate(LINE)
         page.close()
-        page, errs = self.open("run=sample&pace=0&t=0&tab=bench&dev=1")
+        page, errs = self.open("run=sample&pace=0&t=0&tab=grid&dev=1")
         self.seek(page, t_hook + 1.0)
         dev = page.evaluate(LINE)
         page.close()
         self.assertEqual(errors + errs, [])
+        self.assertFalse(bench["line"])
+        self.assertEqual((bench["kind"], bench["inStrip"], bench["shown"]), ("hooknote", True, True))
+        self.assertEqual(bench["text"], "hooks が止めた 予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertFalse(before["shown"])
         self.assertTrue(at["shown"])
         self.assertEqual(at["text"], "!予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertEqual(at["rule"], "HK1")
         self.assertNotIn("HK", at["text"])
         self.assertEqual(at["color"], at["border"])  # orange (test_video_fixes_browser: not the NG red)
+        self.assertEqual(bench["color"], at["color"])  # the strip's card in the same orange
         self.assertFalse(gone["shown"])
         self.assertEqual(shot1, shot2)  # the same t, the same picture
         self.assertAlmostEqual(box["cx"], 960, delta=40)  # near the middle
         self.assertLess(box["h"], 60)  # one line
-        self.assertTrue(over["board"])
-        self.assertEqual(over["hit"], [])
         self.assertNotIn("HK", foot["act"])
-        self.assertTrue(on_grid["shown"])
         self.assertTrue(dev["text"].startswith("!HK1 "), dev)
 
     def test_lines_for_every_rule(self):
