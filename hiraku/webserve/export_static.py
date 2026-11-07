@@ -444,6 +444,7 @@ def export(
     assets: bool = True,
     sample: bool = True,
     n10: bool = True,
+    intro_url: str = "",
     viewer: bool = True,
     heavy_min_bytes: int = HEAVY_MIN_BYTES,
     materials_dir: Path | str = CARDS_DIR,
@@ -461,7 +462,8 @@ def export(
         if rel.as_posix() in PAGES:
             text = mark_static(src.read_text(encoding="utf-8"))
             if rel.as_posix() == "index.html":
-                text = text.replace(STATIC_META, STATIC_META + "\n" + JUDGE_HEAD, 1)
+                intro = f'\n<meta name="hiraku-intro" content="{html.escape(intro_url, quote=True)}">' if intro_url else ""
+                text = text.replace(STATIC_META, STATIC_META + intro + "\n" + JUDGE_HEAD, 1)
             _write(out / rel, text.encode("utf-8"))
         else:
             _write(out / rel, src.read_bytes())
@@ -539,12 +541,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--default-run", default=None, help="the run the run list recommends (default: the newest saved run)")
     p.add_argument("--no-sample", action="store_true", help="leave out the contract's sample record")
     p.add_argument("--no-n10", action="store_true", help="leave out the N10 answers' page (and its line in the run list)")
+    p.add_argument("--intro-url", default="", help="the introduction page the judges' card links to (none: no link)")
     p.add_argument("--no-scan", action="store_true", help="do not read the export for what must not be published")
     p.add_argument("--words-from", type=Path, help="private pre-commit hook with WORDS= and PATHS= lines (as qa.judge_scan)")
     args = p.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    got = export(args.out, saved_dir=args.saved, run_ids=args.runs, default_run=args.default_run, sample=not args.no_sample, n10=not args.no_n10)
+    got = export(args.out, saved_dir=args.saved, run_ids=args.runs, default_run=args.default_run, sample=not args.no_sample, n10=not args.no_n10, intro_url=args.intro_url)
     files = got["files"]
     total = sum(files.values())
     big = max(files, key=files.get)

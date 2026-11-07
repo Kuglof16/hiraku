@@ -6,7 +6,8 @@
 (function () {
   if (document.querySelector('meta[name="hiraku-static"]')?.content !== "1") return;
   if (/cut\.html$/.test(location.pathname) || new URLSearchParams(location.search).get("video") === "1") return;
-  const LP = "https://kuglof16.github.io/h860337f9b68847f246/";
+  // the introduction page: the export's --intro-url (a meta in the exported index.html); none, no links to it
+  const LP = document.querySelector('meta[name="hiraku-intro"]')?.content || "";
   // (the bare address: app.js opens the export's first run (export_static --default-run) as it ended, on ④)
   const params = new URLSearchParams(location.search);
   const HEAD = "<b>HIRAKU</b> は、作りたいものを文で書くと、Claude が設計を作り、CAE の計算で確かめ、NG を直すまで繰り返すツールです。";
@@ -22,7 +23,7 @@
   bar.innerHTML = '<p class="ji-text">' + wordsFor(params.get("run") || "") + "</p>" +
     '<div class="ji-buttons"><button type="button" class="ji-play" id="ji-play">▶ 最初から再生して見る</button>' +
     '<button type="button" class="ji-result" id="ji-result">結果を見る</button>' +
-    '<a class="ji-lp" href="' + LP + '">HIRAKU の紹介ページへ</a></div>' +
+    (LP ? '<a class="ji-lp" href="' + LP + '">HIRAKU の紹介ページへ</a>' : "") + "</div>" +
     '<button type="button" class="ji-close" id="ji-close" title="閉じる (右下の「？ 使い方」でまた開けます)">×</button>';
   const css = document.createElement("style");
   // fixed over the page, bottom right, so the page's own grid keeps its rows
@@ -65,9 +66,12 @@
     const help = document.createElement("button");
     help.type = "button"; help.id = "ji-help"; help.className = "ji-head dark"; help.textContent = "？ 使い方";
     help.onclick = openCard;
-    const lp = document.createElement("a");
-    lp.className = "ji-head"; lp.href = LP; lp.textContent = "HIRAKU の紹介ページ";
-    dock.append(help, lp);
+    dock.append(help);
+    if (LP) {
+      const lp = document.createElement("a");
+      lp.className = "ji-head"; lp.href = LP; lp.textContent = "HIRAKU の紹介ページ";
+      dock.append(lp);
+    }
     document.body.appendChild(dock);
     new MutationObserver(() => { dock.style.display = document.getElementById("judge-intro") ? "none" : "flex"; })
       .observe(document.body, { childList: true });
