@@ -24,6 +24,7 @@ HV.fields = HV.fields || {};
 
   HV.fields.water = {
     label: '冠水路', script: 'js/water.js',
+    dataUrl: 'fixtures/water.js',   // the stored record, kept in the repository: opens with no run and no GPU
     async init(D, ctx) {
       const T = window.THREE, view = ctx.view;
       const beams = await ctx.addBeams();

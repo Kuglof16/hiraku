@@ -101,7 +101,7 @@ class Stored(unittest.TestCase):
     """The stored data, so the place opens with no GPU and no run."""
 
     def test_the_stored_data_has_the_statement_and_no_path(self):
-        text = (ROOT / "viewer" / "data" / "water.js").read_text(encoding="utf-8")
+        text = (ROOT / "viewer" / "fixtures" / "water.js").read_text(encoding="utf-8")
         data = json.loads(text.split('window.VIEW_DATA["water"] = ', 1)[1].rstrip().rstrip(";"))
         self.assertEqual(data["statement"], STATEMENT)
         self.assertEqual(data["source"]["design_version"], 5)
@@ -111,11 +111,15 @@ class Stored(unittest.TestCase):
         self.assertLess(len(text), 4_000_000)
 
     def test_the_arrays_of_the_stored_data_are_hex(self):
-        text = (ROOT / "viewer" / "data" / "water.js").read_text(encoding="utf-8")
+        text = (ROOT / "viewer" / "fixtures" / "water.js").read_text(encoding="utf-8")
         data = json.loads(text.split('window.VIEW_DATA["water"] = ', 1)[1].rstrip().rstrip(";"))
         for k in ("surface", "spray", "spray_start"):
             self.assertIn("hex", data[k])
             self.assertNotIn("b64", data[k])
+
+    def test_the_stored_file_is_where_the_script_writes_and_the_page_reads(self):
+        self.assertEqual(water.STORED, ROOT / "viewer" / "fixtures")
+        self.assertIn("dataUrl: 'fixtures/water.js'", (ROOT / "viewer" / "js" / "water.js").read_text(encoding="utf-8"))
 
     def test_the_page_shows_the_statement_and_the_vehicle_is_opaque(self):
         js = (ROOT / "viewer" / "js" / "water.js").read_text(encoding="utf-8")
