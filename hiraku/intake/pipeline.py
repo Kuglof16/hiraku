@@ -90,7 +90,13 @@ def intake(
     domains = pick_domains(want, flags, speed_class, flag_reasons=flag_reasons, reasons=reasons, shown_names=shown_names,
                            exclude=exclude, product=product)
     if added_tests or no_addition_reason:
-        domains = add_tests(domains, added_tests, no_addition_reason, product=product)[0]
+        from hiraku.catalog import load_catalog
+        from hiraku.intake.domains import has_builder
+
+        catalog = load_catalog()  # a draft may hold a test no builder makes (an older one): it is left out, not an error
+        keep = [a for a in (added_tests or []) if has_builder(catalog, a["test_id"], product)]
+        if keep or no_addition_reason:
+            domains = add_tests(domains, keep, no_addition_reason, product=product)[0]
     slug = slug or product or slug_for(want)  # slug: the file's name for the product when no file of its own lends values
     own: dict[str, Record] = {}
     if product and product in product_files():

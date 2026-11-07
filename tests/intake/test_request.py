@@ -257,12 +257,15 @@ class AddedTestsTest(unittest.TestCase):
                     "added_tests": added, "no_addition_reason": reason, "cost_usd": 0.1}
         return pick
 
-    def left_out(self):
+    def left_out(self, built=True):
+        """A catalog test the choice does not have: one a run can build (built) or one no builder makes."""
         first = request.begin("飲み物を運ぶロボ", product="free-robot", flags=ROBOT["flags"], speed_class="walk")
         have = {t for p in first["domains"]["picks"] for t in p["test_ids"]} | set(first["domains"]["assembly_test_ids"])
         from hiraku.catalog import load_catalog
+        from hiraku.intake.domains import has_builder
 
-        return next(t["id"] for t in load_catalog().tests if t["id"] not in have)
+        catalog = load_catalog()
+        return next(t["id"] for t in catalog.tests if t["id"] not in have and has_builder(catalog, t["id"], None) == built)
 
     def test_an_added_test_is_in_the_picks_and_the_draft_keeps_it(self):
         tid = self.left_out()
@@ -282,6 +285,13 @@ class AddedTestsTest(unittest.TestCase):
         plain = request.begin("飲み物を運ぶロボ", picker=self.picker([], "足すものは無い"))
         self.assertEqual(plain["domains"]["no_addition_reason"], "足すものは無い")
         self.assertNotIn("tests", request.finish(plain["draft"], None, None)["requirements_file"])  # nothing added: the catalog chooses
+
+    def test_an_added_test_no_builder_makes_is_not_listed_in_the_file_but_stays_in_the_choice(self):
+        tid = self.left_out(built=False)
+        first = request.begin("飲み物を運ぶロボ", picker=self.picker([{"test_id": tid, "reason": "要る"}]))  # an older draft may hold it
+        self.assertNotIn(tid, [t for p in first["domains"]["picks"] for t in p["test_ids"]] + first["domains"]["assembly_test_ids"])
+        tests = request.finish(first["draft"], None, None)["requirements_file"].get("tests") or []
+        self.assertNotIn(tid, tests)  # a test with no builder is not in the choice and not in the file: it would refuse every v1
 
     def test_a_known_products_file_keeps_its_tests_and_gets_the_added_one(self):
         own = load_product("offroad-4w")["tests"]

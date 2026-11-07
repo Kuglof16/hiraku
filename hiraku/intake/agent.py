@@ -85,14 +85,14 @@ def build_server(run: PickRun, ctx: Any = None):
         if run.record is None:
             return {"content": [{"type": "text", "text": "まだ分野を選んでいません。先に pick_domains を呼んでください"}], "is_error": True}
         try:
-            record, ignored, no_builder = await asyncio.to_thread(
+            record, ignored, _ = await asyncio.to_thread(
                 add_tests, {k: v for k, v in run.record.items() if k in _RECORD_KEYS}, args.get("tests"), args.get("no_addition_reason"))
         except IntakeError as e:
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
         run.added_tests = [dict(a) for a in record.get("added_tests", [])]
         run.no_addition_reason = record.get("no_addition_reason", "")
         run.record = {**run.record, **record}
-        out = {"added_tests": run.added_tests, "no_addition_reason": run.no_addition_reason, "ignored": ignored, "no_builder": no_builder}
+        out = {"added_tests": run.added_tests, "no_addition_reason": run.no_addition_reason, "ignored": ignored}
         return {"content": [{"type": "text", "text": json.dumps(out, ensure_ascii=False)}]}
 
     async def handler(args: dict[str, Any]) -> dict[str, Any]:
