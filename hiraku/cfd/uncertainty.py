@@ -181,12 +181,14 @@ def _f2_rows(aero: Record, hand: Record | None, validation_pct: float | None) ->
     if not drag:
         return []
     hand = hand or {}
-    v = drag["speed_kmh"] / 3.6
+    v = hand.get("speed_ms") or drag["speed_kmh"] / 3.6  # the load case's speed; the same CdA, the force goes as speed^2
     rho = hand.get("rho") or aero["air"]["rho_kg_m3"]
     hand_x = None if None in (hand.get("C_d"), hand.get("A_m2")) else hand["C_d"] * hand["A_m2"]
+    crit = hand.get("criterion")
+    tail = ("OK / NG はこの表の上の見立てで、流れの値は実験と比べて確かめていない" if crit else "F2 の基準はまだ無いので判定は無い")
     return [_row("F2", "drag_force", "N", lambda x: drag_force(rho, x, v), hand_x, drag["CdA_m2"],
-                 _margins(_grid_change(aero, drag["speed_kmh"], 0.0, "CdA_m2"), validation_pct),
-                 note=f"ヨー 0、{drag['speed_kmh']:g} km/h。F2 の基準はまだ無いので判定は無い", at_speed_kmh=drag["speed_kmh"])]
+                 _margins(_grid_change(aero, drag["speed_kmh"], 0.0, "CdA_m2"), validation_pct), crit,
+                 note=f"ヨー 0 の CdA ({drag['speed_kmh']:g} km/h で計算) を {v * 3.6:g} km/h で。{tail}", at_speed_kmh=v * 3.6)]
 
 
 def _p4_rows(aero: Record, hand: Record | None, validation_pct: float | None) -> list[Record]:

@@ -231,6 +231,19 @@ class CfdToolTest(unittest.TestCase):
         self.assertTrue(any("P4" in n for n in out["uncertainty"]["hand_notes"]))
         self.assertEqual(len(out["table"]), 13)
 
+    def test_the_f2_load_case_gives_the_criterion_and_the_speed(self):
+        case = {"load_case_id": "F2-drag40kmh", "test_id": "F2", "domain": "aero", "title": "空気抵抗", "params": {"speed": {"value": 40.0, "unit": "km/h"}, "loading": "two_cargo"},
+                "criterion": {"quantity": "drag_force", "op": "<=", "limit": {"value": 665.0, "unit": "N"}, "basis": "Q50"}}
+        with mock.patch.object(self.store, "version_load_cases", return_value=[case]):
+            hand, _, _, _ = cfd_tools._hand_inputs(self.store, self.design, self.store.design_version)
+        self.assertEqual(hand["f2"]["criterion"], {"quantity": "drag_force", "op": "<=", "limit": 665.0, "unit": "N", "load_case_id": "F2-drag40kmh"})
+        self.assertAlmostEqual(hand["f2"]["speed_ms"], 40.0 / 3.6)
+
+    def test_without_an_f2_load_case_there_is_no_f2_criterion(self):
+        with mock.patch.object(self.store, "version_load_cases", return_value=[]):
+            hand, _, _, _ = cfd_tools._hand_inputs(self.store, self.design, self.store.design_version)
+        self.assertNotIn("criterion", hand["f2"])
+
     def test_a_second_sweep_does_not_write_over_the_first(self):
         with self.gpu_available():
             a = call(self.ctx, yaws_deg=[0.0])
