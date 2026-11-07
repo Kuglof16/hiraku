@@ -184,7 +184,8 @@ class Replay(unittest.TestCase):
         self.assertIsNone(PRIVATE_PLACES.search(text))
 
     def test_the_place_check_sees_paths_and_mail_but_not_links(self):
-        for seen in ("D:/runs/a", "E:\\runs\\a", "/home/a/b", "x\\" + "Users" + "\\a", "a.b@example.org"):
+        # the samples are joined from pieces, so no line of this file holds a whole folder or address
+        for seen in ("D:" + "/runs/a", "E:" + "\\runs\\a", "/" + "home" + "/a/b", "x\\" + "Users" + "\\a", "a.b" + "@" + "example.org"):
             self.assertIsNotNone(PRIVATE_PLACES.search(seen), seen)
         for unseen in ("https://example.org/a", "Re 1e5: 0.47", "ratio 1:2"):
             self.assertIsNone(PRIVATE_PLACES.search(unseen), unseen)
