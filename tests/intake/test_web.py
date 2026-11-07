@@ -884,6 +884,36 @@ console.log(JSON.stringify({{ n: past.length, t: past[0].t, states: past[0].ques
         self.assertTrue(got["current"])  # the new round is on the screen as before
 
 
+@unittest.skipUnless(NODE, "node is not installed")
+class NoQuestionsTest(unittest.TestCase):
+    """A hearing that asked nothing is one short box in the positive, with the standard values listed."""
+
+    def run_events(self, answers):
+        return node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const events = [e(1, 0, 'hearing.answered', {{ answers: {answers} }})];
+const el = new El('div');
+const intake = mountIntake(el, {{ events: () => events, onEvent: () => () => {{}} }}, {{ screen: 'A2' }});
+const box = el.all('section').find((s) => s.className === 'in-compact');
+console.log(JSON.stringify({{ text: el.text(), box: !!box, items: box ? box.all('li').map((l) => l.text()) : [], empty: el.all('p').some((p) => p.className === 'in-empty') }}));
+""")
+
+    def test_standard_values_make_one_short_box_with_the_values_listed(self):
+        got = self.run_events("[{ key: 'Q63', name: '挟み込みの隙間', value: 25, unit: 'mm', source: 'default', trust: 3, basis: 'assumption' }, { key: 'Q41', name: '荷の位置', value: 150, unit: 'mm', source: 'default', trust: 3, basis: 'assumption' }]")
+        self.assertTrue(got["box"])
+        self.assertIn("質問は無く、分からない 2 つは標準の値で進めました", got["text"])
+        self.assertEqual(len(got["items"]), 2)
+        self.assertIn("確かめていない値として、最後の報告に載ります", got["text"])
+        self.assertNotIn("足りない情報はないので", got["text"])  # said once, not three times
+        self.assertNotIn("標準の値で足したもの", got["text"])
+
+    def test_without_standard_values_the_old_line_stays(self):
+        got = self.run_events("[]")
+        self.assertFalse(got["box"])
+        self.assertTrue(got["empty"])
+
+
 class TradeoffQuestionTest(unittest.TestCase):
     """A2 draws a trade-off (two results that pull apart) with the code's numbers and sends the person's choice."""
 

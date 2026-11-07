@@ -192,6 +192,18 @@ export async function submit(api, ui, body) {
   ui.rerender();
 }
 
+/** A hearing with no question: one short box, in the positive: what was left to the standard values, as a list of the values.
+ *  (Without any standard value either, the empty line that was there before.) */
+function noQuestions(m) {
+  const std = (m.hearing.answered?.answers || []).filter((a) => a.source !== "hearing");
+  if (!std.length) return h("p", { class: "in-empty" }, m.requirements.length ? "足りない情報はないので、そのまま進みます" : "いまは聞くことがありません");
+  const unchecked = std.some((a) => a.trust === 3);
+  return h("section", { class: "in-compact" },
+    h("p", { class: "in-compact-title" }, `質問は無く、分からない ${std.length} つは標準の値で進めました`),
+    h("ul", { class: "in-compact-list" }, std.map((a) => h("li", {}, h("b", {}, a.name), `: ${showValue(a.value, a.unit)}`))),
+    unchecked ? h("p", { class: "in-compact-note" }, "確かめていない値として、最後の報告に載ります") : null);
+}
+
 /** The rounds asked before this one, in the order they were asked, each with what it asked and how it was answered (read only). */
 function pastBlock(m, api, ui) {
   const rounds = pastRounds(m);
@@ -225,7 +237,7 @@ export function renderA2(el, m, api, ui) {
       h("h2", {}, "HIRAKU からの質問", h("small", {}, rows.length || rules.length || trades.length ? `${[rows.length ? `確認したいこと ${rows.length} 件` : "", rules.length ? `ルール ${rules.length} 件` : "", trades.length ? `優先の相談 ${trades.length} 件` : ""].filter(Boolean).join("・")}` : "")),
       h("div", { class: "in-qs", dataset: { keepScroll: "a2-qs" } },
         rows.length || rules.length || trades.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui)), ...trades.map((q) => tradeoffQuestion(q, api, ui))]
-          : h("p", { class: "in-empty" }, m.requirements.length ? "足りない情報はないので、そのまま進みます" : "いまは聞くことがありません")),
+          : noQuestions(m)),
       pastBlock(m, api, ui),
       rows.length || rules.length || trades.length
         ? h("div", { class: "in-composer" },
@@ -235,9 +247,6 @@ export function renderA2(el, m, api, ui) {
               h("button", { class: "in-btn", disabled: !canSend, onclick: () => useDefaultsOrSay(api, ui, rows) }, "標準の値のまま進める"),
               h("button", { class: "in-btn primary", disabled: !canSend,
                 onclick: () => submit(api, ui, answersBody()) }, ui.sending ? "送っています…" : "答えて進める")))
-        : null,
-      !rows.length && m.hearing.answered?.answers?.length
-        ? h("p", { class: "in-foot" }, `標準の値で足したもの: ${m.hearing.answered.answers.map((a) => a.name).join("・")}`)
         : null,
       m.hearing.answered?.note ? h("p", { class: "in-foot" }, `ほかに伝えたこと: ${m.hearing.answered.note}`) : null,
       must.length ? h("p", { class: "in-warn" }, `答えが要る質問 (${must.map((q) => q.name).join("・")}) に答えがないので、先へ進めません`) : null),
