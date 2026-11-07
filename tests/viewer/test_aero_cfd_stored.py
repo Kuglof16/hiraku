@@ -25,6 +25,10 @@ class Stored(unittest.TestCase):
         cls.top = json.loads(cls.text)
         cls.data = cls.top["data"]
 
+    def test_the_aero_page_reads_the_flow_record_only_when_asked(self):
+        js = (ROOT / "viewer" / "js" / "aero_cfd.js").read_text(encoding="utf-8")
+        self.assertIn("{ key: 'aero_cfd', label: 'CFD', always: true, lazy: true }", js)
+
     def test_the_shape_build_writes_with_json(self):
         self.assertEqual(set(self.top), {"field", "data", "title", "source"})
         self.assertEqual(self.top["field"], "aero_cfd")
