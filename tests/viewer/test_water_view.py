@@ -16,7 +16,7 @@ from viewer.src import common, water
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = ROOT / "tests" / "verification" / "fixtures" / "n15-v005-design.json"
 PATHS = re.compile(r"[A-Za-z]:[\\/]|/" + "Users" + r"/|/home/|@[a-z0-9.-]+\.[a-z]{2,}", re.I)  # the home folder's name is joined so the repository's scan does not read this line
-STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"
+STATEMENT = "この判定は電池、モーター、制御器が水に浸かるかだけを見る (しぶきは数えない)。実験と比べていない計算による"
 
 
 def write_case(folder: Path, design_version: int = 5, spray_per_frame: int = 50) -> Path:
@@ -52,10 +52,10 @@ class Build(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.folder = write_case(Path(self.tmp.name) / "case")
 
-    def test_the_statement_is_in_the_data_and_the_notes(self):
+    def test_the_statement_is_in_the_data_but_not_on_the_page(self):  # the owner's decision (11/7): the README keeps it
         d = build(self.folder)
         self.assertEqual(d["statement"], STATEMENT)
-        self.assertIn(STATEMENT, d["notes"][0])
+        self.assertFalse(any(STATEMENT in n or "実験と比べていない" in n for n in d["notes"]))
 
     def test_the_arrays_hold_the_record(self):
         d = build(self.folder)
@@ -121,9 +121,10 @@ class Stored(unittest.TestCase):
         self.assertEqual(water.STORED, ROOT / "viewer" / "fixtures")
         self.assertIn("dataUrl: 'fixtures/water.js'", (ROOT / "viewer" / "js" / "water.js").read_text(encoding="utf-8"))
 
-    def test_the_page_shows_the_statement_and_the_vehicle_is_opaque(self):
+    def test_the_page_leaves_the_statement_out_and_the_vehicle_is_opaque(self):
         js = (ROOT / "viewer" / "js" / "water.js").read_text(encoding="utf-8")
-        self.assertIn("D.statement", js)
+        self.assertNotIn("st.textContent = D.statement", js)
+        self.assertNotIn("実験と比べていない", js)
         self.assertIn("boxes.mat.transparent = false", js)
 
 

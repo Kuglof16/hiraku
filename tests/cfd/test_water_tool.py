@@ -84,7 +84,7 @@ class Roles(unittest.TestCase):
         from hiraku.agent import prompts
 
         text = prompts.cae_prompt("aero")
-        for word in ("cfd_water", "judge", "F5", "電池、モーター、制御器に水が届くかだけを見る", "実験と比べていない", "record_cause", "GPU が無い"):
+        for word in ("cfd_water", "judge", "F5", "電池、モーター、制御器が水に浸かるかだけを見る", "実験と比べていない", "record_cause", "GPU が無い"):
             self.assertIn(word, text)
         self.assertNotIn("cfd_water", prompts.cae_prompt("nvh"))
 

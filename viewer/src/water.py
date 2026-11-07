@@ -27,7 +27,7 @@ from viewer.src import common
 
 Record = dict[str, Any]
 TOOL = "flooded_road"
-STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"  # the same as hiraku.cfd.water.STATEMENT (a test holds them together)
+STATEMENT = "この判定は電池、モーター、制御器が水に浸かるかだけを見る (しぶきは数えない)。実験と比べていない計算による"  # the same as hiraku.cfd.water.STATEMENT (a test holds them together)
 SPRAY_PER_FRAME = 1200  # the sample the page draws: enough to see the spray, small enough to keep in the repository
 SEED = 5
 STORED = common.VIEWER / "fixtures"
@@ -45,7 +45,25 @@ def _hex(packed: Record) -> Record:
 
 def extra(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--design", type=Path, help="the design the case was run on (default: <case>/design.json)")
+    ap.add_argument("--depth-record", type=Path, nargs="*", default=[], help="water_depth_record.json files of the same design (one per speed): their crossable depths go on the page")
     ap.set_defaults(out=STORED)
+
+
+def crossable_inputs(depth_records: Record | list[Record] | None) -> list[Record]:
+    """The page's lines for the crossable depth found by passes at several depths (cfd_water depths_mm), one per speed, the
+    newest of each speed; none without a record."""
+    records = [depth_records] if isinstance(depth_records, dict) else list(depth_records or [])
+    by_speed: dict[float, Record] = {}
+    for rec in records:
+        by_speed[float(rec.get("speed_kmh") or 0.0)] = rec
+    names = {"battery": "電池", "motor": "モーター", "controller": "制御器"}  # as hiraku.cfd.water.PROTECTED_JA
+    out = []
+    for speed, rec in sorted(by_speed.items()):
+        d = rec.get("crossable_depth_mm")
+        rows = "、".join(f"{r['depth_mm']:g} mm: " + ("浸からない" if not r["reached"] else "、".join(names.get(n.split("_")[0], n) for n in r["reached"]) + " が浸かる") for r in rec.get("table", []))
+        label = rec.get("label", "渡れる水深 (計算)") + (f" {speed:g} km/h" if speed else "")
+        out.append({"label": label, "value": f"{d:g} mm" if d is not None else str(rec.get("said", "")), "source": f"{rec.get('definition', '')}。{rows}"})
+    return out
 
 
 def _road_height(depth_level_m: float, half_length_m: float, slope: float, blend_m: float, x: np.ndarray) -> np.ndarray:
@@ -100,10 +118,12 @@ def moment_centre_mm(design: Record) -> list[float]:
 
 def for_record(run: Path, vdir: Path, rec: Record) -> Record | str:
     """viewer.src.build's entry: the data of a cfd_water analysis, or the reason in one plain line (the version's newest pass)."""
-    found = sorted((Path(run) / "cfd" / f"v{rec.get('design_version')}").glob("water_*/water_record.json"), key=lambda p: p.stat().st_mtime_ns)
+    version = Path(run) / "cfd" / f"v{rec.get('design_version')}"
+    found = sorted(version.glob("water_*/water_record.json"), key=lambda p: p.stat().st_mtime_ns)
     if not found:
         return f"この解析の冠水路の記録 (cfd/v{rec.get('design_version')} の water_record.json) が run のフォルダにない"
-    return build(argparse.Namespace(run=found[-1].parent, design=Path(vdir) / "design.json"))
+    depths = sorted(version.glob("water_depths_*/water_depth_record.json"), key=lambda p: p.stat().st_mtime_ns)
+    return build(argparse.Namespace(run=found[-1].parent, design=Path(vdir) / "design.json", depth_record=depths))
 
 
 def build(args: argparse.Namespace) -> Record:
@@ -141,9 +161,13 @@ def build(args: argparse.Namespace) -> Record:
               {"label": "水の粒子", "value": f"{int(case['particles']):,} 個", "source": "計算の条件"},
               {"label": "いちばん低い部品", "value": f"{float(under['lowest_part_m']) * 1000.0:.0f} mm", "source": "部品の形から計算"},
               {"label": "積み方", "value": loading, "source": "計算の条件"}]
-    notes = [statement + "。",
-             "波の大きさは実験と比べていない。音速の設定を変えると、車が受ける力積はまだ動く。力の値としては読まない。",
-             "水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",
+    given = getattr(args, "depth_record", None) or []
+    depth_records = [common.read_json(p) for p in ([given] if isinstance(given, (str, Path)) else given)]
+    for rec in depth_records:
+        if rec.get("design_version") not in (None, design.get("design_version")):
+            raise ValueError(f"the depth record is of design v{rec.get('design_version')}, the design given is v{design.get('design_version')}")
+    inputs = crossable_inputs(depth_records) + inputs
+    notes = ["水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",
              "床下の水の深さ: " + str(under.get("depth_definition", "")),
              "水が届いた床下の列: " + str(under.get("reach_definition", ""))]
     return {"field": "water", "title": "冠水路を渡る水", "statement": statement,

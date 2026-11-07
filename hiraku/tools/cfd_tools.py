@@ -19,6 +19,7 @@ Every value stays marked as not compared with an experiment (physically_validate
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -310,6 +311,8 @@ WATER_INPUT_SCHEMA: Record = {
         "frame_hz": {"type": "number", "minimum": WATER_RANGE["frame_hz"][0], "maximum": WATER_RANGE["frame_hz"][1], "description": "Saved frames per second. Missing: 30."},
         "keep_particles": {"type": "boolean", "description": "Keep every frame's particles in the run's folder, for pictures made afterwards (about 8 MB a frame at 30 mm). Missing: false."},
         "judge": {"type": "boolean", "description": "true: go to a verdict on test F5 (water reaches none of the battery, the motor and the controller): the load case, the hand calculation, the analysis and the comparison. Missing: false."},
+        "depths_mm": {"type": "array", "items": {"type": "number", "minimum": WATER_RANGE["depth_mm"][0], "maximum": WATER_RANGE["depth_mm"][1]}, "minItems": 1, "maxItems": 8,
+                      "description": "Find the crossable depth: a pass at each depth, shallow first, until water reaches one of the battery, the motor and the controller. The record gives the deepest depth with none reached. No verdict."},
         "replay": {"anyOf": [{"type": "boolean"}, {"type": "string", "minLength": 1, "pattern": "\\.json$"}],
                    "description": "Read a stored record instead of running: its path relative to the run's folder, or true for the newest of the version. Needs no GPU."},
     },
@@ -318,7 +321,7 @@ WATER_INPUT_SCHEMA: Record = {
 WATER_DESCRIPTION = (
     "設計の版が冠水路 (水の入った窪み、両端は斜面) を通るときの水を GPU で解き (MLS-MPM)、実行のフォルダの cfd/ に記録を書く。"
     "judge を true にすると、試験 F5 (電池、モーター、制御器のどれにも水が届かない) の荷重条件を書き、手計算の予測、解析、比較まで進めて判定を返す。"
-    "この判定は水が届くかだけを見る。値は実験と比べて確かめていない (physically_validated: false)。"
+    "この判定は部品が水に浸かるかだけを見る (路面からつながった水。飛ぶしぶきは数えない)。値は実験と比べて確かめていない (physically_validated: false)。"
     "返すのは、部品ごとのすき間と水が届いた時刻、水の高さ、床下の水の深さ、水の運動量の収支。vehicle_moves が true (既定) なら K2 の車両と水を双方向につなぎ、速さの落ち方、路面に対するピッチと高さ、前輪が路面を離れた時間も返す。"
     "1 回に数分。GPU が無いときは回さず、そう答える。GPU のメモリが足りないときは待つように答える。"
     "replay を付けると保存した記録を GPU なしで読む (true か、実行のフォルダからの path)"
@@ -377,7 +380,9 @@ def _water_pass(ctx: Any, args: Record) -> Record:
     try:
         with cuda.gpu_turn(GPU_WAIT_S), cuda.Gpu("water") as live:
             if moves:
-                water_coupled.run_coupled(live, k2_parts(), design, water_coupled.LIFT_RATIO, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, frame_dt=frame_dt, t_max_s=WATER_TIME_LIMIT_S)
+                # a slower vehicle takes longer through the same road: the limit grows as the speed falls
+                limit = WATER_TIME_LIMIT_S * max(1.0, WATER_DEFAULTS["speed_kmh"] / asked["speed_kmh"])
+                water_coupled.run_coupled(live, k2_parts(), design, water_coupled.LIFT_RATIO, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, frame_dt=frame_dt, t_max_s=limit)
             else:
                 water.run_flooded_road(live, design, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, analyse=False, frame_dt=frame_dt)
     except TimeoutError:
@@ -402,7 +407,46 @@ def cfd_water(ctx: Any, args: Record | None = None, agent: str | None = None) ->
     args = dict(args or {})
     if args.get("replay"):
         return _water_replay(ctx, args)
+    if args.get("depths_mm"):
+        return _crossable_depth(ctx, args)
     return _judge_water(ctx, args, agent) if args.get("judge") else _water_pass(ctx, args)
+
+
+CROSSABLE = "渡れる水深 (計算)"
+CROSSABLE_DEFINITION = "電池、モーター、制御器のどれも水に浸からなかった (しぶきは数えない)、いちばん深い水深。回した水深の刻みの中の値で、刻みの間は回していない"
+
+
+def _crossable_depth(ctx: Any, args: Record) -> Record:
+    """A pass at each depth, shallow first, stopping at the first that reaches a protected part: the crossable depth is the one
+    before it. Saved as water_depth_record.json in its own folder; the passes keep their own records."""
+    run = _run_dir(ctx)
+    version = _version(ctx, args)
+    depths = sorted({float(d) for d in args["depths_mm"]})
+    _say_no_gpu("water")
+    rows: list[Record] = []
+    for depth in depths:
+        out = _water_pass(ctx, {**{k: v for k, v in args.items() if k not in ("depths_mm", "judge")}, "depth_mm": depth})
+        reached = sorted(n for n, g in out["protected_parts"].items() if g["reached_s"] is not None)
+        rows.append({"depth_mm": depth, "water_level_mm": out["road"]["water_level_mm"], "reached": reached, "clearance_mm": {n: g["clearance_mm"] for n, g in out["protected_parts"].items()},
+                     "lowest_speed_kmh": out["vehicle"]["speed_kmh"]["lowest"] if out["vehicle"] else None, "record": out["path"]})
+        if reached:
+            break
+    dry = [r["depth_mm"] for r in rows if not r["reached"]]
+    crossable = max(dry) if dry else None
+    if crossable is None:
+        said = f"いちばん浅い {depths[0]:g} mm でも浸かる ({water.part_names_ja(rows[0]['reached'])})"
+    elif len(dry) == len(rows):
+        said = f"回したいちばん深い {crossable:g} mm まで浸からない (それより深くは回していない)"
+    else:
+        said = f"{CROSSABLE}: {crossable:g} mm ({rows[-1]['depth_mm']:g} mm では {water.part_names_ja(rows[-1]['reached'])} が浸かる)"
+    rec = {"statement": water.STATEMENT, "kind": "cfd_water_depth_record", "version": 1, "tool": water_record.TOOL, "design_version": version, "physically_validated": False,
+           "crossable_depth_mm": crossable, "speed_kmh": float(args.get("speed_kmh") or WATER_DEFAULTS["speed_kmh"]), "label": CROSSABLE, "definition": CROSSABLE_DEFINITION, "said": said, "depths_mm": depths, "table": rows,
+           "assumptions": [NOT_COMPARED, f"{float(args.get('speed_kmh') or WATER_DEFAULTS['speed_kmh']):g} km/h、格子 {float(args.get('dx_mm') or WATER_DEFAULTS['dx_mm']):g} mm", "要件に水深が無いので、OK / NG は出さない"]}
+    folder = run / CFD_DIR / f"v{version}" / f"water_depths_{len(list((run / CFD_DIR / f'v{version}').glob('water_depths_*'))) + 1}"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "water_depth_record.json"
+    path.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {**{k: rec[k] for k in ("statement", "crossable_depth_mm", "speed_kmh", "label", "definition", "said", "table", "physically_validated", "assumptions")}, "path": path.relative_to(run).as_posix()}
 
 
 # ---------------------------------------------------------------- the way to a verdict (tests F4 and F5)

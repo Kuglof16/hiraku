@@ -30,8 +30,13 @@ from hiraku.cfd.geometry import Cylinder, Polytope, Shape
 from hiraku.cfd.solver import check_memory
 from hiraku.cfd.vehicle import design_shapes
 
-STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"
+STATEMENT = "この判定は電池、モーター、制御器が水に浸かるかだけを見る (しぶきは数えない)。実験と比べていない計算による"
 PROTECTED_PARTS = ("battery", "motor", "controller")  # the parts test F5 asks water not to reach (a powertrain part named so, or <name>_...)
+PROTECTED_JA = {"battery": "電池", "motor": "モーター", "controller": "制御器"}
+
+
+def part_names_ja(names: Sequence[str]) -> str:
+    return "、".join(PROTECTED_JA.get(n.split("_")[0], n) for n in names)
 
 RHO_WATER = 1000.0  # kg/m^3, rounded value for water; 確かめていない
 GRAVITY = 9.80665  # m/s^2, standard gravity; 確かめていない
@@ -834,16 +839,27 @@ def protected_shapes(solid: Sequence[Shape]) -> dict[str, Shape]:
     return {s.name: s for s in solid if s.group == "powertrain" and s.name.split("_")[0] in PROTECTED_PARTS}
 
 
-def part_gaps(protected: dict[str, Shape], local: np.ndarray, dx: float) -> dict[str, float]:
-    """For one frame, in vehicle axes: each part's lower face minus the highest water beside or under it (m), None with no water
-    there. Beside means within 2 dx of the part's plan, since water cannot stand inside the part; water more than dx above the
-    part's top is flying past and does not count."""
-    out: dict[str, float] = {}
+def part_gaps(protected: dict[str, Shape], local: np.ndarray, dx: float, above_road: np.ndarray | None = None) -> dict[str, tuple[float, float | None]]:
+    """For one frame, in vehicle axes, each part's (splash gap, standing gap) in m: its lower face minus the highest water beside or
+    under it. Beside means within 2 dx of the part's plan, since water cannot stand inside the part; water more than dx above the
+    part's top is flying past and does not count. The splash gap takes any particle; the standing gap only water joined to the
+    road: from the lowest particle there, up while no step between particles is larger than dx (None with no water on the road
+    there; needs above_road, each particle's height over the road)."""
+    out: dict[str, tuple[float, float | None]] = {}
     for name, s in protected.items():
         lo, hi = s.bounds()
         here = (np.abs(local[:, 0] - 0.5 * (lo[0] + hi[0])) <= 0.5 * (hi[0] - lo[0]) + 2.0 * dx) & (np.abs(local[:, 1] - 0.5 * (lo[1] + hi[1])) <= 0.5 * (hi[1] - lo[1]) + 2.0 * dx) & (local[:, 2] <= hi[2] + dx)
-        if here.any():
-            out[name] = float(lo[2] - local[here, 2].max())
+        if not here.any():
+            continue
+        standing = None
+        if above_road is not None:
+            order = np.argsort(above_road[here])
+            h, z = above_road[here][order], local[here, 2][order]
+            if h[0] <= dx:
+                steps = np.flatnonzero(np.diff(h) > dx)
+                top = steps[0] if len(steps) else len(h) - 1
+                standing = float(lo[2] - z[: top + 1].max())
+        out[name] = (float(lo[2] - local[here, 2].max()), standing)
     return out
 
 
@@ -871,15 +887,21 @@ def analyse_case(out: str | Path, design: dict[str, Any], keep_particles: bool =
     cube_rest = (cube / (0.5 * dx)) ** 3
     n_cube = np.ceil((bounds_hi - bounds_lo) / cube).astype(np.int64) + 1
     protected = protected_shapes(solid)
-    gaps: dict[str, dict[str, Any]] = {name: {"lower_face_mm": float(s.bounds()[0][2]) * 1000.0, "clearance_mm": float(s.bounds()[0][2]) * 1000.0, "reached_s": None} for name, s in protected.items()}
+    gaps: dict[str, dict[str, Any]] = {name: {"lower_face_mm": float(s.bounds()[0][2]) * 1000.0, "clearance_mm": float(s.bounds()[0][2]) * 1000.0, "reached_s": None,
+                                              "splash_clearance_mm": float(s.bounds()[0][2]) * 1000.0, "splash_reached_s": None} for name, s in protected.items()}
     for frame, rec in enumerate(case["records"]):
         with np.load(folder / "frames" / f"p{frame:04d}.npz") as d:
             world = d["xyz"].astype(np.float64) * d["scale"] + d["lo"]
         local = to_vehicle(world, tuple(rec["pose"]))
-        for name, gap in part_gaps(protected, local, dx).items():
-            gaps[name]["clearance_mm"] = min(gaps[name]["clearance_mm"], gap * 1000.0)
-            if gaps[name]["reached_s"] is None and gap <= 0.5 * dx:
-                gaps[name]["reached_s"] = rec["t"]
+        for name, (splash, standing) in part_gaps(protected, local, dx, world[:, 2] - road.height(world[:, 0])).items():
+            g = gaps[name]
+            g["splash_clearance_mm"] = min(g["splash_clearance_mm"], splash * 1000.0)
+            if g["splash_reached_s"] is None and splash <= 0.5 * dx:
+                g["splash_reached_s"] = rec["t"]
+            if standing is not None:
+                g["clearance_mm"] = min(g["clearance_mm"], standing * 1000.0)
+                if g["reached_s"] is None and standing <= 0.5 * dx:
+                    g["reached_s"] = rec["t"]
         near = np.all((local >= lo) & (local <= hi), axis=1)
         here = local[near]
         rec.update(underfloor_measure(uf, here, vol0, 0.5 * dx))
@@ -903,7 +925,9 @@ def analyse_case(out: str | Path, design: dict[str, Any], keep_particles: bool =
                           "max_depth_mean_mm": max(r["depth_mean_mm"] for r in records), "max_depth_mm": max(r["depth_max_mm"] for r in records), "max_reached_share": max(r["reached_share"] for r in records)}
     case["wet_parts_first_seen_s"] = wet_first
     case["protected_parts"] = gaps
-    case["protected_definition"] = f"下面と水面のすき間 = 部品の下面の高さ - 部品の横 {2.0 * dx * 1000:.0f} mm までと真下にある水のいちばん高い粒子の高さ (部品の上面より {dx * 1000:.0f} mm 上までの粒子)。通過の全部のコマで最も小さい値。{0.5 * dx * 1000:.0f} mm 以下で届いたとする"
+    case["protected_definition"] = (f"下面と水のすき間 = 部品の下面の高さ - 部品の横 {2.0 * dx * 1000:.0f} mm までと真下にある、路面からつながった水のいちばん高い粒子の高さ。"
+                                    f"粒子の間が {dx * 1000:.0f} mm より空いた所から上は、つながっていない飛ぶ水 (しぶき) として数えない (要件 Q20 の IP54 はしぶきに耐える: IEC 60529 の本文は読んでいない)。"
+                                    f"通過の全部のコマで最も小さい値。{0.5 * dx * 1000:.0f} mm 以下で水が届いた (浸かった) とする。splash_ はしぶきも数えた値")
     case["momentum_budget"] = momentum_budget(case)
     # Says whether the box was tall enough. The walls' row along z also holds what water leaving the box carried, so this is
     # an upper limit of the lid's share only when the frames show nothing near the lid.

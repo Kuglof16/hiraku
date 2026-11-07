@@ -6057,6 +6057,17 @@
           "type": "boolean",
           "description": "true: go to a verdict on test F5 (water reaches none of the battery, the motor and the controller): the load case, the hand calculation, the analysis and the comparison. Missing: false."
         },
+        "depths_mm": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 50.0,
+            "maximum": 350.0
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "Find the crossable depth: a pass at each depth, shallow first, until water reaches one of the battery, the motor and the controller. The record gives the deepest depth with none reached. No verdict."
+        },
         "replay": {
           "anyOf": [
             {

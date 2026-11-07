@@ -149,6 +149,7 @@ MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp
 どちらも `judge: true` で判定まで進む。ツールの中で、試験の荷重条件を `write_load_case` で書き (版にまだ無いとき)、`record_prediction`、`analyze`、`compare` を順に通す (HK1〜HK6 はそのまま効く。解析の `base` は K6、`stage` は 2)。実行は F4 と F5 を持って始まらない (`applies_if: not always`。GPU の無い機械で実行を止めないため)。
 
 - F4: `critical_wind_speed >= Q18`。止まった車に真横の風を左右から当てた流れの力で、風上の輪が浮く風速を出す (流れの揚力も入れる)。手計算は F1 と同じ `crosswind.critical_wind_speed`
+- 渡れる水深 (計算): `cfd_water` に `depths_mm` を付けると、浅い方から 1 本ずつ回し、電池、モーター、制御器のどれかに水が届いた水深で止める。届かなかったいちばん深い水深を `water_depth_record.json` の `crossable_depth_mm` に書き、水の画面にも出す。要件に水深が無いので OK / NG は出さない
 - F5: `water_reached_parts <= 0`。電池、モーター、制御器のうち水が届いた数。部品の下面と水のすき間 (部品の横 2 格子までと真下の、いちばん高い粒子まで) が半格子以下になったら届いたとする (部品ごとのすき間と時刻も `results` に出す)。手計算は `flooded.parts_reached` (下面が 静かな水面 + 速度水頭 より低い部品の数。上限の見積もり)。水深 200 mm と 18 km/h は HIRAKU の仮定で、要件から来ていない
 
 ## Claude が書く設計 (2026-11-06)
