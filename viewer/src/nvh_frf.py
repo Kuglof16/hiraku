@@ -110,10 +110,52 @@ def chosen_keys(raws: list[dict], per_pattern: int) -> set[str]:
     return out
 
 
-def set_object(folder: Path, label: str, keep: set[str] | None = None) -> dict:
+def part_setup(design: dict, npz) -> tuple[list[dict], dict, dict, dict]:
+    """The set's part boxes, their ledger (as the modal tool carries them: mass on the carried_by nodes), the
+    display mesh as nvh_shell reads a mesh, and the design nodes' joint mesh nodes on it (nvh_shell.joint_nodes)."""
+    from viewer.src import nvh_shell
+
+    parts = common.parts_of(design)
+    ledger = common.parts_ledger("modal", design, {"params": {"loading": PART_LOADING}}, {}, parts)
+    mesh = {"nodes_mm": npz["nodes"].tolist(), "elements": npz["elements"].tolist(),
+            "element_member": [str(m) for m in npz["member"]], "element_size_mm": DISPLAY_ELEMENT_MM}
+    return parts, ledger, mesh, nvh_shell.joint_nodes(design, mesh)
+
+
+# the loading the FRF runs put on board (studies/lere/frf.py: the N1 load case, Q30's two_cargo)
+PART_LOADING = "two_cargo"
+DISPLAY_ELEMENT_MM = 30.0  # frf.json display_mesh element_size_mm
+PART_NOTE = ("部品は、載っている節 (carried_by) の動きと一緒に動く: 解いた網の表示の節のうち、その設計の節のまわりの節の"
+             "平均 (実部と虚部を別に。viewer/src/nvh_shell.py の joint_nodes と同じ選び方) に、部品ごとの剛体の動きを"
+             "合わせる。ばね下の部品 (車輪・ナックル・腕など) は表示の網に無いので止めて描く")
+
+
+def part_shape(design: dict, parts: list[dict], ledger: dict, mesh: dict, joints: dict, d: np.ndarray) -> dict:
+    """One stored response's part motions: the rigid fit (nvh.part_motion) of the real and of the imaginary part of
+    the displacement, packed; the unsprung parts stay (their wheels and arms are not in the display mesh)."""
+    from viewer.src import nvh as beam
+    from viewer.src import nvh_shell
+
+    out = {}
+    for tag, u in (("re", d.real), ("im", d.imag)):
+        per = nvh_shell.node_motion(design, mesh, joints, u.tolist())
+        per = {k: v for k, v in per.items() if not k.startswith("wc:")}
+        pm = beam.part_motion(parts, ledger, design, per)
+        for j, e in enumerate(ledger["parts"]):
+            if e.get("cat") == "unsprung":
+                pm["t"][j], pm["w"][j] = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+        out[f"t_{tag}"] = common.pack_f32([c for v in pm["t"] for c in v], [len(pm["t"]), 3])
+        out[f"w_{tag}"] = common.pack_f32([c for v in pm["w"] for c in v], [len(pm["w"]), 3])
+        if tag == "re":
+            out["c"] = common.pack_f32([c for v in pm["c"] for c in v], [len(pm["c"]), 3])
+    return out
+
+
+def set_object(folder: Path, label: str, keep: set[str] | None = None, design: dict | None = None) -> dict:
     r = common.read_json(folder / "frf.json")
     npz = np.load(folder / "frf_shapes.npz")
     keys = [str(k) for k in npz["keys"]]
+    setup = part_setup(design, npz) if design is not None else None
     x = r["frequencies_Hz"]
     curves = {p: {o: {"acc": common.pack_f32(c["acc_mps2"]), "disp": common.pack_f32(c["disp_mm"])}
                   for o, c in r["curves"][p].items()} for p in r["curves"]}
@@ -129,8 +171,11 @@ def set_object(folder: Path, label: str, keep: set[str] | None = None) -> dict:
         im_, u_im = pack_scaled(d.imag, d.shape)
         vm, vm_max = pack_scaled(npz["vm"][i], npz["vm"][i].shape)
         shapes[k] = {"re": re_, "im": im_, "vm": vm, "u_max": float(np.max(np.abs(d))), "vm_max": vm_max}
+        if setup is not None:
+            shapes[k]["parts"] = part_shape(design, setup[0], setup[1], setup[2], setup[3], d)
     hop = r.get("hop_band_Hz") or []
     return {"name": r["name"], "label": label, "doc": r.get("doc", ""), "tyre_N_per_mm": r["tyre_N_per_mm"],
+            "parts": setup[0] if setup is not None else [],
             "shell": shell_of(npz), "x": common.pack_f32(x), "curves": curves, "peaks": peaks,
             "modes": [{"f_Hz": m["f_Hz"], "kind": kind_ja(m["kind"])} for m in r["modes"]],
             "rollbar_Hz": r.get("rollbar_mode_Hz"), "frame_Hz": r.get("first_frame_mode_Hz"),
@@ -144,7 +189,10 @@ def build(args) -> dict:
     names = args.sets
     labels = args.labels or [f"対策前 {names[0]}"] + [f"対策後 {n}" for n in names[1:]]
     keep = chosen_keys([common.read_json(base / n / "frf.json") for n in names], getattr(args, "per_pattern", 8) or 8)
-    sets = [set_object(base / n, lab, keep) for n, lab in zip(names, labels)]
+    designs = [common.read_json(Path(p)) for p in args.designs] if getattr(args, "designs", None) else [None] * len(names)
+    if len(designs) != len(names):
+        raise SystemExit("--designs: one design JSON per set, in the order of --sets")
+    sets = [set_object(base / n, lab, keep, dz) for n, lab, dz in zip(names, labels, designs)]
     r0 = sets[0].pop("_raw")
     raws = [r0] + [s.pop("_raw") for s in sets[1:]]
     # side by side across y: each set beside the one before with a gap
@@ -202,6 +250,8 @@ def build(args) -> dict:
         "表示の網は解いた網より粗い (各表示の節は、解いた網のいちばん近い節の動き。要素の色は、近い解いた要素の最大)。",
         "ばね下のホップの帯 (灰色) と、ロールバー・最初のフレームのモード (破線) をグラフに印した。",
     ]
+    if any(s["parts"] for s in sets):
+        obj["notes"].append(PART_NOTE)
     return obj
 
 
@@ -211,6 +261,8 @@ def main(argv=None):
     ap.add_argument("dir", type=Path, help="studies/lere/frf.py's output folder")
     ap.add_argument("--sets", nargs="+", default=["A", "REC"], help="sets in order (the first is before the fix)")
     ap.add_argument("--labels", nargs="+")
+    ap.add_argument("--designs", nargs="+", help="each set's design JSON (same order as --sets): the part boxes and "
+                    "their motion with the nodes they sit on; without it no parts are drawn")
     ap.add_argument("--per-pattern", type=int, default=8, help="stored shapes kept per input pattern (data size)")
     ap.add_argument("--out", type=Path, default=common.DEFAULT_OUT)
     args = ap.parse_args(argv)
