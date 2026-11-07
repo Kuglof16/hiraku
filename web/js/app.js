@@ -77,7 +77,7 @@ import { STATIC, getUrl } from "./source.js"; // a static export: its files in p
 import { domainIconSvg } from "./domain_icons.js";
 import { footerActivity, hookLineText, mountHookLine, withoutRuleIds } from "./hookline.js";
 import { mountBenchNote, noteKind } from "./benchnote.js"; // ③'s sentence card under the 3D
-import { filmWords, isFilmWords, markRecordWords, plainLineHtml, plainWords } from "./plain.js"; // plain words: the card's, the footer's and the log's
+import { filmWords, isFilmWords, markRecordWords, plainLineHtml, plainWords, shownText } from "./plain.js"; // plain words: the card's, the footer's and the log's
 import { roundSeq } from "./proposals.js";
 import { boardHtml } from "./test_board.js"; // ③'s tests at a glance
 import { askAll, heavyPending, heavyReady, heavyWaiting, onHeavy, prefetch, quietly, tracked } from "./heavy.js"; // a static export's heavy parts, read when drawn
@@ -1799,7 +1799,8 @@ function renderChain(s, chain) {
     // Long words are cut to a few lines here; the log keeps them whole.
     const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(judgedWords(cause.safe_side_reason ?? ""))}"><b>安全側で見られている:</b> ${esc(judgedWords(cause.safe_side_reason ?? ""))}</div>` : "";
     const cz = cause
-      ? `<div class="cause"><div class="clamp" title="${esc(judgedWords(cause.cause))}">原因: ${esc(judgedWords(cause.cause))}</div><div class="clamp c2" title="${esc(judgedWords(cause.fix))}">直し方: ${esc(judgedWords(cause.fix))}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
+      // (the cause and the fix in plain words, as the log's: record ids by their kind, parts by their names)
+      ? `<div class="cause"><div class="clamp" title="${esc(judgedWords(cause.cause))}">原因: ${plainLine(s, judgedWords(cause.cause))}</div><div class="clamp c2" title="${esc(judgedWords(cause.fix))}">直し方: ${plainLine(s, judgedWords(cause.fix))}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
       : ok
         ? ""
         : `<div class="cause">原因が書かれるまで、この分野は先に進めない (HK3)</div>`;
@@ -1835,7 +1836,7 @@ function nextStep(chain) {
   if (ana.status === "failed") return "解析が通らなかった: 条件を直して走らせ直す";
   if (!cmp) return "予測と解析を比べる";
   if (cmp.status !== "match" && !cause) return "不一致の原因を書く (書くまでこの分野は進めない)";
-  if (cmp.status !== "match" && cause && !cause.resolved && cause.fix) return `直し方: ${judgedWords(cause.fix)}`;
+  if (cmp.status !== "match" && cause && !cause.resolved && cause.fix) return `直し方: ${shownText(plainLine(player.state, judgedWords(cause.fix)))}`;
   if (!verdict) return loadCase.criterion ? "基準で OK / NG を決める" : "この試験には基準が無い (判定しない)";
   return verdict.pass ? "次の試験へ" : "設計を直して次の v へ";
 }
@@ -2317,10 +2318,13 @@ function fitOverlays() {
     const src = lg.querySelector(":scope > .src");
     if (src && !VIDEO_LAYOUT) {
       if (src.hidden) src.hidden = false;
+      lg.classList.remove("squeeze");
       const tight = lg.scrollHeight > lg.clientHeight + 1;
       src.hidden = tight;
       const tip = tight ? src.textContent : "";
       if (lg.title !== tip) lg.title = tip;
+      // still too tall without it: the list of fields is the next to give way (it scrolls, app.css .squeeze)
+      if (tight && lg.scrollHeight > lg.clientHeight + 1) lg.classList.add("squeeze");
     }
     const f = lg.querySelector(".fields");
     const on = f?.querySelector("button.on");
