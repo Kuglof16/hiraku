@@ -203,6 +203,14 @@ export const TESTS = {
     "domain": "aero",
     "title": "液体のこぼれ"
   },
+  "F4": {
+    "domain": "aero",
+    "title": "流れの計算で横風"
+  },
+  "F5": {
+    "domain": "aero",
+    "title": "冠水路で電池・モーター・制御器に水が届かない"
+  },
   "P1": {
     "domain": "powertrain",
     "title": "段差を越える"
