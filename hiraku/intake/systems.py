@@ -142,9 +142,42 @@ def _by_distance(net: Net, starts: list[str], carries: str) -> list[str]:
     return [n for n, _ in sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
+def _path_without(net: Net, sources: list[str], end: str, carries: str) -> list[tuple[str, str, str | None]]:
+    """The links of the shortest path from the sources to `end` over links that carry `carries` or nothing, the ones that say nothing:
+    the parts are joined, only `carries` is not written on them. [] when there is no such path or it all says it."""
+    prev: dict[str, tuple[str, str | None]] = {}
+    seen = set(sources)
+    queue = deque(sources)
+    while queue and end not in seen:
+        n = queue.popleft()
+        for m, c in net.adj.get(n, ()):
+            if m not in seen and (c is None or c == carries):  # only links that say nothing or say this chain's name: others are other chains or bolts
+                seen.add(m)
+                prev[m] = (n, c)
+                queue.append(m)
+    if end not in prev:
+        return []
+    out, node = [], end
+    while node in prev:
+        a, c = prev[node]
+        if c != carries:
+            out.append((a, node, c))
+        node = a
+    return list(reversed(out))
+
+
+def _carries_hint(edges: list[tuple[str, str, str | None]], carries: str) -> str:
+    shown = "、".join(f"{a} と {b} ({'carries なし' if not c else 'carries: ' + c})" for a, b, c in edges[:4])
+    more = f" ほか {len(edges) - 4} か所" if len(edges) > 4 else ""
+    return f"。つながってはいますが、carries: {carries} が書かれていないのは {shown}{more} です。ここを carries: {carries} に直してください"
+
+
 def _gap_hint(net: Net, sources: list[str], end: str, reached: set[str], other: set[str], carries: str) -> str:
     """Where the chain is cut, as the code finds it: a link between the two sides that carries something else (or nothing),
     else the last part each side reaches, and the link to write between them."""
+    edges = _path_without(net, sources, end, carries)  # joined all the way, but some links do not say `carries`
+    if edges:
+        return _carries_hint(edges, carries)
     wrong = [(a, b, c) for a in sorted(reached) for b, c in net.adj.get(a, ()) if b in other and c != carries][:3]
     if wrong:
         return "。切れ目: " + "、".join(
@@ -365,8 +398,16 @@ def disconnect(net: Net) -> Result:
     inside = net.reach(batteries, "power")
     if any(p in inside for p in protectors):
         return batteries, [], []
+    def where(b: str) -> str:  # a protector joined to the battery, but over links that do not say power
+        for p in protectors:
+            edges = _path_without(net, [b], p, "power")
+            if edges:
+                return _carries_hint(edges, "power")
+        return ""
+
     return batteries, [_hit(b, f"遮断の部品 ({_ends(protectors)}) が電池 {b} の power の鎖に入っていません。"
-                               "電池とモーターの間の connects_to に carries: power で入れてください", on_chain=0) for b in batteries], []
+                               "電池とモーターの間の connects_to に carries: power で入れてください" + where(b), on_chain=0)
+                       for b in batteries], []
 
 
 CHECKS: dict[str, Callable[[Net], Result]] = {
