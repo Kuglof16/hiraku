@@ -167,6 +167,11 @@ class Clear3DBrowserTest(unittest.TestCase):
                     want = {"hook.denied": "hooknote", "hook.blocked_stop": "hooknote", "cause.recorded": "causenote", "design.change_proposed": "roundcard"}.get(e["kind"])
                     if e["kind"] == "design.created" and e["data"].get("module_changes"):
                         want = "roundcard"
+                    # a cause written again as resolved by a later comparison (data.resolved, the same
+                    # cause_id: 164004 seq 387, 388, 421) is no new cause: the screen opens no note for it
+                    # (present.js openCause reads the cause at its first record; its load case is OK by then)
+                    if e["kind"] == "cause.recorded" and (e.get("data") or {}).get("resolved"):
+                        want = None
                     if want and got["kind"] != want:
                         bad.append(f"{at}: the strip shows {got['kind']}, not {want}")
         finally:

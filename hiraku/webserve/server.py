@@ -452,10 +452,6 @@ class _NullWriter:
     def flush(self) -> None:
         self._raw.flush()
 
-    @property
-    def closed(self) -> bool:  # socketserver's finish() asks before flushing
-        return self._raw.closed
-
 
 def modules_info() -> dict:
     """GET /api/modules: the contract's module ids, their names and the module designers' agent ids."""
@@ -657,8 +653,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self) -> None:  # noqa: N802 (stdlib name)
         # Answer like GET without a body (used by tools that probe the server).
-        self.wfile = _NullWriter(self.wfile)
-        self.do_GET()
+        # The real writer is put back afterwards: socketserver's finish() flushes and closes it.
+        raw = self.wfile
+        self.wfile = _NullWriter(raw)
+        try:
+            self.do_GET()
+        finally:
+            self.wfile = raw
 
     def _send_events(self, run_id: str, query: dict[str, list[str]]) -> None:
         path = events_path(self.runs_dir, run_id, self.saved_dir)

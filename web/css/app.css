@@ -1240,6 +1240,7 @@ body.video .mode .stop-btn { display: none; }
 .now[hidden] { display: none; }
 /* a verdict just recorded on the tool's value after the load path was checked (why_line.js): why, on its own line */
 .now .now-why { display: block; font-weight: 400; font-size: 0.85em; }
+.now.one-line .now-why { display: inline; }   /* beside the legend: the same one line, cut (the whole in the tooltip) */
 /* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
 .now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
 /* ③'s sentence card under the 3D (js/benchnote.js): one card at a time (the いま line, the round's
@@ -1539,3 +1540,5 @@ body.video .vstory { display: none; } /* (the film's ④ as before) */
 .hero-note { flex: none; max-width: 300px; font-size: 14px; color: var(--muted); line-height: 1.4; }
 /* the legend still too tall once its source line is out (app.js fitOverlays): its list of fields scrolls in a short box */
 .legend.squeeze > .fields { max-height: 52px; min-height: 0; }
+/* (squeezed: each button one line, cut, the whole name in its tooltip, so the chosen one fits the list's height) */
+.legend.squeeze > .fields .variants button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
