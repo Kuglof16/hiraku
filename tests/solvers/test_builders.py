@@ -474,6 +474,23 @@ class OperatingTimeLoopTest(unittest.TestCase):
                 self.assertIn("Q54 10 h", p["distance_from"])
         self.assertIn("10 h", BUILDERS["P4"](CATALOG.test("P4"), self.req, DESIGN)["criterion"]["basis"])
 
+    def test_a_slow_product_with_a_range_drives_its_own_loop(self):
+        # the intake department's a67c0852 writes the robot's Q54 as 43.2 km: the catalog's 20 km/h slow part is still
+        # faster than its Q50, so its own Q13 and Q50 give the loop
+        req = copy.deepcopy(self.req)
+        for r in req["requirements"]:
+            if r["key"] == "Q54":
+                r.update(value=43.2, unit="km")
+        for tid in ("P4", "T1", "T2"):
+            lcs = BUILDERS[tid](CATALOG.test(tid), req, DESIGN)
+            for lc in (lcs if isinstance(lcs, list) else [lcs]):
+                p = lc["params"]
+                self.assertAlmostEqual(p["distance"]["value"], 43.2, places=9)
+                self.assertAlmostEqual(p["grade_high"]["value"], 8.33, places=9)
+                self.assertAlmostEqual(p["speed_low"]["value"], 1.2 * 3.6 / 2, places=9)
+                self.assertIn("loop_from", p)
+                self.assertIn("Q13", lc["requirement_keys"])
+
     def test_a_range_keeps_the_forest_loop(self):
         lc = BUILDERS["P4"](CATALOG.test("P4"), REQ, DESIGN)
         self.assertNotIn("distance_from", lc["params"])
