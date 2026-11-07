@@ -74,6 +74,7 @@ HV.QUANTITY_JA = {
  "cycles_at_FAT": "FAT の応力範囲での繰り返し数",
  "cycles_at_half_the_knee_range": "折れ点の半分の応力範囲での繰り返し数",
  "cycles_counted": "数えた繰り返し",
+ "cycles_to_failure": "壊れるまでの繰り返しの回数",
  "damage": "疲労の損傷度",
  "damage_frame": "フレームの溶接の損傷度",
  "damage_lug_back": "後ろの耳 (ラグ) の溶接の損傷度",
