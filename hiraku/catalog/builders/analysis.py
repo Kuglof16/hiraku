@@ -357,7 +357,7 @@ N1_PLAN = {
          "assumptions": ["車輪は滑らずに回る"],
          "inputs": {"v": "lc.speed", "r": "from.driven_wheel_radius", "i": "design.var.gear_ratio"}, "inputs_from": n1_calc},
     ],
-    "expected_mismatch": {
+    "expected_mismatch": [{
         "quantity": "first_frame_involving_mode",
         "source": N1_SOURCE,
         "cause": ("梁の模型にはサスペンションの腕とタイヤが無く、車輪の中心のばねで支える。シェルの模型では、フレームが加わる"
@@ -370,7 +370,23 @@ N1_PLAN = {
         "tool_decides_reason": ("フレームが加わるいちばん低いモードは、腕とタイヤの上のシェルの模型でしか分けられず、手計算の"
                                 "見積もりは無い (梁の模型の値は v1 で 8.95 Hz に対してシェル 6.52 Hz)。値には届かないので、"
                                 "手計算で道がつながることを確かめて、ツールの値で決める"),
-    },
+    }, {
+        # the ladder's twist by hand below the shell's frame mode (the analysis department, 2026-11-07, from the records)
+        "quantity": "first_frame_mode",
+        "when": "low",
+        "source": ("the scripted runs 20261107-030237 / 030242 / 030247-offroad-4w-scripted (EC2 trial of "
+                   "claude/design-v5-o2-braced 4569b0f4), version 4: modal.ladder_twist_mode 9.141 Hz against modal_shell "
+                   "(linkage) 10.547 Hz (mode 9, frame coupled with the wheels, above four wheel-hop modes at 8.985 to "
+                   "10.049 Hz), +15.4 % (cmp-0101, ana-0067); the same record's beam model 8.371 Hz"),
+        "cause": ("手計算は、はしご形のねじれをレイリー法で見る (レールと横の部材だけ、ねじれの角は前後に直線)。同じ記録の梁の"
+                  "模型 (8.37 Hz) より 9 % 高く、仮定どおり高めに出ている。シェルの模型 (腕とタイヤつき) では、フレームの"
+                  "いちばん低いモードは車輪の跳ねのモード 4 つ (9.0〜10.0 Hz) の上の、車輪と一緒に動くモード (10.55 Hz) で、"
+                  "梁の模型より 26 % 高い (v1 でも 21 % 高い)。シェルが梁より高く出るわけは、分けて確かめていない"),
+        "fix": ("設計の変更は要らない。N1 の合否は first_frame_involving_mode で出す (first_frame_mode は判定しない)。"
+                "手計算は、はしご形のねじれの見込みとして残す"),
+        "end": True,
+        "end_say": "原因を記録しました。first_frame_mode は判定に使わないので、この比べはここで終えます",
+    }],
 }
 
 # ---------------------------------------------------------------- R3 fatigue

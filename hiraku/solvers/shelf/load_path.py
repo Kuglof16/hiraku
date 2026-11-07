@@ -106,7 +106,10 @@ NET_KINDS = ("side_net",)
 PIN_ENDED_KINDS = ("pushrod",)
 NET_CELL_MM = 50.0
 NET_PRESTRESS_MPA = 20.0  # the wires' stress as fitted (assumption, no source; run param net_prestress)
-NET_NEWTON_TOL = 1e-6  # mm per mm of the largest movement
+# mm per mm of the largest movement. 1e-6 until 2026-11-07: on the scripted v5 (side_bar_reach 222, the nets on clips)
+# R8-free's steps stalled at 1e-5 to 1e-4 mm (cables close to slack flipping taut / slack) and never settled; with
+# 1e-4 it settles in 10 s, and on v4 of the same run R8-free gives the same results to 9 digits at 1e-6 and 1e-4
+NET_NEWTON_TOL = 1e-4
 NET_NEWTON_ITER = 100
 NET_STEP_MM = 20.0  # a Newton step moves no node more than this (the pretension alone gives far too large a first step)
 SLACK_FLOOR = 1e-6

@@ -290,8 +290,17 @@ offroad-4w:
           後ろの車軸の継ぎ手のレールの応力を予測し直す
         retry:
           say: &r1_retry_say 後ろの車軸の継ぎ手で、張り出しと押す力による縦の曲げに、車輪のずれから来る横の曲げとねじりを足して予測し直します
-          predictions: &r1_joint
-            - quantity: max_stress
+          predictions:
+            # the load path by hand first, so tool_decides below can let frame_static decide on version 5 (R1 runs at
+            # stage 1, before the R7 / R8 steps' load_path.free_parts on some plans: judge.path_check)
+            - quantity: unsupported_load
+              formula_id: load_path.free_parts
+              output: n
+              assumptions: [力のかかる部品 (荷重条件が名指す操作部、無ければ質量のある部品の全部) から、触れている所を部材までたどって、届かない部品を数える (carried_by は見ない)]
+              inputs: {n_parts: from.n_parts, n_held: from.n_held}
+              inputs_from: load_path.path_inputs
+            - &r1_joint
+              quantity: max_stress
               formula_id: frame_static.rail_joint_stress_closed
               output: sigma
               assumptions:
@@ -321,6 +330,26 @@ offroad-4w:
                 t_e: load.rail_joint.t_e
           # matches frame_static within R1's 15 % (the analysis department, 0dac13b: video step100 47.5 vs 52.7,
           # step250-beyond 138.8 vs 126.2, N15 versions 2 and 3 78.9 vs 73.0 and 79.2 vs 72.7)
+          # On version 5 the largest stress moves off the rail to cross_B (the analysis department, 2026-11-07)
+          expected_mismatch:
+            quantity: max_stress
+            when: low
+            source: >-
+              the survey runs 20261107-034514 / 034519 / 034524-offroad-4w-scripted (EC2 trial of
+              claude/design-v5-survey 0008049), version 5: frame_static's max_stress 50.19 / 51.94 / 50.70 MPa at
+              cross_B (cmp-0237, 0261, 0125) against rail_joint_stress_closed 39.45 / 39.88 / 42.16 MPa; the rail's
+              largest, rail_L_HB, 39.38 / 39.88 / 40.32 MPa
+            cause: >-
+              手計算は、後ろの車軸の継ぎ手のレールの応力を見る。v5 では、いちばん大きい応力はレールではなく、後ろの車軸の
+              横の部材 cross_B (塔の斜めの支えの足が立つ所) にある。レールのいちばん大きい所 (rail_L_HB) とは、手計算は
+              0〜5 % で合っている
+            fix: >-
+              設計の変更は要らない (cross_B は 50〜52 MPa で、安全率 4.7 以上)。手計算はレールの継ぎ手の値として残し、
+              合否はツールの値で出す
+            tool_decides: true
+            tool_decides_reason: >-
+              手計算はレールの継ぎ手だけを持ち、塔の支えの足が横の部材を曲げる分を持たないので、いちばん大きい応力に
+              届かない。力の道は、この手順の手計算 (load_path.free_parts) と、frame_static の支えのない荷重で確かめる
     # R1s (files that list it): the same step on the frame as shells (frame_shell), judged on the
     # hot-spot stress where a cross member's end bends the rail's side wall. Before the driven P1,
     # for the same reason as R1. Inputs from the analysis builders' joint_wall_calc.
@@ -419,7 +448,7 @@ offroad-4w:
         fix: *r1_fix1
         retry:
           say: *r1_retry_say
-          predictions: *r1_joint
+          predictions: [*r1_joint]  # the joint alone at 250 mm (it matched frame_static on version 5: 116.4 MPa)
           # matches frame_static within R1's 15 % (the analysis department, 0dac13b: video step100 47.5 vs 52.7,
           # step250-beyond 138.8 vs 126.2, N15 versions 2 and 3 78.9 vs 73.0 and 79.2 vs 72.7)
     - <<: *p1_dynamic

@@ -9,6 +9,7 @@ from hiraku import contract, solvers
 from hiraku.catalog import load_catalog, load_requirements
 from hiraku.catalog.builders import BUILDERS, PLANS, BuildError
 from hiraku.solvers.k2_vehicle.shelf.crash_beam import EDGE_NOTE
+from hiraku.tools.plan import expected_entries
 from hiraku.tools.summary import design_summary
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -174,8 +175,8 @@ class BuildersTest(unittest.TestCase):
                 continue
             got = {r["quantity"]: r for r in self.runs[key]["results"]}
             preds = {}
-            expected = plan.get("expected_mismatch", {}).get("quantity")
-            when = plan.get("expected_mismatch", {}).get("when")  # high / low: the miss is expected that way only
+            # quantity -> when (high / low: the miss is expected that way only) of each expected_mismatch entry
+            exp_when = {e["quantity"]: e.get("when") for e in expected_entries(plan)}
             for p in plan["predictions"]:
                 extra = p["inputs_from"](DESIGN, lc) if "inputs_from" in p else {}
                 refs = [ref for ref in p["inputs"].values() if isinstance(ref, str)]
@@ -203,6 +204,8 @@ class BuildersTest(unittest.TestCase):
                                     or "Unbroken at" in edge, edge)
                     continue
                 side = "high" if out["value"] > ana["value"] else "low"  # as scripted.expected_for
+                expected = p["quantity"] if p["quantity"] in exp_when else None
+                when = exp_when.get(p["quantity"])
                 if p["quantity"] == expected and when and (side != when or abs(rel) <= lc["tolerance_rel"]):
                     # the plan expects the miss one way only (when): on this design it is not that way, so it matches
                     self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
@@ -370,10 +373,14 @@ class N1HopTest(unittest.TestCase):
         declared = {p.name: p for p in TOOLS["modal_shell"].run_params}
         for name, value in plan["params"].items():
             declared[name].check(value, "run parameter")
-        em = plan["expected_mismatch"]
+        em, twist = plan["expected_mismatch"]
         self.assertEqual(em["quantity"], self.lc["criterion"]["quantity"])
         self.assertTrue(em["tool_decides"] and em["tool_decides_reason"] and em["cause"] and em["fix"] and em["source"])
         self.assertNotIn("safe_side", em)
+        # the ladder's twist by hand below the shell's frame mode: not judged, the comparison ends there
+        self.assertEqual((twist["quantity"], twist["when"], twist["end"]), ("first_frame_mode", "low", True))
+        self.assertTrue(twist["cause"] and twist["fix"] and twist["source"])
+        self.assertNotIn("tool_decides", twist)
         # the path check first, so tool_decides can let the shell decide (functions.path_check)
         self.assertEqual((plan["predictions"][0]["formula_id"], plan["predictions"][0]["quantity"]),
                          ("load_path.free_parts", "unsupported_load"))
