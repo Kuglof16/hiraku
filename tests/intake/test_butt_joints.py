@@ -73,7 +73,7 @@ class ButtJointRulesTest(unittest.TestCase):
     def test_the_basis_says_it_is_the_authors_experience_and_names_no_one(self):
         for rid in ("WD-04", "WD-05"):
             basis = self.rule(rid)["basis"]
-            self.assertIn("practical experience", basis)  # the basis the author asked for
+            self.assertIn("practical experience", basis)  # the basis is practice, not a document: these two rules have no source to read
             self.assertEqual(self.rule(rid)["trust"], 3)
 
 
