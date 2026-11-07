@@ -155,7 +155,9 @@ class TopbarBrowserTest(unittest.TestCase):
         for word in ("HK1", "HK4", "✓", "×"):
             self.assertNotIn(word, folded["words"])
         self.assertTrue(opened["shown"])
-        self.assertIn("HK1", opened["words"])  # opened, the whole list as before
+        # opened, the whole list in words (the rules' ids under ?dev=1: test_judge_words_browser)
+        self.assertIn("守るための決まり (6 つ)", opened["words"])
+        self.assertNotIn("HK1", opened["words"])
         self.assertIn("予測が先", opened["words"])
         self.assertIn("判定を出しました", after_verdict["act"])
         self.assertNotIn("→ OK", after_verdict["act"])
