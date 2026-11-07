@@ -393,6 +393,18 @@ def _aim(ob: Any, target: Any) -> None:
     ob.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
 
 
+def use_optix() -> bool:
+    """Cycles on the NVIDIA GPU, when Blender finds one; otherwise the picture stays on the CPU."""
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    prefs.compute_device_type = "OPTIX"
+    prefs.get_devices()
+    found = False
+    for device in prefs.devices:
+        device.use = device.type == "OPTIX"
+        found = found or device.use
+    return found
+
+
 def blender_main(argv: list[str]) -> None:
     scene_file, png = argv[0], argv[1]
     d = np.load(scene_file)
@@ -400,7 +412,7 @@ def blender_main(argv: list[str]) -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    scene.cycles.device = "GPU" if opt.get("gpu") and use_optix() else "CPU"
     scene.cycles.samples = int(opt["samples"])
     scene.cycles.use_denoising = True
     scene.cycles.max_bounces = 4
@@ -447,12 +459,15 @@ def blender_main(argv: list[str]) -> None:
     cam.clip_end = 200.0
     cam_ob = bpy.data.objects.new("camera", cam)
     scene.collection.objects.link(cam_ob)
-    cam_ob.location = opt["camera"]
-    _aim(cam_ob, target)
     scene.camera = cam_ob
-    bpy.context.view_layer.update()
-    Path(png).with_suffix(".camera.json").write_text(json.dumps({"matrix_world": [list(r) for r in cam_ob.matrix_world], "lens": cam.lens, "sensor_width": cam.sensor_width, "resolution": opt["resolution"]}), encoding="utf-8")
-    bpy.ops.render.render(write_still=True)
+    # one picture, or several from other camera places in this one Blender (the scene loads once): opt["views"] [[x, y, z, png], ...]
+    for *place, picture in opt.get("views") or [[*opt["camera"], png]]:
+        cam_ob.location = place
+        _aim(cam_ob, target)
+        bpy.context.view_layer.update()
+        scene.render.filepath = picture
+        Path(picture).with_suffix(".camera.json").write_text(json.dumps({"matrix_world": [list(r) for r in cam_ob.matrix_world], "lens": cam.lens, "sensor_width": cam.sensor_width, "resolution": opt["resolution"]}), encoding="utf-8")
+        bpy.ops.render.render(write_still=True)
 
 
 # ---------------------------------------------------------------- the driver
@@ -499,13 +514,14 @@ def wait_for_ram(min_gb: float, poll_s: float = 30.0) -> None:
         time.sleep(poll_s)
 
 
-def run_blender(blender: str, scene_file: Path, png: Path, log: Path | None = None) -> None:
-    """Blender in background mode with factory settings, as its own process; no open scene is touched."""
+def run_blender(blender: str, scene_file: Path, png: Path, log: Path | None = None, last_picture: Path | None = None) -> None:
+    """Blender in background mode with factory settings, as its own process; no open scene is touched. last_picture: the file that
+    says it finished, when it is not png."""
     cmd = [blender, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(Path(__file__).resolve()), "--", str(scene_file), str(png)]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if log:
         log.write_text(r.stdout + r.stderr, encoding="utf-8")
-    if r.returncode != 0 or not png.is_file():
+    if r.returncode != 0 or not (last_picture or png).is_file():
         raise RuntimeError(f"Blender failed ({r.returncode}):\n{(r.stdout + r.stderr)[-3000:]}")
 
 
@@ -649,6 +665,8 @@ def add_arguments(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--n", type=int, nargs=2, default=(26, 18), help="seeds across and up the upstream plane")
     ap.add_argument("--across", type=float, nargs=2, help="the plane's range in grid y, m (default: as wide as the vehicle, moved away from the camera's y- side)")
     ap.add_argument("--up", type=float, nargs=2, default=(0.08, 2.3), help="the plane's range in z, m")
+    ap.add_argument("--upstream", type=float, default=1.6, help="the plane's distance ahead of the vehicle, m")
+    ap.add_argument("--gpu-render", action="store_true", help="Cycles on the NVIDIA GPU when Blender finds one (minutes per picture become seconds)")
     ap.add_argument("--radius", type=float, default=0.005, help="tube radius, m")
     ap.add_argument("--downstream", type=float, default=7.0, help="lines end this far behind the moment centre, m")
     ap.add_argument("--camera", type=float, nargs=3, default=(-3.6, -7.2, 2.3), help="the camera, m, as the grid has it at yaw 0: it stays put for the vehicle at any yaw")
@@ -675,7 +693,7 @@ def prepare(a: argparse.Namespace) -> dict[str, Any]:
     # the same camera for the vehicle at any yaw: the grid's air stays along +x, so the camera turns with the vehicle
     view = to_grid(float(summary["yaw_deg"])) @ to_grid(0.0).T
     eye, target = view @ np.array(a.camera, float), view @ np.array(a.target, float)
-    x_plane = lo[0] - 1.6
+    x_plane = lo[0] - a.upstream
     across = a.across or (lo[1] + 0.45, hi[1] + 0.45)
     n_across = a.n[0] if a.across else max(2, int(round(a.n[0] * (across[1] - across[0]) / 1.5)))  # the same spacing at any yaw
     seeds = plane_seeds((x_plane, across[0], a.up[0]), (0.0, across[1] - across[0], 0.0), (0.0, 0.0, a.up[1] - a.up[0]), n_across, a.n[1])
@@ -690,20 +708,21 @@ def prepare(a: argparse.Namespace) -> dict[str, Any]:
     return {"summary": summary, "design": design, "shapes": shapes, "field": field, "lines": lines, "vmax": vmax, "tick": tick, "text": text, "eye": eye, "target": target, "view": view}
 
 
-def render(a: argparse.Namespace, p: dict[str, Any], png: Path, line_strength: float = 1.0) -> None:
-    """The still picture in Blender, without its caption; beside it <png stem>.camera.json, the camera Blender used."""
+def render(a: argparse.Namespace, p: dict[str, Any], png: Path, line_strength: float = 1.0, views: list[list[Any]] | None = None) -> None:
+    """The still picture in Blender, without its caption; beside it <png stem>.camera.json, the camera Blender used. views: instead
+    of the one picture, one from each [x, y, z, png] (png then only says where the scene file and the log go)."""
     wait_for_ram(a.min_free_gb)
     per_point = max(1, int(round(0.06 / (p["field"].dx / 4.0))))
     arrays = scene_arrays(p["design"], p["summary"], p["lines"], p["vmax"], a.radius, per_point, p["shapes"])
     options = {"resolution": list(a.resolution), "samples": a.samples, "threads": a.threads, "background": [0.0035, 0.004, 0.0065], "line_strength": line_strength, "camera": p["eye"].tolist(),
-               "target": p["target"].tolist(), "view": p["view"].tolist(), "lens": a.lens, "ground": [-22.0, -22.0, 26.0, 22.0]}
+               "target": p["target"].tolist(), "view": p["view"].tolist(), "lens": a.lens, "ground": [-22.0, -22.0, 26.0, 22.0], "views": views, "gpu": a.gpu_render}
     png.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=png.parent) as tmp:
         scene_file = Path(tmp) / "scene.npz"
         np.savez(scene_file, options=json.dumps(options), **arrays)
         if a.keep_scene:
             shutil.copy(scene_file, png.with_suffix(".scene.npz"))
-        run_blender(find_blender(a.blender), scene_file, png, png.with_suffix(".log"))
+        run_blender(find_blender(a.blender), scene_file, png, png.with_suffix(".log"), Path(views[-1][3]) if views else None)
 
 
 def main(argv: list[str] | None = None) -> Path:

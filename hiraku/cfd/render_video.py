@@ -7,7 +7,7 @@ Blender renders the still once (hiraku.cfd.render_blender, background mode). A C
 minutes per frame on the CPU, so the lights are drawn onto that still frame by frame, by the same camera as Blender's.
 Each light is where the stored polyline's travel time puts it: t = the integral of ds / |u| along the line, so it runs
 only on real streamlines, at the local speed times --rate. A point behind a solid shape, seen from the camera, is not
-drawn. The camera stands still.
+drawn. The camera stands still, unless --orbit-deg turns it: then every frame is its own Blender picture.
 
 The clip loops without a seam. Lights enter each line one per `spacing` seconds of flow time and leave at its end, so the
 pattern repeats every `spacing`. The spacing is set to a whole share of the flow time the clip covers (seconds x rate),
@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import subprocess
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -186,11 +188,66 @@ def encode(frames_dir: Path, mp4: Path, fps: int, threads: int) -> None:
                     "-x264-params", "ipratio=1.0:pbratio=1.0:mbtree=0", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(mp4)], check=True)
 
 
+def orbit_places(eye: np.ndarray, target: np.ndarray, degrees: float, count: int) -> list[np.ndarray]:
+    """Camera places turning at an even rate about the vertical through the target, the given eye in the middle of the sweep."""
+    out = []
+    for f in range(count):
+        angle = math.radians(degrees) * (f / max(count - 1, 1) - 0.5)
+        c, s = math.cos(angle), math.sin(angle)
+        d = eye - target
+        out.append(target + np.array([c * d[0] - s * d[1], s * d[0] + c * d[1], d[2]]))
+    return out
+
+
+def orbit(a: argparse.Namespace, only: list[int] | None = None) -> Path:
+    """The camera turning about the target: every frame is its own Blender picture, then the lights by that frame's camera. A
+    picture that exists is not made again, so a stopped run goes on; the pictures are made a few at a time, each batch in a render
+    turn, so a long run leaves room for other jobs. No text on the picture."""
+    from PIL import Image
+
+    from hiraku.cfd.cuda import gpu_turn
+    from hiraku.cfd.render_water_blender import render_turn
+
+    t0 = time.perf_counter()
+    out = Path(a.out)
+    stills, frames_dir = out / "stills", out / "frames"
+    stills.mkdir(parents=True, exist_ok=True)
+    frames_dir.mkdir(exist_ok=True)
+    p = rb.prepare(a)
+    frames = int(round(a.seconds * a.fps))
+    places = orbit_places(p["eye"], p["target"], a.orbit_deg, frames)
+    pictures = [stills / f"s{f + 1:04d}.png" for f in range(frames)]
+    wanted = only if only is not None else list(range(frames))
+    todo = [f for f in wanted if not pictures[f].is_file()]
+    for start in range(0, len(todo), a.batch):
+        part = todo[start:start + a.batch]
+        with render_turn(a.min_free_gb), (gpu_turn() if a.gpu_render else nullcontext()):
+            rb.render(a, p, stills / "batch.png", a.line_strength, views=[[*places[f].tolist(), str(pictures[f])] for f in part])
+        print(f"pictures up to frame {part[-1] + 1} of {frames}, {time.perf_counter() - t0:.0f} s", flush=True)
+    flow_time = frames / a.fps * a.rate
+    spacing = loop_spacing(flow_time, a.every)
+    air = float(p["summary"]["air_speed_ms"])
+    for f in wanted:
+        camera = Camera.from_json(pictures[f].with_suffix(".camera.json"))
+        base = np.asarray(Image.open(pictures[f]).convert("RGB"), np.float32) / 255.0
+        seen = seen_from(camera.eye, p["lines"].points, p["shapes"])
+        im = lit(base, camera, p["lines"], seen, p["vmax"], f / frames * flow_time, spacing, a.tail, 40, air)
+        Image.fromarray((im * 255.0 + 0.5).astype(np.uint8)).save(frames_dir / f"f{f + 1:04d}.png", compress_level=1)
+    mp4 = out / "flow.mp4"
+    if only is None:
+        encode(frames_dir, mp4, a.fps, a.threads)
+    print(f"wrote {len(wanted)} frames in {time.perf_counter() - t0:.0f} s", flush=True)
+    return mp4
+
+
 def main(argv: list[str] | None = None) -> Path:
     from PIL import Image
 
     ap = argparse.ArgumentParser(prog="python -m hiraku.cfd.render_video", description="Lights along a case's real streamlines, as frames and an mp4")
     rb.add_arguments(ap)
+    ap.add_argument("--orbit-deg", type=float, help="turn the camera this far about the vertical through --target over the clip: every frame is rendered, and no text is drawn")
+    ap.add_argument("--only", type=int, nargs="+", help="with --orbit-deg: only these frames (1 is the first), to try the camera")
+    ap.add_argument("--batch", type=int, default=4, help="with --orbit-deg: pictures in one Blender")
     ap.add_argument("--also", type=Path, help="a second case: the two side by side, the same camera and colour scale")
     ap.add_argument("--seconds", type=float, default=5.0)
     ap.add_argument("--fps", type=int, default=30)
@@ -202,6 +259,8 @@ def main(argv: list[str] | None = None) -> Path:
     ap.add_argument("--frames-only", action="store_true")
     ap.add_argument("--encode-only", action="store_true", help="only make the mp4 from the frames already in the folder")
     a = ap.parse_args(argv)
+    if a.orbit_deg is not None:
+        return orbit(a, [f - 1 for f in a.only] if a.only else None)
     rb.wait_for_ram(a.min_free_gb)  # also when the stills are reused: the frames are a render job too
     t0 = time.perf_counter()
     out = Path(a.out)
