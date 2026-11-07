@@ -406,8 +406,8 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `python -m unittest` が集める試験は 4,277 (2026-11-08、78758627 の時点。`unittest.defaultTestLoader.discover(".").countTestCases()`)。
-  - `git grep "def test_" -- "tests/**/*.py"` は 3,952 行、`git grep -l` で 330 ファイル (2026-11-08、78758627 の時点。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
+  - `python -m unittest` が集める試験は 4,277 (2026-11-08、5fdf2d9f の時点。`unittest.defaultTestLoader.discover(".").countTestCases()`)。
+  - `git grep "def test_" -- "tests/**/*.py"` は 3,952 行、`git grep -l` で 330 ファイル (2026-11-08、5fdf2d9f の時点。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 - CI (GitHub Actions など) は無い (`.github/` も無い)。試験は手元の PC と EC2 の上で回している。
@@ -419,7 +419,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部のツール。
   - このコミットにも `Co-Authored-By: Claude` の行がある。
 - 遅い試験は 2026-11-05 から EC2 の上で回している。EC2 の用意と試験の起動は Codex のセッションが行い、結果を統括部と品質保証部に返す。
-- 全部の branch のコミット 3,299 件のうち、2,534 件に `Co-Authored-By: Claude` の行がある (2026-11-08、78758627 を main にした後の時点。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
+- GitHub にある全部の branch のコミット 3,071 件のうち、2,360 件に `Co-Authored-By: Claude` の行がある (2026-11-08、main が 5fdf2d9f の時点。`git fetch --prune` のあと `git rev-list --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。main から辿れるのは 2,832 件 (`git rev-list --count main`)。
 
 ## 期間中に作ったもの
 
