@@ -1,4 +1,4 @@
-"""The flooded-road pass with the water and the K2 vehicle moving each other: 見せるための計算で、走破の判定ではない.
+"""The flooded-road pass with the water and the K2 vehicle moving each other.
 
 Every few milliseconds the water's force on each shape goes to K2, K2 moves the vehicle one interval ahead, and the water runs to
 that pose. The vehicle slows, pitches and rises because of the water, and the water sees it do so. A one-way run cannot do this:
@@ -333,7 +333,7 @@ def run_coupled(gpu: Gpu, k2: Any, design: dict[str, Any], lift_ratio: float, de
         "memory": {"at_start_mib": memory_at_start, "reserve_mib": reserve_mib},
         "particles": len(particles), "cells": list(grid.nodes), "step_s": dt, "steps": sim.steps, "steps_per_frame": per_frame, "frames": len(records), "frame_s": per_frame * dt, "run_wall_s": time.perf_counter() - t0,
         "device": gpu.name, "sound_speed_ms": plan["sound"], "density_kg_m3": RHO_WATER, "gravity_ms2": GRAVITY, "cfl": CFL, "e_max": E_MAX, "e_min": E_MIN, "particle_mass_kg": sim.mass, "groups": table.groups, "faulted": fault,
-        "assumptions": ["見せるための計算で、走破の判定ではない。水の力は実験と比べておらず、確かめていない",
+        "assumptions": ["水の力と波の高さは実験と比べておらず、確かめていない",
                         "車輪の上向きの力は、回す計算では音速を上げるほど大きくなり続けるので、回さない計算との比を掛けて K2 に返す (coupling.lift_ratio)",
                         "水の側の車は K2 の車体の x、z、ピッチで動く。ロール、ヨー、横の動きは K2 の側だけにある",
                         "車輪と路面の摩擦、サスペンションなどは K2 の設定のまま。水で滑りやすくなることは入れていない"],

@@ -17,6 +17,7 @@ from unittest import mock
 
 import numpy as np
 
+from viewer.src import water as viewer_water
 from hiraku.cfd.cuda import STAMP, Gpu, gpu_or_reason, gpu_turn, source_hash
 from hiraku.cfd.geometry import Cylinder, box
 from hiraku.cfd.render_water_blender import pass_order, polytope_faces, surface_nets
@@ -396,7 +397,8 @@ class OnGpu(unittest.TestCase):
             case = run_flooded_road(_gpu, design, 0.1, 3.0, 0.1, True, folder, keep_particles=False, length_m=8.0, water_length_m=5.0, width_m=2.4, height_m=0.8)
             saved = json.loads((Path(folder) / "case.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["statement"], STATEMENT)
-            self.assertEqual(case["statement"], "見せるための計算で、走破の判定ではない")
+            self.assertEqual(case["statement"], STATEMENT)
+            self.assertEqual(STATEMENT, viewer_water.STATEMENT)  # the page says the same
             self.assertIsNone(saved["faulted"])
             for key in ("inputs", "memory", "particles", "cells", "step_s", "assumptions", "tests_passed"):
                 self.assertIn(key, saved)

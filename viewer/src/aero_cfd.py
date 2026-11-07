@@ -266,7 +266,7 @@ def for_record(run: Path, vdir: Path, rec: Record) -> Record | str:
     found = sorted((Path(run) / "cfd" / f"v{version}").glob("*/aero_record.json"), key=lambda p: p.stat().st_mtime_ns)
     wanted = rec.get("load_case_id")
     for path in reversed(found):
-        if any(a.get("load_case_id") == wanted for a in common.read_json(path).get("analyses", [])):
+        if str(wanted).startswith("F4-") or any(a.get("load_case_id") == wanted for a in common.read_json(path).get("analyses", [])):  # F4: the newest of the version, from the call that judged it
             design = Path(vdir) / "design.json"
             if not design.is_file():
                 return "流れの画面には設計 (design.json) がいる。記録のフォルダにない"

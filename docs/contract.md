@@ -142,9 +142,14 @@ MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp
 
 ## 流れの解析 (2026-11-06)
 
-`cfd_aero` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役だけが使う。`analyze` を通らないので HK1〜HK5 の外で、値は判定の根拠にしない) は、設計の v の流れを GPU で解き、`<実行のフォルダ>/cfd/v<N>/` に各ケースの記録と `aero_record.json` を書く。GPU が無ければ回さないと答え、CPU では回さない。GPU のメモリが足りなければ待つように答える。`replay` は保存した記録を GPU なしで読む。解析の記録の `physically_validated` が false の値は、実験と比べて確かめていない (`assumptions` にも 確かめていない と書く)。
+`cfd_aero` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役とまとめ役が使う) は、設計の v の流れを GPU で解き、`<実行のフォルダ>/cfd/v<N>/` に各ケースの記録と `aero_record.json` を書く。GPU が無ければ回さないと答え、CPU では回さない。GPU のメモリが足りなければ待つように答える。`replay` は保存した記録を GPU なしで読む。解析の記録の `physically_validated` が false の値は、実験と比べて確かめていない (`assumptions` にも 確かめていない と書く)。
 
-`cfd_water` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役だけが使う。`analyze` を通らないので HK1〜HK5 の外) は、設計の v が冠水路を通るときの水を GPU で解き、`<実行のフォルダ>/cfd/v<N>/water_.../` に `case.json`、`replay.npz`、`water_record.json` を書く。既定では車両が K2 で水に応えて動く。見せるための計算で、走破の判定ではない: 記録の先頭の `statement` にそう書き、OK / NG も基準も持たず、判定の根拠にしない。`physically_validated` は false。GPU が無ければ回さないと答え、CPU では回さない。`replay` は保存した記録を GPU なしで読む。
+`cfd_water` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役とまとめ役が使う) は、設計の v が冠水路を通るときの水を GPU で解き、`<実行のフォルダ>/cfd/v<N>/water_.../` に `case.json`、`replay.npz`、`water_record.json` を書く。既定では車両が K2 で水に応えて動く。`physically_validated` は false で、記録の先頭の `statement` に「この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による」と書く。GPU が無ければ回さないと答え、CPU では回さない。`replay` は保存した記録を GPU なしで読む。
+
+どちらも `judge: true` で判定まで進む。ツールの中で、試験の荷重条件を `write_load_case` で書き (版にまだ無いとき)、`record_prediction`、`analyze`、`compare` を順に通す (HK1〜HK6 はそのまま効く。解析の `base` は K6、`stage` は 2)。実行は F4 と F5 を持って始まらない (`applies_if: not always`。GPU の無い機械で実行を止めないため)。
+
+- F4: `critical_wind_speed >= Q18`。止まった車に真横の風を左右から当てた流れの力で、風上の輪が浮く風速を出す (流れの揚力も入れる)。手計算は F1 と同じ `crosswind.critical_wind_speed`
+- F5: `water_reached_parts <= 0`。電池、モーター、制御器のうち水が届いた数。部品の下面と水のすき間 (部品の横 2 格子までと真下の、いちばん高い粒子まで) が半格子以下になったら届いたとする (部品ごとのすき間と時刻も `results` に出す)。手計算は `flooded.parts_reached` (下面が 静かな水面 + 速度水頭 より低い部品の数。上限の見積もり)。水深 200 mm と 18 km/h は HIRAKU の仮定で、要件から来ていない
 
 ## Claude が書く設計 (2026-11-06)
 

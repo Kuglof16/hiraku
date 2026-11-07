@@ -24,6 +24,10 @@ tests:
   - {id: F1, domain: aero, title: 横風, applies_if: outdoor and self_propelled, requirement_keys: [Q16, Q18]}
   - {id: F2, domain: aero, title: 空気抵抗, applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50, Q54]}
   - {id: F3, domain: aero, title: 液体のこぼれ, applies_if: liquid and self_propelled, requirement_keys: [Q42, Q51]}
+  # F4, F5: judged on the GPU flow calculations. A run does not start with them (they would hold a machine with no GPU back): the
+  # aero role's cfd_aero and cfd_water, called with judge, write the load case, the prediction, the analysis and the comparison.
+  - {id: F4, domain: aero, title: 流れの計算で横風, applies_if: not always, requirement_keys: [Q16, Q18], tolerance_rel: 0.10}
+  - {id: F5, domain: aero, title: 冠水路で電池・モーター・制御器に水が届かない, applies_if: not always, requirement_keys: [], tolerance_rel: 0.10}
   - id: P1
     domain: powertrain
     title: 段差を越える

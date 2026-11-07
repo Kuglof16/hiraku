@@ -6,7 +6,7 @@ page. Nothing is computed here and no GPU is needed.
 The stored file is kept in the repository (viewer/fixtures/, not the ignored viewer/data/), so the place opens with no run and no GPU.
 
 The data (window.VIEW_DATA["water"]), on top of what every field has (common.py):
-    statement                the sentence the page always shows: for showing, not a judgement of what can be crossed
+    statement                the sentence the page always shows: a judgement covers only whether water reaches three parts, not compared with an experiment
     frames, frame_s, poses   the vehicle's x, z (m) and pitch (rad) in the road's frame, per frame
     columns {nx, ny, x0_mm, y0_mm, step_mm}, surface (i16 mm, frames x nx x ny), road_mm (the road's height per x column)
     spray (i16 mm, points x 3), spray_start (i32): a sample of the flying particles per frame, in the road's frame
@@ -27,6 +27,7 @@ from viewer.src import common
 
 Record = dict[str, Any]
 TOOL = "flooded_road"
+STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"  # the same as hiraku.cfd.water.STATEMENT (a test holds them together)
 SPRAY_PER_FRAME = 1200  # the sample the page draws: enough to see the spray, small enough to keep in the repository
 SEED = 5
 STORED = common.VIEWER / "fixtures"
@@ -97,6 +98,14 @@ def moment_centre_mm(design: Record) -> list[float]:
     return [float(c[0]), float(c[1]), float(min(s["position_mm"][2] - s.get("radius_mm", 0.0) for s in sup))]
 
 
+def for_record(run: Path, vdir: Path, rec: Record) -> Record | str:
+    """viewer.src.build's entry: the data of a cfd_water analysis, or the reason in one plain line (the version's newest pass)."""
+    found = sorted((Path(run) / "cfd" / f"v{rec.get('design_version')}").glob("water_*/water_record.json"), key=lambda p: p.stat().st_mtime_ns)
+    if not found:
+        return f"この解析の冠水路の記録 (cfd/v{rec.get('design_version')} の water_record.json) が run のフォルダにない"
+    return build(argparse.Namespace(run=found[-1].parent, design=Path(vdir) / "design.json"))
+
+
 def build(args: argparse.Namespace) -> Record:
     folder = Path(args.run)
     case = common.read_json(folder / "case.json")
@@ -106,7 +115,7 @@ def build(args: argparse.Namespace) -> Record:
     if inputs_case.get("design_version") != design.get("design_version"):
         raise ValueError(f"the case is of design v{inputs_case.get('design_version')}, the design given is v{design.get('design_version')}")
     with np.load(folder / "replay.npz") as d:
-        statement = str(d["statement"])
+        statement = STATEMENT  # what a judgement on it covers today, also for a record stored before this sentence
         surface = d["surface_mm"]
         column_m, x0_m, y0_m = float(d["column_m"]), float(d["x0_m"]), float(d["y0_m"])
         poses = d["poses"]

@@ -1,5 +1,5 @@
 """The flooded-road tool on a temporary run: the no-GPU answer, the limits, a short coarse pass on the GPU, its record and its replay.
-The statement stays on everything it writes, and nothing it writes holds an OK / NG."""
+The statement stays on everything it writes. The way to a verdict is in tests/cfd/test_flow_verdict.py."""
 
 import json
 import tempfile
@@ -61,7 +61,8 @@ class WithoutGpu(ToolBase):
     def test_registered_with_a_schema(self) -> None:
         tool = cfd_tools.TOOLS["cfd_water"]
         self.assertIs(tool["function"], cfd_tools.cfd_water)
-        self.assertIn("走破の判定ではない", tool["description"])
+        self.assertIn("F5", tool["description"])
+        self.assertIn("実験と比べて確かめていない", tool["description"])
         self.assertIn("vehicle_moves", tool["input_schema"]["properties"])
 
 
@@ -83,7 +84,7 @@ class Roles(unittest.TestCase):
         from hiraku.agent import prompts
 
         text = prompts.cae_prompt("aero")
-        for word in ("cfd_water", "見せるための計算で、走破の判定ではない", "判定 (verdict) の根拠にせず", "GPU が無い"):
+        for word in ("cfd_water", "judge", "F5", "電池、モーター、制御器に水が届くかだけを見る", "実験と比べていない", "record_cause", "GPU が無い"):
             self.assertIn(word, text)
         self.assertNotIn("cfd_water", prompts.cae_prompt("nvh"))
 
@@ -129,9 +130,7 @@ class OnGpu(ToolBase):
         self.assertLess(out["vehicle"]["speed_kmh"]["end"], out["vehicle"]["speed_kmh"]["start"] + 1.0)
         self.assertLess(max(out["water"]["momentum_residual_over_gross"]), 1e-3)
         run = Path(self.ctx.store.path)
-        saved = (run / out["path"]).read_text(encoding="utf-8")
-        for word in ("verdict", "\"OK\"", "\"NG\"", "criterion"):
-            self.assertNotIn(word, saved)
+        self.assertEqual(set(out["protected_parts"]), {"battery", "motor", "controller"})
         folder = (run / out["path"]).parent
         self.assertTrue((folder / "replay.npz").is_file())
         self.assertFalse((folder / "frames").exists())  # the particles are not kept unless asked

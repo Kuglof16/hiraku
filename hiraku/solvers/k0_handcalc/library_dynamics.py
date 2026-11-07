@@ -457,5 +457,30 @@ def _launch_formulas() -> list[Formula]:
     )]
 
 
+def _parts_reached(v: dict) -> dict:
+    line = v["d_water"] + (v["V"] / 3.6) ** 2 / (2.0 * float(G)) * 1000.0
+    return {"n_reached": float(sum(v[h] <= line for h in ("h_1", "h_2", "h_3"))), "water_line": line}
+
+
+def _flooded() -> list[Formula]:
+    return [Formula(
+        formula_id="flooded.parts_reached",
+        title="冠水路で水が届く部品の数",
+        domain="aero",
+        expression="n = the number of parts with h_i <= d_water + V^2 / (2 g)",
+        inputs={"h_1": _in("mm", "height of the first part's lower face above the road", min=0),
+                "h_2": _in("mm", "height of the second part's lower face above the road", min=0),
+                "h_3": _in("mm", "height of the third part's lower face above the road", min=0),
+                "d_water": _in("mm", "depth of the still water on the road", min=0),
+                "V": _in("km/h", "the vehicle's speed through the water", min=0)},
+        outputs={"n_reached": ("1", "how many of the parts the water can climb to", None),
+                 "water_line": ("mm", "the highest water can climb on a blunt front: the still water plus the velocity head", None)},
+        assumptions=["water meeting a blunt front at the vehicle's speed climbs by its velocity head, the upper end: it stands for every part, wherever it is on the vehicle",
+                     "the vehicle level on the flat of the road", G_NOTE],
+        source="Bernoulli's velocity head V^2 / 2 g (textbook fluid mechanics)",
+        fn=_parts_reached,
+    )]
+
+
 def all_formulas() -> list[Formula]:
-    return _tilt() + _crosswind() + _lane_change() + _braking() + _launch_formulas()
+    return _tilt() + _crosswind() + _lane_change() + _braking() + _launch_formulas() + _flooded()
