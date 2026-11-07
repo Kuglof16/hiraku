@@ -310,6 +310,20 @@ class ClaudesPicksTest(FirstDesignCase, unittest.TestCase):
         for e in self.ctx.store.events():
             self.assertEqual(contract.errors("event", e), [], e["kind"])
 
+    def test_the_assembly_tests_beside_the_picks_are_built_too(self):
+        """pick_domains keeps the assembly tests in assembly_test_ids, not in picks (assembly is not one of the
+        analysis domains): version 1 builds them too (the vehicle run 20261107-153915 had no H1 to H7 without it),
+        and they stay out of domain_picks."""
+        picks = [{"domain": "strength", "shown_name": "フレームの強さ", "reason": "段差で人と荷を支える",
+                  "test_ids": ["R1"]}]
+        data = {"want": self.ctx.project["want"], "flags": self.ctx.project["flags"], "picks": picks, "off": [],
+                "assembly_test_ids": ["H1", "H3"]}
+        self.ctx.store.emit("domains.picked", agent="lead", text="分野を選びました", data=data)
+        propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+        tests = {lc["test_id"] for lc in self.ctx.load_cases}
+        self.assertTrue({"R1", "H1", "H3"} <= tests, tests)
+        self.assertEqual([p["domain"] for p in self.ctx.project["domain_picks"]], ["strength"])
+
 
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):
     tests = ["P1"]  # no criterion: the scripted run ends done once P1 is matched
