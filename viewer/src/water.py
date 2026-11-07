@@ -45,19 +45,25 @@ def _hex(packed: Record) -> Record:
 
 def extra(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--design", type=Path, help="the design the case was run on (default: <case>/design.json)")
-    ap.add_argument("--depth-record", type=Path, help="a water_depth_record.json of the same design: its crossable depth goes on the page")
+    ap.add_argument("--depth-record", type=Path, nargs="*", default=[], help="water_depth_record.json files of the same design (one per speed): their crossable depths go on the page")
     ap.set_defaults(out=STORED)
 
 
-def crossable_inputs(depth_record: Record | None) -> list[Record]:
-    """The page's line for the crossable depth found by passes at several depths (cfd_water depths_mm), none without one."""
-    if not depth_record:
-        return []
-    d = depth_record.get("crossable_depth_mm")
+def crossable_inputs(depth_records: Record | list[Record] | None) -> list[Record]:
+    """The page's lines for the crossable depth found by passes at several depths (cfd_water depths_mm), one per speed, the
+    newest of each speed; none without a record."""
+    records = [depth_records] if isinstance(depth_records, dict) else list(depth_records or [])
+    by_speed: dict[float, Record] = {}
+    for rec in records:
+        by_speed[float(rec.get("speed_kmh") or 0.0)] = rec
     names = {"battery": "電池", "motor": "モーター", "controller": "制御器"}  # as hiraku.cfd.water.PROTECTED_JA
-    rows = "、".join(f"{r['depth_mm']:g} mm: " + ("浸からない" if not r["reached"] else "、".join(names.get(n.split("_")[0], n) for n in r["reached"]) + " が浸かる") for r in depth_record.get("table", []))
-    return [{"label": depth_record.get("label", "渡れる水深 (計算)"), "value": f"{d:g} mm" if d is not None else str(depth_record.get("said", "")),
-             "source": f"{depth_record.get('definition', '')}。{rows}。実験と比べていない"}]
+    out = []
+    for speed, rec in sorted(by_speed.items()):
+        d = rec.get("crossable_depth_mm")
+        rows = "、".join(f"{r['depth_mm']:g} mm: " + ("浸からない" if not r["reached"] else "、".join(names.get(n.split("_")[0], n) for n in r["reached"]) + " が浸かる") for r in rec.get("table", []))
+        label = rec.get("label", "渡れる水深 (計算)") + (f" {speed:g} km/h" if speed else "")
+        out.append({"label": label, "value": f"{d:g} mm" if d is not None else str(rec.get("said", "")), "source": f"{rec.get('definition', '')}。{rows}。実験と比べていない"})
+    return out
 
 
 def _road_height(depth_level_m: float, half_length_m: float, slope: float, blend_m: float, x: np.ndarray) -> np.ndarray:
@@ -117,7 +123,7 @@ def for_record(run: Path, vdir: Path, rec: Record) -> Record | str:
     if not found:
         return f"この解析の冠水路の記録 (cfd/v{rec.get('design_version')} の water_record.json) が run のフォルダにない"
     depths = sorted(version.glob("water_depths_*/water_depth_record.json"), key=lambda p: p.stat().st_mtime_ns)
-    return build(argparse.Namespace(run=found[-1].parent, design=Path(vdir) / "design.json", depth_record=depths[-1] if depths else None))
+    return build(argparse.Namespace(run=found[-1].parent, design=Path(vdir) / "design.json", depth_record=depths))
 
 
 def build(args: argparse.Namespace) -> Record:
@@ -155,10 +161,12 @@ def build(args: argparse.Namespace) -> Record:
               {"label": "水の粒子", "value": f"{int(case['particles']):,} 個", "source": "計算の条件"},
               {"label": "いちばん低い部品", "value": f"{float(under['lowest_part_m']) * 1000.0:.0f} mm", "source": "部品の形から計算"},
               {"label": "積み方", "value": loading, "source": "計算の条件"}]
-    depth_record = common.read_json(args.depth_record) if getattr(args, "depth_record", None) else None
-    if depth_record and depth_record.get("design_version") not in (None, design.get("design_version")):
-        raise ValueError(f"the depth record is of design v{depth_record.get('design_version')}, the design given is v{design.get('design_version')}")
-    inputs = crossable_inputs(depth_record) + inputs
+    given = getattr(args, "depth_record", None) or []
+    depth_records = [common.read_json(p) for p in ([given] if isinstance(given, (str, Path)) else given)]
+    for rec in depth_records:
+        if rec.get("design_version") not in (None, design.get("design_version")):
+            raise ValueError(f"the depth record is of design v{rec.get('design_version')}, the design given is v{design.get('design_version')}")
+    inputs = crossable_inputs(depth_records) + inputs
     notes = [statement + "。",
              "波の大きさは実験と比べていない。音速の設定を変えると、車が受ける力積はまだ動く。力の値としては読まない。",
              "水面は、柱ごとの粒子の体積から求めた高さ。飛ぶ水は計算の粒子から選んだ一部で、点の大きさは見せるための大きさ。",

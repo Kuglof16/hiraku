@@ -380,7 +380,9 @@ def _water_pass(ctx: Any, args: Record) -> Record:
     try:
         with cuda.gpu_turn(GPU_WAIT_S), cuda.Gpu("water") as live:
             if moves:
-                water_coupled.run_coupled(live, k2_parts(), design, water_coupled.LIFT_RATIO, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, frame_dt=frame_dt, t_max_s=WATER_TIME_LIMIT_S)
+                # a slower vehicle takes longer through the same road: the limit grows as the speed falls
+                limit = WATER_TIME_LIMIT_S * max(1.0, WATER_DEFAULTS["speed_kmh"] / asked["speed_kmh"])
+                water_coupled.run_coupled(live, k2_parts(), design, water_coupled.LIFT_RATIO, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, frame_dt=frame_dt, t_max_s=limit)
             else:
                 water.run_flooded_road(live, design, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, analyse=False, frame_dt=frame_dt)
     except TimeoutError:
@@ -438,13 +440,13 @@ def _crossable_depth(ctx: Any, args: Record) -> Record:
     else:
         said = f"{CROSSABLE}: {crossable:g} mm ({rows[-1]['depth_mm']:g} mm では {water.part_names_ja(rows[-1]['reached'])} が浸かる)"
     rec = {"statement": water.STATEMENT, "kind": "cfd_water_depth_record", "version": 1, "tool": water_record.TOOL, "design_version": version, "physically_validated": False,
-           "crossable_depth_mm": crossable, "label": CROSSABLE, "definition": CROSSABLE_DEFINITION, "said": said, "depths_mm": depths, "table": rows,
+           "crossable_depth_mm": crossable, "speed_kmh": float(args.get("speed_kmh") or WATER_DEFAULTS["speed_kmh"]), "label": CROSSABLE, "definition": CROSSABLE_DEFINITION, "said": said, "depths_mm": depths, "table": rows,
            "assumptions": [NOT_COMPARED, f"{float(args.get('speed_kmh') or WATER_DEFAULTS['speed_kmh']):g} km/h、格子 {float(args.get('dx_mm') or WATER_DEFAULTS['dx_mm']):g} mm", "要件に水深が無いので、OK / NG は出さない"]}
     folder = run / CFD_DIR / f"v{version}" / f"water_depths_{len(list((run / CFD_DIR / f'v{version}').glob('water_depths_*'))) + 1}"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "water_depth_record.json"
     path.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
-    return {**{k: rec[k] for k in ("statement", "crossable_depth_mm", "label", "definition", "said", "table", "physically_validated", "assumptions")}, "path": path.relative_to(run).as_posix()}
+    return {**{k: rec[k] for k in ("statement", "crossable_depth_mm", "speed_kmh", "label", "definition", "said", "table", "physically_validated", "assumptions")}, "path": path.relative_to(run).as_posix()}
 
 
 # ---------------------------------------------------------------- the way to a verdict (tests F4 and F5)

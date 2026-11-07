@@ -1,7 +1,7 @@
 """The GPU kernels against numpy written from the equations, on small grids.
 
-The whole module takes one GPU turn (one flow job at a time across processes) and skips with the reason when
-there is no GPU, or when the turn does not come within HIRAKU_GPU_WAIT_S seconds. Steps are few and grids
+The whole module takes one GPU turn (one flow job at a time across processes). With no GPU, or when the turn does
+not come within HIRAKU_GPU_WAIT_S seconds, every test skips with the reason (counted one by one as skipped). Steps are few and grids
 small: the checks run in seconds. The tolerances are FP32 ones; the measured errors are well under them.
 """
 
@@ -23,21 +23,29 @@ from hiraku.cfd.solver import Flow, Simulation, ground_cf, sponge_profile
 
 _turn: Any = None
 _gpu: Gpu | None = None
+_why_not = ""  # why the module has no GPU: each test skips with it, so a machine with no GPU counts every test as skipped
 
 
 def setUpModule() -> None:
-    global _turn, _gpu
+    global _turn, _gpu, _why_not
     _turn = gpu_turn(wait_s=float(os.environ.get("HIRAKU_GPU_WAIT_S", "1800")))
     try:
         _turn.__enter__()
     except TimeoutError as e:
-        _turn = None
-        raise unittest.SkipTest(str(e)) from None
+        _turn, _why_not = None, str(e)
+        return
     _gpu, reason = gpu_or_reason()
     if _gpu is None:
         _turn.__exit__(None, None, None)
-        _turn = None
-        raise unittest.SkipTest(reason)
+        _turn, _why_not = None, reason
+
+
+class OnGpu(unittest.TestCase):
+    """A test that needs the module's GPU: skipped, with the reason, when there is none."""
+
+    def setUp(self) -> None:
+        if _gpu is None:
+            self.skipTest(_why_not or "no GPU")
 
 
 def tearDownModule() -> None:
@@ -116,7 +124,7 @@ def rough_field(g: Grid, seed: int) -> np.ndarray:
     return equilibrium_h(dr, u) + 1e-3 * W.reshape(19, 1, 1, 1) * rng.normal(size=(19,) + shape)
 
 
-class OneStep(unittest.TestCase):
+class OneStep(OnGpu):
     """One GPU step against an independent pull stream and lattice.collide, population by population."""
 
     FP32 = 2e-6  # |h| ~ 0.1: a few units in the last place after the moments and the rebuild
@@ -167,7 +175,7 @@ class OneStep(unittest.TestCase):
         self.check(0.6, 0.0, sponge=(3, 3, 2, 2, 2, 2))
 
 
-class OneStepWithLinks(unittest.TestCase):
+class OneStepWithLinks(OnGpu):
     """Bouzidi links and the momentum exchange against numpy written from the formulas."""
 
     def check(self, interpolate: bool) -> None:
@@ -220,7 +228,7 @@ class OneStepWithLinks(unittest.TestCase):
         self.check(False)
 
 
-class SingleVoxelForce(unittest.TestCase):
+class SingleVoxelForce(OnGpu):
     """A uniform field on one solid node: the first step's force has a closed form."""
 
     def first_step_force(self, u: float, dr: float, interpolate: bool) -> np.ndarray:
@@ -253,7 +261,7 @@ class SingleVoxelForce(unittest.TestCase):
         self.assertLess(abs(f[1]) + abs(f[2]), 2e-6)
 
 
-class MomentumBudget(unittest.TestCase):
+class MomentumBudget(OnGpu):
     """What the fluid loses, the bodies carry: to rounding, with nothing else reaching the fluid."""
 
     def test_sphere_before_the_boundary_knows(self):
@@ -321,7 +329,7 @@ class MomentumBudget(unittest.TestCase):
                     sim.close()
 
 
-class Ground(unittest.TestCase):
+class Ground(OnGpu):
     """The ground is a specular wall with a log-law stress at the first row: tau = 1/2 cf |du| du, du = ground - air.
 
     The column looked at is 40 nodes from the sides, and a pressure signal moves 0.577 nodes per step: for up to 60
@@ -435,7 +443,7 @@ class Ground(unittest.TestCase):
                     sim.close()
 
 
-class RestartBetweenTurns(unittest.TestCase):
+class RestartBetweenTurns(OnGpu):
     """A long case runs in GPU turns: state to a file, a new Simulation, state back. It must not show."""
 
     def check(self, ramp_steps: int, first: int) -> None:
@@ -488,7 +496,7 @@ class RestartBetweenTurns(unittest.TestCase):
         self.check(ramp_steps=200, first=100)
 
 
-class UniformFlow(unittest.TestCase):
+class UniformFlow(OnGpu):
     """An empty far-field box has nothing to do: uniform stays uniform."""
 
     def test_uniform_flow_stays_uniform(self):

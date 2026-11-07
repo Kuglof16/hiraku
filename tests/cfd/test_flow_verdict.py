@@ -143,10 +143,14 @@ class CrossableDepth(Base):
         self.assertEqual(self.records("verdict"), [])  # no requirement gives a depth: no OK / NG
         saved = json.loads((Path(self.ctx.store.path) / out["path"]).read_text(encoding="utf-8"))
         self.assertEqual(saved["crossable_depth_mm"], 100.0)
+        self.assertEqual(saved["speed_kmh"], 18.0)
         from viewer.src import water as page
         line = page.crossable_inputs(saved)[0]
-        self.assertEqual((line["label"], line["value"]), ("渡れる水深 (計算)", "100 mm"))
+        self.assertEqual((line["label"], line["value"]), ("渡れる水深 (計算) 18 km/h", "100 mm"))
         self.assertIn("125 mm: モーター が浸かる", line["source"])
+        slow = dict(saved, speed_kmh=5.0, crossable_depth_mm=150.0)
+        lines = page.crossable_inputs([saved, slow])
+        self.assertEqual([(x["label"], x["value"]) for x in lines], [("渡れる水深 (計算) 5 km/h", "150 mm"), ("渡れる水深 (計算) 18 km/h", "100 mm")])
 
     def test_reached_at_the_shallowest_and_never_reached(self) -> None:
         seen, one = self.passes(0.0)
