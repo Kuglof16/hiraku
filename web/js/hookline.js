@@ -62,8 +62,8 @@ export function mountHookLine(stage, { dev = false, showS = 5, avoid = () => [] 
       row.classList.toggle("hooks-open", open);
       hooks.hidden = !open;
       more.setAttribute("aria-expanded", String(open));
-      more.textContent = open ? "hooks を閉じる" : "くわしく";
-      more.title = open ? "hooks の一覧をたたむ" : "hooks の一覧 (どの決まりが何回止めたか) を開く";
+      more.textContent = open ? (dev ? "hooks を閉じる" : "閉じる") : "くわしく";
+      more.title = open ? "決まりの一覧をたたむ" : "守るための決まりの一覧 (どの決まりが何回止めたか) を開く";
     };
     set(dev);
     more.addEventListener("click", () => set(hooks.hidden));

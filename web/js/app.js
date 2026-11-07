@@ -76,7 +76,7 @@ import { STATIC, getUrl } from "./source.js"; // a static export: its files in p
 import { domainIconSvg } from "./domain_icons.js";
 import { footerActivity, hookLineText, mountHookLine, withoutRuleIds } from "./hookline.js";
 import { mountBenchNote, noteKind } from "./benchnote.js"; // ③'s sentence card under the 3D
-import { filmWords, isFilmWords, markRecordWords, plainLineHtml } from "./plain.js"; // plain words: the card's, the footer's and the log's
+import { filmWords, isFilmWords, markRecordWords, plainLineHtml, plainWords } from "./plain.js"; // plain words: the card's, the footer's and the log's
 import { roundSeq } from "./proposals.js";
 import { boardHtml } from "./test_board.js"; // ③'s tests at a glance
 import { askAll, heavyPending, heavyReady, heavyWaiting, onHeavy, prefetch, quietly, tracked } from "./heavy.js"; // a static export's heavy parts, read when drawn
@@ -660,8 +660,13 @@ function showGridViewer(s) {
     el.dataset.extra = g.extra;
   } else {
     const ana = s?.analyses?.[g.ana];
-    const tid = (s?.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id)?.test_id ?? ana?.load_case_id ?? g.ana;
-    el.querySelector(".gv-title").textContent = `${DOMAIN_JA[g.domain] ?? g.domain}・${tid}・${ana?.tool ?? ""} (${verLabel(ana?.design_version ?? "")})`;
+    const lc = (s?.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id);
+    const tid = lc?.test_id ?? ana?.load_case_id ?? g.ana;
+    // the test's id and the tool's id under ?dev=1 (and in the film); else the test's title and the tool's name
+    const ids = DEV || VIDEO_LAYOUT;
+    const test = ids ? tid : plainWords(String(lc?.title ?? "").split(/\s*[（(:：]/)[0]) || "";
+    const tool = ids ? ana?.tool ?? "" : ana?.tool ? toolShort(s, ana.tool) : "";
+    el.querySelector(".gv-title").textContent = [DOMAIN_JA[g.domain] ?? g.domain, test, tool].filter(Boolean).join("・") + ` (${verLabel(ana?.design_version ?? "")})`;
     el.querySelector(".gv-sample").textContent = viewerProvisional(viewerRunId(s)) ? VIEWER_WORDS.sample : "";
     el.dataset.ana = g.ana;
     delete el.dataset.extra;
@@ -1346,12 +1351,15 @@ function renderTop(s, domainAt = null) {
   $("pill-cost").hidden = !hasRun;
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
-  $("pill-version").textContent = `${verLabel(v)}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
+  // (no design yet: said in words, not v—, but under ?dev=1 and in the film)
+  $("pill-version").textContent = `${v == null && !DEV && !VIDEO_LAYOUT ? "設計はまだ" : verLabel(v)}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
   // No cost to show (s.cost null: the user's own Claude Code pays, or a driver that gives none; a
   // scripted run, project.driver, calls no Claude): a dash only, no limit, never $0.00.
   const scripted = s.project?.driver === "scripted";
   const costKnown = !scripted && s.cost !== null && s.cost !== undefined;
   $("pill-cost").textContent = costKnown ? `費用 ${fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}` : "費用 —";
+  // a record with no cost (a scripted run, the plugin's run): no pill at all (the dash stays under ?dev=1 and in the film)
+  if (!costKnown && !DEV && !VIDEO_LAYOUT) $("pill-cost").hidden = true;
   const live = player.live;
   // a replay says where the record is at the playhead (not that something runs now)
   // (a followed run that is over while the replay is still behind its end: said so, not 記録の途中)
@@ -1508,7 +1516,7 @@ function hookLogItem(e, hook, resolved) {
   const mark = resolved ? `<span class="resolved">解決済み</span>` : "";
   return (
     `<li class="hook${resolved ? " done" : ""}" data-seq="${e.seq}">${mark}<b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>` +
-    `<details><summary title="${esc(`${w.id} ${w.ja}`)}">詳しい記録 (${esc(w.id)})<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
+    `<details><summary title="${esc(DEV || VIDEO_LAYOUT ? `${w.id} ${w.ja}` : w.ja)}">詳しい記録${DEV || VIDEO_LAYOUT ? ` (${esc(w.id)})` : ""}<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
   );
 }
 
@@ -1688,7 +1696,7 @@ function renderChain(s, chain) {
     const title = formulaTitles.get(pred.formula_id);
     const formula = `<div class="expr">${esc(pred.expression)}</div><div class="kv">${inputs}</div>`;
     p.innerHTML =
-      `<h3>1. 予測<small>手計算の段 (K0)・${esc(agentLongName(pred.agent))}</small></h3>` +
+      `<h3>1. 予測<small>手計算の段${DEV || VIDEO_LAYOUT ? " (K0)" : ""}・${esc(agentLongName(pred.agent))}</small></h3>` +
       (title
         ? `<div class="sub">${esc(quantityName(pred.quantity))}</div><div class="fl-title" data-formula="${esc(pred.formula_id)}">${keepAsides(title)}</div>` +
           `<details class="more" data-keep="pred-formula"><summary>くわしく (式と入力)</summary><div class="sub">${esc(pred.formula_id)}</div>${formula}</details>`
@@ -1699,7 +1707,7 @@ function renderChain(s, chain) {
     keepOpen(p);
   } else {
     p.className = "card wait";
-    p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める (HK1)` : "試験がまだ無い"}</div>`;
+    p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める${DEV || VIDEO_LAYOUT ? " (HK1)" : ""}` : "試験がまだ無い"}</div>`;
   }
   // 2. analysis (with 「ビューアで見る」, viewer_link.js)
   const a = $("card-ana");
@@ -1721,8 +1729,8 @@ function renderChain(s, chain) {
     const anaAsm = (ana.assumptions ?? []).map((x) => `<li>${esc(assumptionText(x, anaDesign))}</li>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
-      `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
-      `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
+      `<h3>2. 解析<small>CAE の段 (${DEV || VIDEO_LAYOUT ? `${esc(ana.base)} ` : ""}${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
+      `<div class="sub" title="${esc(DEV ? ana.tool : "")}">${esc(toolShort(s, ana.tool))}${DEV || VIDEO_LAYOUT ? `・${esc(ana.load_case_id)}` : ""}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
       (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "") +
       (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
@@ -2153,7 +2161,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
   const acts =
     zoomAct +
     (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "1 つ前の設計と比べる"}</button>` : "");
-  const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
+  const mesh = ct.mesh ? `・${DEV || VIDEO_LAYOUT ? `${esc(ct.mesh.rec.mesh_id)} ` : "メッシュ "}(要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
     ? `${esc(fieldLabel(ct.field, DEV))}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
     : `${ct.reference ? `${esc(JUDGED_JA.refBar)}: ` : ""}${esc(fieldLabel(ct.field, DEV))} [${esc(unit || "1")}]`;
@@ -2182,7 +2190,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     `<div class="bar">${bandRows(ct, relative)}</div>` +
     over +
     cmp +
-    `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの設計の最大値" : "・上端 = 最大値"}</div>`;
+    `<div class="src">色の元: ${DEV || VIDEO_LAYOUT ? `${esc(ct.analysisId)}・` : ""}${esc(DEV || VIDEO_LAYOUT ? ct.toolTitle ?? "" : plainWords(ct.toolTitle ?? ""))}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの設計の最大値" : "・上端 = 最大値"}</div>`;
 }
 
 // ---- before / after (the previous version's same field beside the current one) ----
@@ -2548,7 +2556,7 @@ function renderGrid(s) {
   // the newest report's next changes (none written yet, or no next: no block)
   const nx = $("report-next");
   // (the design numbers' paths said by their names, of the report's version; the paths under ?dev=1)
-  const html = reportNextHtml(s.report, { design: s.designs[s.report?.design_version] ?? s.designs[s.currentVersion] ?? null, dev: DEV });
+  const html = reportNextHtml(s.report, { design: s.designs[s.report?.design_version] ?? s.designs[s.currentVersion] ?? null, dev: DEV, cases: s.project?.load_cases, plain: !DEV && !VIDEO_LAYOUT });
   if (nx.dataset.html !== html) {
     nx.dataset.html = html;
     nx.innerHTML = html;
@@ -2585,7 +2593,10 @@ function renderHooks(s, playhead, resolved) {
     if (playhead - d.t < SHOW_S) recent[d.rule] = true;
   }
   const state = (r) => (!counts[r.id] ? " ✓" : ` ×${counts[r.id]}${open[r.id] ? "" : `<span class="resolved">解決済み</span>`}`);
-  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""} ${counts[r.id] && !open[r.id] ? "done" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${state(r)}</span>`).join("");
+  // the rules' ids (HK1 ...) and keys only under ?dev=1 (and in the film); else the rules in words
+  const ids = DEV || VIDEO_LAYOUT;
+  const html = (ids ? `hooks: ` : `守るための決まり (${RULES.length} つ): `) +
+    RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""} ${counts[r.id] && !open[r.id] ? "done" : ""}"${ids ? ` title="${esc(r.key)}"` : ""}>${ids ? `<span class="hk">${r.id}</span> ` : ""}${esc(r.ja)}${state(r)}</span>`).join("");
   if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
 }
 let hooksHtml = "";

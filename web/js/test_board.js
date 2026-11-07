@@ -19,6 +19,7 @@ import { chainFor, judgementState } from "./state.js";
 
 export const MAX_COLS = 6; // a group's boxes: at most this many side by side
 export const NAME_MAX = 7; // letters of a test's short name (then …)
+export const NAME_LONG = 14; // the same off the film: on up to 2 lines
 
 // The states a test can be in, in the order they come; ja: the word in its box.
 export const CASE_STATE = {
@@ -45,10 +46,10 @@ export function caseState(s, lcId, version = s.currentVersion) {
 }
 
 // A test's short name: the title up to its first bracket or comma, at most NAME_MAX letters.
-export function shortCaseName(lc) {
+export function shortCaseName(lc, max = NAME_MAX) {
   const s = String(lc?.title ?? lc?.load_case_id ?? "").split(/\s*[（(、,]/)[0].trim() || String(lc?.load_case_id ?? "");
   const letters = [...s];
-  return letters.length > NAME_MAX ? `${letters.slice(0, NAME_MAX - 1).join("")}…` : s;
+  return letters.length > max ? `${letters.slice(0, max - 1).join("")}…` : s;
 }
 
 // The board's HTML for the load cases (all of the run's, or ④'s open domain's).
@@ -56,6 +57,9 @@ export function shortCaseName(lc) {
 // line of the domains without a test (③; not in ④'s one domain).
 export function boardHtml(s, cases, { lcId = null, auto = true, pets = null, withRest = true } = {}) {
   const shorts = caseShortNames(cases);
+  // the film's frames (?video=1, body.video) as filmed: names of NAME_MAX letters on one line; else a
+  // name of up to NAME_LONG letters on up to 2 lines under the id (test_board.css), not cut short
+  const film = typeof document !== "undefined" && !!document.body?.classList.contains("video");
   const order = [...DOMAINS, ...new Set(cases.map((c) => c.domain).filter((d) => !DOMAINS.includes(d)))];
   const groups = order.map((d) => ({ d, list: cases.filter((c) => c.domain === d) })).filter((g) => g.list.length);
   const html = groups
@@ -69,13 +73,13 @@ export function boardHtml(s, cases, { lcId = null, auto = true, pets = null, wit
           const st = caseState(s, c.load_case_id);
           const word = CASE_STATE[st.key];
           const dup = shorts.get(c.load_case_id);
-          const name = dup ?? shortCaseName(c);
+          const name = film ? dup ?? shortCaseName(c) : shortCaseName(c, NAME_LONG);
           const safe = st.key === "ok" && st.cmp === "mismatch" ? " safe" : "";
           const title = `${c.load_case_id}: ${c.title ?? ""}\n${word.ja} (${word.title})${safe ? "・予想とは不一致 (安全側で判定)" : ""}`;
           return (
             `<button class="test st-${st.key}${safe}${c.load_case_id === lcId ? " on" : ""}" type="button" data-lc="${esc(c.load_case_id)}" data-state="${st.key}" data-lint="wrap" title="${esc(title)}">` +
-            `<span class="tid"><b>${esc(c.test_id ?? c.load_case_id)}</b>${dup ? `<small class="tnm">${esc(dup)}</small>` : ""}</span>` +
-            `<span class="tst">${esc(word.ja)}</span>${dup ? "" : `<small class="tnm">${esc(name)}</small>`}</button>`
+            `<span class="tid"><b>${esc(c.test_id ?? c.load_case_id)}</b>${film && dup ? `<small class="tnm">${esc(dup)}</small>` : ""}</span>` +
+            `<span class="tst">${esc(word.ja)}</span>${film && dup ? "" : `<small class="tnm${film ? "" : " two"}">${esc(name)}</small>`}</button>`
           );
         })
         .join("");

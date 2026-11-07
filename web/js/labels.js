@@ -170,6 +170,7 @@ export const BASE_JA = {
 const QUANTITY_JA = {
   // frame (K1)
   max_stress: "最大応力",
+  cycles_to_failure: "壊れるまでの繰り返しの回数",
   min_safety_factor: "最小の安全率",
   max_displacement: "最大変位",
   vehicle_mass: "車両の質量",

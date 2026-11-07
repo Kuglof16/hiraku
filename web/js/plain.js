@@ -20,13 +20,14 @@
 // The name put in is in span.rn, which ?dev=1 hides (the record's own word shows there).
 // Numbers and units, OK / NG and vN are never record words, so they stay.
 
-import { esc, plainToolName, quantityName } from "./labels.js";
+import { BASE_JA, esc, plainToolName, quantityName } from "./labels.js";
 
 // Lower-case words of the screen's own, not a record's English: units and names said as they are.
 const OWN_WORDS = new Set(["von", "hooks", "deg", "rpm", "rad"]);
 // an id: letters joined by _ or . (rule_check, battery.battery2, side_post_LS2_1), a record's number
-// (chg-0006, cmp-0027, pred-0017), or a load case's id (R1-step100, H7-handhold, S1-edge1350N)
-const ID_SRC = String.raw`[A-Za-z][A-Za-z0-9]*(?:[_.][A-Za-z0-9]+)+|\b[a-z]{2,8}-\d{2,}\b|\b[A-Z]{1,3}\d+[a-z]?-[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*`;
+// (chg-0006, cmp-0027, pred-0017), a load case's id (R1-step100, H7-handhold, S1-edge1350N), a hooks
+// rule's id (HK3) or a calculation's step by its number (K2: said by its name, labels.js BASE_JA)
+const ID_SRC = String.raw`[A-Za-z][A-Za-z0-9]*(?:[_.][A-Za-z0-9]+)+|\b[a-z]{2,8}-\d{2,}\b|\b[A-Z]{1,3}\d+[a-z]?-[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*|\b(?:HK\d|K[0-5])\b`;
 const ID = new RegExp(ID_SRC);
 const IDS = new RegExp(ID_SRC, "g");
 const WORD = /\b[a-z]{3,}\b/g;
@@ -103,7 +104,7 @@ function maskOf(text, name = null) {
       if (visible(from, to) !== m[0]) continue; // (part of it already out)
       if (!ID.test(m[0]) && OWN_WORDS.has(m[0])) continue;
       hide(from, to);
-      const said = (name && name(m[0])) || quantityWord(m[0]);
+      const said = (name && name(m[0])) || BASE_JA[m[0]] || quantityWord(m[0]);
       if (said) {
         names.set(from, said);
         for (let i = from; i < to; i++) named.add(i);

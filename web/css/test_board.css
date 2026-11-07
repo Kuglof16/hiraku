@@ -52,3 +52,11 @@
 .tests.board .auto { flex: none; white-space: nowrap; font-size: 14px; color: var(--muted); border: 1.5px dashed var(--line); border-radius: 999px; padding: 3px 12px; }
 .tests.board .auto.on { color: var(--blue); border-color: var(--blue); border-style: solid; }
 .tb-rest { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+/* off the film (test_board.js NAME_LONG): the test's name on up to 2 lines, the box as tall as it needs */
+body:not(.video) .tb-cells { grid-auto-rows: minmax(32px, auto); }
+body:not(.video) .tests.board .test { height: auto; min-height: 32px; }
+.tests.board .test .tnm.two {
+  white-space: normal; text-overflow: clip; line-height: 1.12;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-all;
+}
