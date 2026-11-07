@@ -371,7 +371,13 @@ class RunChecker:
             elif kind == "load_cases.created":
                 v = data.get("design_version")
                 if v in self.version_lcs:
-                    self.error("ids.duplicate", w, f"load cases of version {v} created twice")
+                    # write_load_case saves the version's whole list again with its load case added
+                    # (hiraku/tools/load_case_writer.py): every earlier load case kept, the new ones written by Claude
+                    old = self.version_lcs[v][1]
+                    new = {lc.get("load_case_id"): lc for lc in data.get("load_cases") or []}
+                    added = [new[k] for k in set(new) - set(old)]
+                    if not (set(old) <= set(new) and added and all(lc.get("written_by") == "claude" for lc in added)):
+                        self.error("ids.duplicate", w, f"load cases of version {v} created twice")
                 if v not in self.designs:
                     self.error("load_cases.version", w, f"load cases for version {v}, not created before them")
                 elif v == 1:

@@ -1833,6 +1833,22 @@ class VersionLoadCases(unittest.TestCase):
         f.unlink()
         self.assertIn("files.missing", {x.rule for x in cr.check_run(run) if x.level == "error"})
 
+    def test_write_load_case_saves_the_list_again_with_its_case_added(self):
+        r1 = copy.deepcopy(sample_events()[0]["data"]["load_cases"])
+        ev = self.with_v2_cases(r1)
+        first = [k for k, e in enumerate(ev) if e["kind"] == "load_cases.created"][-1]
+
+        def again(cases):
+            out = copy.deepcopy(ev)
+            out.insert(first + 1, dict(copy.deepcopy(out[first]), data={"design_version": 2, "load_cases": cases}))
+            return [f.message for f in self.findings(renumber(out)) if f.rule == "ids.duplicate"]
+
+        written = dict(copy.deepcopy(r1[0]), load_case_id="R6-g3", test_id="R6", written_by="claude")
+        self.assertEqual(again(r1 + [written]), [])  # write_load_case (hiraku/tools/load_case_writer.py)
+        self.assertTrue(again(copy.deepcopy(r1)))  # the same list again
+        self.assertTrue(again(r1[1:] + [written]))  # an earlier load case dropped
+        self.assertTrue(again(r1 + [dict(written, written_by=None)]))  # a new case not written by Claude
+
 
 if __name__ == "__main__":
     unittest.main()
