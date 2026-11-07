@@ -455,6 +455,16 @@ items:
     name: 荷の位置
     applies_if: cargo
     ask: default
+    unit: mm
+    default:
+      value: 150
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity
+        above the floor it stands on, taken as 150 mm (a cup or a plate on a tray). The demo vehicle's cargo is also
+        150 mm above its deck (data/requirements/offroad-4w.yaml, Q41). It stands in when a requirements file gives a
+        sentence ("the top shelf") for this item, because the load case needs a number
 
   - key: Q42
     name: 液体のこぼれまでの余裕角

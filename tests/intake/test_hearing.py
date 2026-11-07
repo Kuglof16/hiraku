@@ -378,3 +378,43 @@ class TypedNumberTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SentenceWhereANumberIsNeededTest(unittest.TestCase):
+    """A requirements file that gives a sentence for an item whose default is a number (Q41: "the top shelf"): the default
+    stands in, says so, and nobody is asked."""
+
+    def robot(self, value):
+        from hiraku.intake.products import load_product
+
+        req = load_product("serving-robot")
+        for r in req["requirements"]:
+            if r["key"] == "Q41":
+                r["value"] = value
+                r.pop("unit", None)
+        return req
+
+    def test_the_default_takes_the_sentences_place_and_the_record_says_it_is_a_default(self):
+        p = prepare(self.robot("一番高い段"), ask_confirm=False)
+        q41 = {r["key"]: r for r in p.requirements_file["requirements"]}["Q41"]
+        self.assertEqual((q41["value"], q41["unit"], q41["source"], q41["trust"]), (150, "mm", "default", 3))
+        self.assertIn("assumption", q41["basis"])
+        self.assertIn("一番高い段", q41["basis"])  # what the file said
+        self.assertIn("Q41", [r["key"] for r in p.answered["answers"]])  # in the record of what was settled
+        self.assertNotIn("Q41", [q["req_key"] for q in p.asked["questions"]])  # nobody is asked
+
+    def test_a_number_the_file_gives_stays(self):
+        req = self.robot(200)
+        for r in req["requirements"]:
+            if r["key"] == "Q41":
+                r["unit"] = "mm"
+        p = prepare(req, ask_confirm=False)
+        q41 = {r["key"]: r for r in p.requirements_file["requirements"]}["Q41"]
+        self.assertEqual(q41["value"], 200)
+
+    def test_the_serving_robots_own_file_has_the_number(self):
+        from hiraku.intake.products import load_product
+
+        q41 = {r["key"]: r for r in load_product("serving-robot")["requirements"]}["Q41"]
+        self.assertEqual((q41["value"], q41["unit"], q41["trust"]), (150, "mm", 3))
+        self.assertIn("assumption", q41["basis"])
