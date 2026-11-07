@@ -205,7 +205,7 @@ def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> li
                         if isinstance(ref, str) and ref.startswith("pred.") and ref[len("pred."):] in skipped})
         try:
             if needs:
-                raise ReaderError(f"its inputs read {', '.join(needs)}, not predicted on this design")
+                raise ReaderError("pred", p["formula_id"], f"its inputs read {', '.join(needs)}, not predicted on this design")
             given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
         except ReaderError as e:  # the formula does not apply to this design (e.g. nothing outside point R for R8-push)
             ctx.store.emit("agent.said", agent="system", domain=lc["domain"],
