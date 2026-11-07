@@ -73,21 +73,18 @@ HV.fields = HV.fields || {};
       const sp = new Float32Array(most * 3), sg = new T.BufferGeometry(); sg.setAttribute('position', new T.BufferAttribute(sp, 3).setUsage(T.DynamicDrawUsage));
       const points = new T.Points(sg, new T.PointsMaterial({ color: LOOK.spray, size: 22, sizeAttenuation: true })); points.frustumCulled = false; points.userData.kind = 'water'; road.add(points);
 
-      // the camera stands on the road: the stretch the vehicle covers (its parts at the first and the last pose) is in view
       const poseMatrix = (x0, z0, pitch) => {   // the vehicle's axes (the page's, at rest) -> the road's frame on the page
         const c = Math.cos(pitch), s = Math.sin(pitch), m = D.centre_mm;
         const roadFromVehicle = new T.Matrix4().set(-c, 0, s, m[0] + c * x0 * 1000 - s * z0 * 1000, 0, -1, 0, m[1], s, 0, c, m[2] - s * x0 * 1000 - c * z0 * 1000, 0, 0, 0, 1).invert();
         return toPage.clone().multiply(roadFromVehicle);
       };
-      const lo0 = ctx.lo.slice(), hi0 = ctx.hi.slice();
-      ctx.lo[1] = Math.min(ctx.lo[1], D.centre_mm[1] + D.columns.y0_mm); ctx.hi[1] = Math.max(ctx.hi[1], D.centre_mm[1] - D.columns.y0_mm);   // the road's width
-      for (const p of [D.poses[0], D.poses[D.poses.length - 1]]) {
-        const M = poseMatrix(...p);
-        for (const x of [lo0[0], hi0[0]]) for (const z of [lo0[2], hi0[2]]) {
-          const v = new T.Vector3(x, 0, z).applyMatrix4(M);
-          ctx.lo[0] = Math.min(ctx.lo[0], v.x); ctx.hi[0] = Math.max(ctx.hi[0], v.x); ctx.lo[2] = Math.min(ctx.lo[2], v.z); ctx.hi[2] = Math.max(ctx.hi[2], v.z);
-        }
-      }
+      // the camera stands on the road and looks at the stretch with water (where the vehicle goes in to where it comes out),
+      // close enough that the vehicle is about a third of the picture's width (ctl.viewDir's length sets the distance)
+      const wet = D.road_mm.map((h, i) => i).filter(i => D.road_mm[i] <= (D.level_mm ?? 195));
+      const ends = wet.length ? [xAt(wet[0]), xAt(wet[wet.length - 1])] : [xAt(0), xAt(nx - 1)];
+      const half = (ctx.hi[0] - ctx.lo[0]) / 2;   // half the vehicle's length: it stays in view while it goes in and comes out
+      ctx.lo[0] = Math.min(...ends.map(x => m0[0] - x)) - half; ctx.hi[0] = Math.max(...ends.map(x => m0[0] - x)) + half;
+      ctx.lo[1] = Math.min(ctx.lo[1], m0[1] + y0_mm); ctx.hi[1] = Math.max(ctx.hi[1], m0[1] - y0_mm);   // the road's width
 
       const S = { f: 0 };
       function show(f) {
@@ -110,7 +107,7 @@ HV.fields = HV.fields || {};
       show(f0);
       const rec = () => D.records[S.f];
       const ctl = {
-        nT: D.frames, t0: f0, times, speed: 0.25, partMode: 'field', ground: null, viewDir: [0.08, 2.4, 0.75],
+        nT: D.frames, t0: f0, times, speed: 0.25, partMode: 'field', ground: null, viewDir: [0.06, 0.7, 0.22],
         timeNote: D.coupled ? '保存した記録の再生。道路と水は止まり、車が計算した速さと揺れ (K2 と水の双方向) で進む' : '保存した記録の再生。道路と水は止まり、車が一定の速さで進む',
         scale: { min: 5, max: 60, step: 1, value: 22, label: '飛ぶ水の点の大きさ (mm)', note: '見せるための大きさで、粒子の大きさではない' },
         setScale(v) { points.material.size = +v; },

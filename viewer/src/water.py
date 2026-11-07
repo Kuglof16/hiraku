@@ -200,7 +200,7 @@ def build(args: argparse.Namespace) -> Record:
             "ledger": ledger_of(design, parts, on_board, loading), "ground": None,
             "frames": int(frames), "frame_s": frame_s, "poses": [[round(float(v), 6) for v in p] for p in poses], "coupled": coupled, "wheel_offsets_mm": wheel_offsets,
             "columns": {"nx": int(nx), "ny": int(ny), "x0_mm": x0_m * 1000.0, "y0_mm": y0_m * 1000.0, "step_mm": column_m * 1000.0},
-            "surface": _hex(common.pack_i16(surface.ravel().tolist(), 1.0, [int(frames), int(nx), int(ny)])), "road_mm": [round(float(v), 1) for v in road_mm],
+            "surface": _hex(common.pack_i16(surface.ravel().tolist(), 1.0, [int(frames), int(nx), int(ny)])), "road_mm": [round(float(v), 1) for v in road_mm], "level_mm": float(road["level_m"]) * 1000.0,
             "spray": _hex(common.pack_i16(spray_mm.ravel().tolist(), 1.0, [len(spray_mm), 3])), "spray_start": _hex(common.pack_i32(spray_start.tolist())),
             "records": records, "checks": checks, "top_of_water_m": float(case.get("top_of_water_m", 0.0)),
             "underfloor": {"max_depth_mean_mm": float(under["max_depth_mean_mm"]), "max_reached_pct": 100.0 * float(under["max_reached_share"]), "lowest_part_mm": float(under["lowest_part_m"]) * 1000.0}}
