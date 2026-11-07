@@ -15,7 +15,22 @@
 
 tests:
   - {id: S1, domain: handling, title: 静的な転倒 (傾斜台・縁の荷重), applies_if: standing, requirement_keys: [Q30, Q33, Q40, Q41, Q60]}
-  - {id: S2, domain: handling, title: 旋回での転倒 (J ターン・定常円), applies_if: self_propelled, requirement_keys: [Q50]}
+  # S2: K2's steady_circle (the circle driven faster up to Q50). The builder and its plan are
+  # hiraku.catalog.builders.k2_tests BUILDERS["S2"] / PLANS["S2"], found by test id as S3's and S6's (a `build:` key
+  # names a builder of hiraku/catalog/build.py). The circle's radius (25 m) is HIRAKU の仮定 (no source); a design
+  # with no steered wheel is not buildable (BuildError says so).
+  - id: S2
+    domain: handling
+    title: 旋回での転倒 (J ターン・定常円)
+    applies_if: self_propelled
+    requirement_keys: [Q50]
+    tolerance_rel: 0.10
+    tolerance_basis: >-
+      HIRAKU's choice. The hand calculation and K2 take the same steady balance on the circle; K2 adds the
+      tyres' deflection, the CG's offset from the centre line and the driver keeping the circle a little
+      outside (demo v1: the lateral acceleration -4.6 %, the inner wheels' load -2.6 % with rigid supports). The
+      body's roll on its springs is not in the first formula: the plan expects that mismatch and predicts
+      again with lane_change.rollover_threshold's roll, so 10 % is allowed.
   - {id: S3, domain: handling, title: 回避 (ダブルレーンチェンジ), applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50]}
   - {id: S4, domain: handling, title: 制動と前のめり, applies_if: self_propelled, requirement_keys: [Q11, Q50, Q52, Q53]}
   - {id: S5, domain: handling, title: 凸凹の横斜面, applies_if: self_propelled and rough, requirement_keys: [Q12, Q14]}
@@ -56,6 +71,9 @@ tests:
   - {id: C1, domain: crash, title: 壁への正面衝突, applies_if: ride and self_propelled and speed_vehicle, requirement_keys: [Q31, Q65]}
   - {id: C2, domain: crash, title: 人との接触, applies_if: near_people and self_propelled, requirement_keys: [Q50, Q62]}
   # C3, R7, R8 and H6: functional requirements (the intake department's FN list); builders from the analysis department
+  # C3: no builder (the lead's decision, 2026-11-07): the static push of OECD Code 4 needs a tool that loads the frame
+  # statically, and none is on the shelf (R4 judges the occupants' space under the Code 4 loads: its criterion
+  # rops_occupant_clearance, hiraku.catalog.builders.analysis r4_rops)
   - {id: C3, domain: crash, title: 横転したときの乗員の空間 (横・後ろ・上から押す), applies_if: ride and rough, requirement_keys: [Q33, Q86]}
   - id: R1
     domain: strength

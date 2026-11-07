@@ -71,7 +71,8 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam", "rollover_tilt"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle", "steady_circle", "crash_beam",
+                                 "rollover_tilt"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
