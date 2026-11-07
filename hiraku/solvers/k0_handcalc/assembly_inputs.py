@@ -118,8 +118,37 @@ def overlap_inputs(design: dict) -> dict:
     return {"n_rest": float(len(rest)), "n_slide": float(len(ends)), "pairs": allp, "left_out": float(left)}
 
 
-STEER_STEP_DEG = 1.0  # the turned wheel checked every this many degrees
 PRUNE_MM = 1.0  # room for round-off when boxes that cannot be reached are left out before the exact checks
+
+
+def sweep_grid(design: dict, support: dict) -> tuple[list[float], list[float]]:
+    """(steer angles deg, wheel travels mm) the corner is checked at: the assembly tool's grid
+    (k4_geometry.motion.sweep), read from its constant STEPS and the design: STEPS angles from -max_steer_angle to
+    +max_steer_angle on a steered support (else 0), STEPS heights from -travel_mm/2 to +travel_mm/2 (else 0)."""
+    from ..k4_geometry.motion import STEPS, max_steer
+
+    steer_max = max_steer(design)
+    travel = float(support.get("suspension", {}).get("travel_mm") or 0.0)
+    steers = (np.linspace(-steer_max, steer_max, STEPS).tolist() if support["actuation"]["steer"] and steer_max > 0
+              else [0.0])
+    dzs = np.linspace(-travel / 2.0, travel / 2.0, STEPS).tolist() if travel > 0 else [0.0]
+    return [float(a) for a in steers], [float(z) for z in dzs]
+
+
+def moving_parts(design: dict, bs: dict | None = None) -> dict[str, dict[str, list[str]]]:
+    """{support id: {"box": [...], "rod": [...], "left_out": [...]}}: the bodies the tool moves with each corner
+    (k4_geometry.motion._hits: every part riding with the support, model.bodies' support, other than kind
+    suspension). Those with a capsule (model.SLENDER_KINDS) are rods; the others are boxes when not turned, and
+    left out when turned (their axis-aligned box is far bigger than they are, as in boxes)."""
+    bs = bs if bs is not None else k4.bodies(design)
+    parts = {f"part:{p['id']}": p for p in design.get("parts", [])}
+    out: dict[str, dict[str, list[str]]] = {s["id"]: {"box": [], "rod": [], "left_out": []}
+                                            for s in design.get("supports", [])}
+    for k, b in sorted(bs.items()):
+        if b.kind == "member" or b.support not in out or b.kind == "suspension":
+            continue
+        out[b.support]["rod" if b.capsule is not None else "left_out" if turned(parts[k]) else "box"].append(k)
+    return out
 
 
 def _plan_overlap(c, R, half_xy, lo, hi) -> float:
@@ -136,99 +165,92 @@ def _plan_overlap(c, R, half_xy, lo, hi) -> float:
 
 
 def motion_inputs(design: dict) -> dict:
-    """assembly.motion_count's inputs: each wheel (kind wheel) as its box, steered wheels turned about the support's
-    vertical axis through every STEER_STEP_DEG from -max_steer_angle to +max_steer_angle, and moved up and down by
-    half the support's travel_mm; a pair counts once, against the axis-aligned boxes of everything not of its own
-    corner and not mounted to it (k4_geometry.model.mounted, the tool's rule)."""
+    """assembly.motion_count's inputs: the bodies the tool moves with each corner (moving_parts), at the tool's grid
+    of steer angles and wheel travels (sweep_grid): a box part turned about the support's vertical axis and moved up
+    or down, a rod (_rod_hits) with its inner end in place (a link, model.LINK_KINDS) or moved whole (another
+    slender part, the damper). A pair counts once, against the axis-aligned boxes of everything not of its own corner
+    and not mounted to it (k4_geometry.model.mounted, the tool's rule). Pairs within a corner are not checked (the
+    tool does not check them either: the damper against the arms waits for K2's damper shape)."""
     from ..k4_geometry.model import TOUCH_MM, mounted
-    from ..k4_geometry.motion import max_steer
 
     bs = k4.bodies(design)
     bx = {k: v for k, v in boxes(design).items() if k in bs}
-    steer_max = max_steer(design)
+    parts = {f"part:{p['id']}": p for p in design.get("parts", [])}
+    moving = moving_parts(design, bs)
     hits = {}
+    rods: set[str] = set()
     for s in design["supports"]:
-        wheel = next((p for p in design.get("parts", []) if p["kind"] == "wheel"
-                      and bs.get(f"part:{p['id']}") is not None and bs[f"part:{p['id']}"].support == s["id"]), None)
-        if wheel is None:
-            continue
-        wk = f"part:{wheel['id']}"
         c = np.asarray(s["position_mm"], float)
-        wc = np.asarray(wheel["box"]["center_mm"], float)
-        half = np.asarray(wheel["box"]["size_mm"], float) / 2.0
-        travel = float(s.get("suspension", {}).get("travel_mm") or 0.0)
-        z_lo, z_hi = wc[2] - half[2] - travel / 2.0, wc[2] + half[2] + travel / 2.0
-        th = steer_max if s["actuation"]["steer"] and steer_max > 0 else 0.0
-        n = max(1, int(math.ceil(2.0 * th / STEER_STEP_DEG)))
-        angles = np.linspace(-th, th, n + 1) if th > 0 else [0.0]
-        # the turned wheel's corners stay within reach of the support's axis (plus PRUNE_MM for round-off): a box
-        # apart from that square along x or y has a negative plan overlap at every angle (_plan_overlap's x or y term)
-        reach = float(np.linalg.norm(wc[:2] - c[:2])) + float(np.linalg.norm(half[:2])) + PRUNE_MM
-        for k, other in bx.items():
-            if bs[k].support == s["id"] or mounted(bs[wk], bs[k], design):
-                continue
-            dz = min(z_hi, other[1][2]) - max(z_lo, other[0][2])
-            if dz <= TOUCH_MM:
-                continue
-            if any(other[0][i] > c[i] + reach or other[1][i] < c[i] - reach for i in (0, 1)):
-                continue
-            for a in angles:
-                r = math.radians(float(a))
-                R = np.array([[math.cos(r), -math.sin(r)], [math.sin(r), math.cos(r)]])
-                centre = c[:2] + R @ (wc[:2] - c[:2])
-                o = min(_plan_overlap(centre, R, half[:2], other[0][:2], other[1][:2]), dz)
-                if o > TOUCH_MM and o > hits.get((wk, k), 0.0):
-                    hits[(wk, k)] = o
-        for rod in design.get("parts", []):
-            rk = f"part:{rod['id']}"
-            if rod["kind"] not in ROD_KINDS or rk not in bs or bs[rk].support != s["id"]:
-                continue
-            for k, o in _rod_hits(design, bs, bx, s, rod, c, th, travel).items():
+        steers, dzs = sweep_grid(design, s)
+        travel = max(dzs) - min(dzs)
+        for wk in moving[s["id"]]["box"]:
+            part = parts[wk]
+            wc = np.asarray(part["box"]["center_mm"], float)
+            half = np.asarray(part["box"]["size_mm"], float) / 2.0
+            # the turned box's corners stay within reach of the support's axis (plus PRUNE_MM for round-off): a box
+            # apart from that square along x or y, or from the box's height range over the travel along z, has a
+            # negative overlap at every angle and height
+            reach = float(np.linalg.norm(wc[:2] - c[:2])) + float(np.linalg.norm(half[:2])) + PRUNE_MM
+            z_lo, z_hi = wc[2] - half[2] + min(dzs), wc[2] + half[2] + max(dzs)
+            for k, other in bx.items():
+                if bs[k].support == s["id"] or mounted(bs[wk], bs[k], design):
+                    continue
+                if min(z_hi, other[1][2]) - max(z_lo, other[0][2]) <= TOUCH_MM:
+                    continue
+                if any(other[0][i] > c[i] + reach or other[1][i] < c[i] - reach for i in (0, 1)):
+                    continue
+                for a in steers:
+                    r = math.radians(a)
+                    R = np.array([[math.cos(r), -math.sin(r)], [math.sin(r), math.cos(r)]])
+                    plan = _plan_overlap(c[:2] + R @ (wc[:2] - c[:2]), R, half[:2], other[0][:2], other[1][:2])
+                    for dz in dzs:
+                        o = min(plan, min(wc[2] + half[2] + dz, other[1][2]) - max(wc[2] - half[2] + dz, other[0][2]))
+                        if o > TOUCH_MM and o > hits.get((wk, k), 0.0):
+                            hits[(wk, k)] = o
+        for rk in moving[s["id"]]["rod"]:
+            rods.add(rk)
+            for k, o in _rod_hits(design, bs, bx, s, rk, c, steers, dzs, travel).items():
                 if o > hits.get((rk, k), 0.0):
                     hits[(rk, k)] = o
     pairs = sorted(((a, b, o) for (a, b), o in hits.items()), key=lambda t: -t[2])
-    return {"n_wheel": float(sum(1 for a, _, _ in pairs if a not in _rod_ids(design))),
-            "n_rod": float(sum(1 for a, _, _ in pairs if a in _rod_ids(design))), "pairs": pairs}
+    return {"n_wheel": float(sum(1 for a, _, _ in pairs if a not in rods)),
+            "n_rod": float(sum(1 for a, _, _ in pairs if a in rods)), "pairs": pairs,
+            "left_out": sorted(k for m in moving.values() for k in m["left_out"])}
 
 
-ROD_KINDS = ("tie_rod",)  # links with one end on the frame side and one on the wheel (the steering's)
 ROD_POINT_MM = 5.0  # points along a rod this far apart
-TRAVEL_STEP_MM = 5.0  # the wheel moved up and down in steps of this
 
 
-def _rod_ids(design: dict) -> set[str]:
-    return {f"part:{p['id']}" for p in design.get("parts", []) if p["kind"] in ROD_KINDS}
+def _rod_hits(design, bs, bx, s, rk, c, steers, dzs, travel) -> dict[str, float]:
+    """A rod as the body's capsule (model.part_capsule: its axis and radius): a link (model.LINK_KINDS) keeps the
+    inner end (nearer the vehicle's middle) in place and turns the outer end with the wheel about the support's
+    vertical axis and moves it up and down (as motion._link_moved); another slender part is turned and moved whole.
+    Points along the axis every ROD_POINT_MM; a point's sphere against an axis-aligned box."""
+    from ..k4_geometry.model import LINK_KINDS, TOUCH_MM, mounted
 
-
-def _rod_hits(design, bs, bx, s, rod, c, th, travel) -> dict[str, float]:
-    """A rod as a straight line of radius half its section, between the ends of its box's long side (the box's x
-    axis turned by rpy_deg): the inner end (nearer the vehicle's middle) stays, the outer end turns with the wheel about
-    the support's vertical axis and moves up and down with it. Points along it every ROD_POINT_MM; a point's sphere
-    against an axis-aligned box."""
-    from ..k4_geometry.model import TOUCH_MM, mounted
-
-    r_, p_, y_ = (math.radians(float(a)) for a in rod["box"].get("rpy_deg") or (0.0, 0.0, 0.0))
-    axis = np.array([math.cos(y_) * math.cos(p_), math.sin(y_) * math.cos(p_), -math.sin(p_)])
-    size = np.asarray(rod["box"]["size_mm"], float)
-    mid = np.asarray(rod["box"]["center_mm"], float)
-    e1, e2 = mid - axis * size[0] / 2.0, mid + axis * size[0] / 2.0
-    inner, outer = (e1, e2) if abs(e1[1]) <= abs(e2[1]) else (e2, e1)
-    radius = float(max(size[1], size[2])) / 2.0
+    cap = bs[rk].capsule
+    link = bs[rk].kind in LINK_KINDS
+    inner, outer = (cap.a, cap.b) if abs(cap.a[1]) <= abs(cap.b[1]) else (cap.b, cap.a)
+    radius = float(cap.r)
     n_pts = max(2, int(math.ceil(float(np.linalg.norm(outer - inner)) / ROD_POINT_MM)) + 1)
     t = np.linspace(0.0, 1.0, n_pts)[:, None]
-    angles = np.linspace(-th, th, max(1, int(math.ceil(2.0 * th / STEER_STEP_DEG))) + 1) if th > 0 else [0.0]
-    dzs = np.linspace(-travel / 2.0, travel / 2.0, max(1, int(math.ceil(travel / TRAVEL_STEP_MM))) + 1) if travel > 0         else [0.0]
-    rk = f"part:{rod['id']}"
     others = {k: v for k, v in bx.items() if bs[k].support != s["id"] and not mounted(bs[rk], bs[k], design)}
     out: dict[str, float] = {}
     if not others:
         return out
-    # a box apart by more than the radius (plus PRUNE_MM) from the box round every place of the rod (the inner end,
-    # and the outer end anywhere on its circle about the support's axis, up and down by half the travel) is never
-    # reached: its depths are below 0 at every angle and height
-    rho = float(np.linalg.norm(outer[:2] - c[:2]))
-    lo_all = np.minimum(inner, [c[0] - rho, c[1] - rho, outer[2] - travel / 2.0]) - radius - PRUNE_MM
-    hi_all = np.maximum(inner, [c[0] + rho, c[1] + rho, outer[2] + travel / 2.0]) + radius + PRUNE_MM
+    # a box apart by more than the radius (plus PRUNE_MM) from the box round every place of the rod (an end in place,
+    # or anywhere on its circle about the support's axis, up and down by half the travel) is never reached: its
+    # depths are below 0 at every angle and height
+    def reach(e, moves):
+        if not moves:
+            return e, e
+        rho = float(np.linalg.norm(e[:2] - c[:2]))
+        return (np.array([c[0] - rho, c[1] - rho, e[2] - travel / 2.0]),
+                np.array([c[0] + rho, c[1] + rho, e[2] + travel / 2.0]))
+
+    (li, hi_i), (lo_o, hi_o) = reach(inner, not link), reach(outer, True)
+    lo_all = np.minimum(li, lo_o) - radius - PRUNE_MM
+    hi_all = np.maximum(hi_i, hi_o) + radius + PRUNE_MM
     others = {k: v for k, v in others.items()
               if all(v[0][i] <= hi_all[i] and v[1][i] >= lo_all[i] for i in range(3))}
     if not others:
@@ -236,12 +258,14 @@ def _rod_hits(design, bs, bx, s, rod, c, th, travel) -> dict[str, float]:
     keys = list(others)
     LO = np.array([np.asarray(others[k][0], float) for k in keys])[None, :, :]  # (1, boxes, 3)
     HI = np.array([np.asarray(others[k][1], float) for k in keys])[None, :, :]
-    for a in angles:
-        ra = math.radians(float(a))
+    for a in steers:
+        ra = math.radians(a)
         R = np.array([[math.cos(ra), -math.sin(ra), 0.0], [math.sin(ra), math.cos(ra), 0.0], [0.0, 0.0, 1.0]])
         for dz in dzs:
-            o = c + R @ (outer - c) + np.array([0.0, 0.0, float(dz)])
-            P = (inner + t * (o - inner))[:, None, :]  # (points, 1, 3): every box at once, the same arithmetic
+            up = np.array([0.0, 0.0, dz])
+            o = c + R @ (outer - c) + up
+            i = inner if link else c + R @ (inner - c) + up
+            P = (i + t * (o - i))[:, None, :]  # (points, 1, 3): every box at once, the same arithmetic
             d_out = np.linalg.norm(np.maximum(LO - P, 0.0) + np.maximum(P - HI, 0.0), axis=2)
             d_in = np.min(np.minimum(P - LO, HI - P), axis=2)
             depths = np.max(np.where(d_out > 0.0, radius - d_out, radius + d_in), axis=0)

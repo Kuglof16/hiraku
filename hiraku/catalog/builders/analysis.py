@@ -844,11 +844,12 @@ H1_ENVELOPE_PLAN = {
 }
 H1_MOTION_PLAN = {
     "tool": "assembly",
-    "say": "車輪の箱とタイロッドの棒を、ハンドルの範囲で 1 度ずつ回し上下に動かして、当たる組を先に数えます",
+    "say": "角の部品 (車輪・ナックル・ブレーキの箱と、リンクやダンパーの棒) を、ツールと同じ刻みでハンドルの範囲を回し上下に動かして、当たる組を先に数えます",
     "predictions": [
         {"quantity": "motion_interference_count", "formula_id": "assembly.motion_count", "output": "n",
-         "assumptions": ["動くのは車輪とタイロッドだけ (ツールはナックルやブレーキも動かす)",
-                         "車輪は支えの位置を通る縦の軸で回り、上下に行程の半分ずつ動く"],
+         "assumptions": ["動くのはツールと同じ部品 (支えと一緒に動く部品のうち、種類 suspension 以外)。回してある箱の部品 (フェンダーとその金具) は数えない",
+                         "支えの位置を通る縦の軸で回り、上下に行程の半分ずつ動く (角度も高さもツールと同じ motion.STEPS 刻み)",
+                         "同じ角の中の組 (ダンパーと腕) は見ない (ツールも見ない。K2 のダンパーの形を待つ)"],
          "inputs": {"n_wheel": "from.n_wheel", "n_rod": "from.n_rod"}, "inputs_from": h1_motion_calc},
     ],
 }

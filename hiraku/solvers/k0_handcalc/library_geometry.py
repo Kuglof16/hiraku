@@ -75,18 +75,22 @@ def all_formulas() -> list[Formula]:
         ),
         Formula(
             formula_id="assembly.motion_count",
-            title="車輪が上下しハンドルを切ったときに当たる物の組の数 (車輪の箱とタイロッドの棒で数える)",
+            title="車輪が上下しハンドルを切ったときに当たる物の組の数 (角の部品の箱と棒で数える)",
             domain="assembly",
             expression="n = n_wheel + n_rod",
-            inputs={"n_wheel": _in("1", "pairs of a wheel (its box turned through the steering's range every 1 deg, "
-                                        "its height range grown by the travel) and a box", min=0),
-                    "n_rod": _in("1", "pairs of a tie rod (a straight rod of its section's radius, the inner end in "
-                                      "place, the outer end with the wheel) and a box", min=0)},
+            inputs={"n_wheel": _in("1", "pairs of a box part of a corner (wheel, knuckle, caliper, ball joints: "
+                                        "its box turned and moved on the tool's grid) and a box", min=0),
+                    "n_rod": _in("1", "pairs of a slender part of a corner (its capsule as a rod: a link with the "
+                                      "inner end in place, the damper moved whole) and a box", min=0)},
             outputs={"n": ("1", "pairs that meet in motion", k["n_wheel"] + k["n_rod"])},
-            assumptions=["only the wheels and the tie rods move (the tool also moves the knuckle, the brake and the "
-                         "other links of the corner)",
-                         "the wheel turns about the vertical axis through the support's position, through "
-                         "-max_steer_angle to +max_steer_angle; it moves up and down by half the travel each way",
+            assumptions=["the parts that move are the tool's: every part riding with the support other than kind "
+                         "suspension (k4_geometry.motion); turned box parts of a corner (fenders, their brackets) "
+                         "are left out",
+                         "each corner turns about the vertical axis through the support's position and moves up and "
+                         "down on the tool's grid: motion.STEPS angles from -max_steer_angle to +max_steer_angle, "
+                         "motion.STEPS heights over the travel",
+                         "pairs within a corner are not checked (nor by the tool: the damper against the arms waits "
+                         "for K2's damper shape)",
                          "the other bodies as in assembly.overlap_count (turned parts and slanted members left out); "
                          "what is mounted to the moving part is the tool's rule (k4_geometry.model.mounted)"],
             source="plane geometry of a turned rectangle and of a line (assembly_inputs.motion_inputs)",
