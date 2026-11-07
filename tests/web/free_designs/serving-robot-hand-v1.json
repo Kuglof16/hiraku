@@ -1,0 +1,692 @@
+{
+ "design_version": 1,
+ "parent_version": null,
+ "name": "配膳ロボットの骨組み (手で書いた試し)",
+ "change_reason": "trial: hand-written, no archetype",
+ "variables": {},
+ "supports": [
+  {
+   "id": "FL",
+   "kind": "wheel",
+   "position_mm": [
+    250.0,
+    200.0,
+    50.0
+   ],
+   "radius_mm": 50.0,
+   "width_mm": 25.0,
+   "suspension": {
+    "type": "rigid"
+   },
+   "actuation": {
+    "drive": true,
+    "brake": true,
+    "steer": false
+   },
+   "frame_node": "foot_FL"
+  },
+  {
+   "id": "FR",
+   "kind": "wheel",
+   "position_mm": [
+    250.0,
+    -200.0,
+    50.0
+   ],
+   "radius_mm": 50.0,
+   "width_mm": 25.0,
+   "suspension": {
+    "type": "rigid"
+   },
+   "actuation": {
+    "drive": true,
+    "brake": true,
+    "steer": false
+   },
+   "frame_node": "foot_FR"
+  },
+  {
+   "id": "RL",
+   "kind": "caster",
+   "position_mm": [
+    -250.0,
+    200.0,
+    50.0
+   ],
+   "radius_mm": 50.0,
+   "width_mm": 25.0,
+   "suspension": {
+    "type": "rigid"
+   },
+   "actuation": {
+    "drive": false,
+    "brake": false,
+    "steer": false
+   },
+   "frame_node": "foot_RL"
+  },
+  {
+   "id": "RR",
+   "kind": "caster",
+   "position_mm": [
+    -250.0,
+    -200.0,
+    50.0
+   ],
+   "radius_mm": 50.0,
+   "width_mm": 25.0,
+   "suspension": {
+    "type": "rigid"
+   },
+   "actuation": {
+    "drive": false,
+    "brake": false,
+    "steer": false
+   },
+   "frame_node": "foot_RR"
+  }
+ ],
+ "parts": [
+  {
+   "id": "frame",
+   "name": "骨組み",
+   "kind": "frame",
+   "box": {
+    "center_mm": [
+     0,
+     0,
+     465.0
+    ],
+    "size_mm": [
+     520,
+     420,
+     770.0
+    ]
+   },
+   "mass_kg": 0.0,
+   "system": "body",
+   "material": "steel"
+  },
+  {
+   "id": "tray_top",
+   "name": "上の棚板",
+   "kind": "body",
+   "box": {
+    "center_mm": [
+     0,
+     0,
+     861.0
+    ],
+    "size_mm": [
+     520,
+     420,
+     2
+    ]
+   },
+   "mass_kg": 1.5,
+   "carried_by": [
+    "top_FL",
+    "top_FR",
+    "top_RL",
+    "top_RR"
+   ],
+   "system": "body",
+   "connects_to": [
+    {
+     "to": "top_FL",
+     "via": "bolt",
+     "carries": "load"
+    },
+    {
+     "to": "top_FR",
+     "via": "bolt",
+     "carries": "load"
+    },
+    {
+     "to": "top_RL",
+     "via": "bolt",
+     "carries": "load"
+    },
+    {
+     "to": "top_RR",
+     "via": "bolt",
+     "carries": "load"
+    }
+   ]
+  },
+  {
+   "id": "tray_low",
+   "name": "下の棚板",
+   "kind": "body",
+   "box": {
+    "center_mm": [
+     0,
+     0,
+     411.0
+    ],
+    "size_mm": [
+     520,
+     420,
+     2
+    ]
+   },
+   "mass_kg": 1.5,
+   "carried_by": [
+    "low_FL",
+    "low_FR",
+    "low_RL",
+    "low_RR"
+   ],
+   "system": "body",
+   "connects_to": [
+    {
+     "to": "low_FL",
+     "via": "bolt",
+     "carries": "load"
+    },
+    {
+     "to": "low_FR",
+     "via": "bolt",
+     "carries": "load"
+    },
+    {
+     "to": "low_RL",
+     "via": "bolt",
+     "carries": "load"
+    },
+    {
+     "to": "low_RR",
+     "via": "bolt",
+     "carries": "load"
+    }
+   ]
+  },
+  {
+   "id": "dishes",
+   "name": "上の棚の荷 (10 kg)",
+   "kind": "cargo",
+   "box": {
+    "center_mm": [
+     0,
+     0,
+     912.0
+    ],
+    "size_mm": [
+     400,
+     300,
+     100
+    ]
+   },
+   "mass_kg": 10.0,
+   "carried_by": [
+    "top_FL",
+    "top_FR",
+    "top_RL",
+    "top_RR"
+   ],
+   "system": "cargo",
+   "connects_to": [
+    {
+     "to": "tray_top",
+     "via": "rest",
+     "carries": "load"
+    }
+   ]
+  },
+  {
+   "id": "battery",
+   "name": "電池",
+   "kind": "battery",
+   "box": {
+    "center_mm": [
+     0,
+     0,
+     120.0
+    ],
+    "size_mm": [
+     200,
+     150,
+     60
+    ]
+   },
+   "mass_kg": 3.0,
+   "carried_by": [
+    "foot_FL",
+    "foot_FR",
+    "foot_RL",
+    "foot_RR"
+   ],
+   "system": "battery"
+  },
+  {
+   "id": "wheel_FL",
+   "name": "車輪 FL",
+   "kind": "wheel",
+   "box": {
+    "center_mm": [
+     250.0,
+     200.0,
+     50.0
+    ],
+    "size_mm": [
+     100,
+     25,
+     100
+    ]
+   },
+   "mass_kg": 0.4,
+   "carried_by": [
+    "foot_FL"
+   ],
+   "system": "drive",
+   "connects_to": [
+    {
+     "to": "foot_FL",
+     "via": "bolt",
+     "carries": "load"
+    }
+   ]
+  },
+  {
+   "id": "wheel_FR",
+   "name": "車輪 FR",
+   "kind": "wheel",
+   "box": {
+    "center_mm": [
+     250.0,
+     -200.0,
+     50.0
+    ],
+    "size_mm": [
+     100,
+     25,
+     100
+    ]
+   },
+   "mass_kg": 0.4,
+   "carried_by": [
+    "foot_FR"
+   ],
+   "system": "drive",
+   "connects_to": [
+    {
+     "to": "foot_FR",
+     "via": "bolt",
+     "carries": "load"
+    }
+   ]
+  },
+  {
+   "id": "wheel_RL",
+   "name": "車輪 RL",
+   "kind": "wheel",
+   "box": {
+    "center_mm": [
+     -250.0,
+     200.0,
+     50.0
+    ],
+    "size_mm": [
+     100,
+     25,
+     100
+    ]
+   },
+   "mass_kg": 0.4,
+   "carried_by": [
+    "foot_RL"
+   ],
+   "system": "drive",
+   "connects_to": [
+    {
+     "to": "foot_RL",
+     "via": "bolt",
+     "carries": "load"
+    }
+   ]
+  },
+  {
+   "id": "wheel_RR",
+   "name": "車輪 RR",
+   "kind": "wheel",
+   "box": {
+    "center_mm": [
+     -250.0,
+     -200.0,
+     50.0
+    ],
+    "size_mm": [
+     100,
+     25,
+     100
+    ]
+   },
+   "mass_kg": 0.4,
+   "carried_by": [
+    "foot_RR"
+   ],
+   "system": "drive",
+   "connects_to": [
+    {
+     "to": "foot_RR",
+     "via": "bolt",
+     "carries": "load"
+    }
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "id": "foot_FL",
+   "xyz_mm": [
+    250.0,
+    200.0,
+    80.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "low_FL",
+   "xyz_mm": [
+    250.0,
+    200.0,
+    400.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "top_FL",
+   "xyz_mm": [
+    250.0,
+    200.0,
+    850.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "foot_FR",
+   "xyz_mm": [
+    250.0,
+    -200.0,
+    80.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "low_FR",
+   "xyz_mm": [
+    250.0,
+    -200.0,
+    400.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "top_FR",
+   "xyz_mm": [
+    250.0,
+    -200.0,
+    850.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "foot_RL",
+   "xyz_mm": [
+    -250.0,
+    200.0,
+    80.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "low_RL",
+   "xyz_mm": [
+    -250.0,
+    200.0,
+    400.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "top_RL",
+   "xyz_mm": [
+    -250.0,
+    200.0,
+    850.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "foot_RR",
+   "xyz_mm": [
+    -250.0,
+    -200.0,
+    80.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "low_RR",
+   "xyz_mm": [
+    -250.0,
+    -200.0,
+    400.0
+   ],
+   "joint": "weld"
+  },
+  {
+   "id": "top_RR",
+   "xyz_mm": [
+    -250.0,
+    -200.0,
+    850.0
+   ],
+   "joint": "weld"
+  }
+ ],
+ "members": [
+  {
+   "id": "leg_lo_FL",
+   "node_a": "foot_FL",
+   "node_b": "low_FL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 FL 下"
+  },
+  {
+   "id": "leg_hi_FL",
+   "node_a": "low_FL",
+   "node_b": "top_FL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 FL 上"
+  },
+  {
+   "id": "leg_lo_FR",
+   "node_a": "foot_FR",
+   "node_b": "low_FR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 FR 下"
+  },
+  {
+   "id": "leg_hi_FR",
+   "node_a": "low_FR",
+   "node_b": "top_FR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 FR 上"
+  },
+  {
+   "id": "leg_lo_RL",
+   "node_a": "foot_RL",
+   "node_b": "low_RL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 RL 下"
+  },
+  {
+   "id": "leg_hi_RL",
+   "node_a": "low_RL",
+   "node_b": "top_RL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 RL 上"
+  },
+  {
+   "id": "leg_lo_RR",
+   "node_a": "foot_RR",
+   "node_b": "low_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 RR 下"
+  },
+  {
+   "id": "leg_hi_RR",
+   "node_a": "low_RR",
+   "node_b": "top_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "脚 RR 上"
+  },
+  {
+   "id": "low_FL_FR",
+   "node_a": "low_FL",
+   "node_b": "low_FR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "low 棚の枠 FL-FR"
+  },
+  {
+   "id": "low_RL_RR",
+   "node_a": "low_RL",
+   "node_b": "low_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "low 棚の枠 RL-RR"
+  },
+  {
+   "id": "low_FL_RL",
+   "node_a": "low_FL",
+   "node_b": "low_RL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "low 棚の枠 FL-RL"
+  },
+  {
+   "id": "low_FR_RR",
+   "node_a": "low_FR",
+   "node_b": "low_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "low 棚の枠 FR-RR"
+  },
+  {
+   "id": "top_FL_FR",
+   "node_a": "top_FL",
+   "node_b": "top_FR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "top 棚の枠 FL-FR"
+  },
+  {
+   "id": "top_RL_RR",
+   "node_a": "top_RL",
+   "node_b": "top_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "top 棚の枠 RL-RR"
+  },
+  {
+   "id": "top_FL_RL",
+   "node_a": "top_FL",
+   "node_b": "top_RL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "top 棚の枠 FL-RL"
+  },
+  {
+   "id": "top_FR_RR",
+   "node_a": "top_FR",
+   "node_b": "top_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "top 棚の枠 FR-RR"
+  },
+  {
+   "id": "base_FL_FR",
+   "node_a": "foot_FL",
+   "node_b": "foot_FR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "下の枠 FL-FR"
+  },
+  {
+   "id": "base_RL_RR",
+   "node_a": "foot_RL",
+   "node_b": "foot_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "下の枠 RL-RR"
+  },
+  {
+   "id": "base_FL_RL",
+   "node_a": "foot_FL",
+   "node_b": "foot_RL",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "下の枠 FL-RL"
+  },
+  {
+   "id": "base_FR_RR",
+   "node_a": "foot_FR",
+   "node_b": "foot_RR",
+   "section": "sq20",
+   "material": "steel",
+   "part": "frame",
+   "name": "下の枠 FR-RR"
+  }
+ ],
+ "sections": {
+  "sq20": {
+   "shape": "rect_tube",
+   "dims_mm": {
+    "b": 20.0,
+    "h": 20.0,
+    "t": 1.6
+   },
+   "source": "trial value (not checked against a catalogue)"
+  }
+ },
+ "materials": {
+  "steel": {
+   "name": "carbon steel tube (trial)",
+   "E_MPa": 205000.0,
+   "nu": 0.3,
+   "density_kg_m3": 7850.0,
+   "yield_MPa": 245.0,
+   "source": "trial assumption, not checked",
+   "verified": false
+  }
+ }
+}

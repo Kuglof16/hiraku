@@ -5,8 +5,8 @@
 //   - part.connects_to [{to, via, at_mm?, axis?}]: the part is joined to `to` (a part, a frame
 //     member, a frame node, a support or "<support>.<hardpoint>") by `via` (bolt, weld, bushing,
 //     ...); at_mm and axis (contract 070d49c), when written, are where and along what it is drawn
-//   - the frame's nodes where two or more members meet: node.joint (weld / bolt / pin);
-//     without it, FRAME_NODE_RULE (below) draws the node as welded (by design.archetype).
+//   - the frame's nodes where two or more members meet: node.joint (weld / bolt / pin), node by
+//     node; a node without it is drawn by FRAME_NODE_RULE (below).
 //
 // One joint is one place: the entries of connects_to with the same two ends and the same via
 // are one joint (a wheel "rests" on its support for load, steer and brake: one place), and a
@@ -60,17 +60,19 @@ export const BEAD_NOTE = `溶接のビードは脚 ${WELD_BEAD.leg_mm} mm の三
 // (a kind not in the table: "そのほか" on the screen, not the record's English word; the word is the row's title)
 export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: "そのほか", via: String(via) };
 
-// The rule for a frame node that does not say how it is joined (node.joint absent): drawn as
-// welded. The contract (docs/contract.md, d9631a5; node.joint in the schema) says the ladder_4w
-// generator's frame nodes are welded, and design.archetype (070d49c) names the generator:
-//   archetype "ladder_4w"      the rule for its nodes without node.joint
+// A frame node that says how it is joined (node.joint, docs/contract.md: weld / bolt / pin) is
+// drawn so, whatever made the design. Only a node without it follows the rule, drawn as welded.
+// The contract (d9631a5) says the ladder_4w generator's frame nodes are welded, and
+// design.archetype (070d49c) names the generator:
+//   archetype "ladder_4w"      the rule for its nodes without node.joint (NODE_RULE_NOTE)
 //   another archetype          no rule: a node without node.joint has no mark (counted, the legend says so)
-//   no archetype (a design     the rule for every frame node without node.joint, as before the
-//   made before 070d49c)       archetype was recorded; the legend says so (NODE_RULE_OLD_NOTE)
+//   no archetype (a design     the rule for its nodes without node.joint, as before; the legend says
+//   Claude wrote, or one made  only that those nodes do not say how (NODE_RULE_UNWRITTEN_NOTE), not
+//   before 070d49c)            that the design is old: the nodes with node.joint keep theirs
 export const FRAME_NODE_RULE = "weld";
 export const RULE_ARCHETYPE = "ladder_4w";
 export const NODE_RULE_NOTE = "ladder_4w の型の枠の節は溶接 (契約) なので、つなぎ方の書いていない節を決まりで溶接として描いている";
-export const NODE_RULE_OLD_NOTE = "型 (archetype) の記録が無い前の設計なので、つなぎ方の書いていない枠の節をすべて決まりで溶接として描いている";
+export const NODE_RULE_UNWRITTEN_NOTE = "設計につなぎ方の書いていない枠の節を、決まりで溶接として描いている (書いてある節は、書いてあるとおりに描く)";
 // Two members of the same section going on in one line through a node (THROUGH_COS) are one tube.
 export const THROUGH_NOTE = "一直線に続く同じ断面の 2 本は 1 本の管として、つなぎ目に数えない";
 // connects_to with at_mm (and axis) is drawn at that point (and along that axis); one without
@@ -193,10 +195,11 @@ function sectionSides(design, m) {
 export function readJoints(design) {
   const out = { joints: [], counts: {}, frameRule: 0, unplaced: 0, byPart: 0, guessed: 0, fromData: 0, unstated: 0, ruleBasis: null, through: 0 };
   if (!design) return out;
-  // the frame node rule: by the archetype (ladder_4w), or for every node of a design without one
+  // the frame node rule, for the nodes without node.joint only: by the archetype (ladder_4w), or,
+  // in a design without one, as the nodes' joint is not written ("unwritten")
   const archetype = typeof design.archetype === "string" && design.archetype ? design.archetype : null;
   const useRule = archetype == null || archetype === RULE_ARCHETYPE;
-  out.ruleBasis = archetype == null ? "old" : useRule ? "archetype" : null;
+  out.ruleBasis = archetype == null ? "unwritten" : useRule ? "archetype" : null;
   const parts = Object.fromEntries((design.parts ?? []).map((p) => [p.id, p]));
   const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, n]));
   const members = Object.fromEntries((design.members ?? []).map((m) => [m.id, m]));
@@ -745,7 +748,7 @@ export function jointLegendHtml(info) {
       return `<span class="jl-sw jl-${kd.mark}" style="--jc:${kd.color}"></span><span class="jl-nm" data-kind="${esc(k)}"${kd.via ? ` title="${esc(kd.via)}"` : ""}>${esc(kd.ja)}${extra}</span><span class="jl-n" data-count="${esc(k)}">${info.counts[k]}</span>`;
     })
     .join("");
-  const ruleNote = info.ruleBasis === "old" ? NODE_RULE_OLD_NOTE : NODE_RULE_NOTE;
+  const ruleNote = info.ruleBasis === "unwritten" ? NODE_RULE_UNWRITTEN_NOTE : NODE_RULE_NOTE;
   const nodeJoints = info.joints ? info.joints.filter((j) => j.source === "node").length : 0;
   const notes = [info.frameRule ? `<div class="jl-note" data-note="rule">※ ${esc(ruleNote)}</div>` : ""];
   if (info.unstated) notes.push(`<div class="jl-note" data-note="unstated">枠の節 ${info.unstated} 所はつなぎ方がデータに無いので印なし (型 ${esc(RULE_ARCHETYPE)} でない)</div>`);

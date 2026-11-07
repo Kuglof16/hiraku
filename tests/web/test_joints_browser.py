@@ -128,7 +128,25 @@ def hand_design():
     return d
 
 
-EXTRA_RUNS = {"place": "20261104-190300-place", "ladder": "20261104-190400-ladder", "other": "20261104-190500-other"}
+EXTRA_RUNS = {"place": "20261104-190300-place", "ladder": "20261104-190400-ladder", "other": "20261104-190500-other",
+              "free": "20261107-190600-free"}
+FREE_V1 = HERE / "free_designs" / "serving-robot-hand-v1.json"  # a design without an archetype (free_designs/README.md)
+FREE_NODES = {"bolt": None, "pin": None, "unwritten": None}  # filled by free_design()
+
+
+def free_design():
+    """The hand-written design (no archetype, every node joint weld) with one frame joint turned
+    to bolt, one to pin, and one whose node.joint is taken off (that one alone follows the rule)."""
+    d = json.loads(FREE_V1.read_text(encoding="utf-8"))
+    assert "archetype" not in d
+    frame = frame_joints(d)
+    for kind, n in zip(("bolt", "pin", "unwritten"), frame[:3]):
+        FREE_NODES[kind] = n["id"]
+        if kind == "unwritten":
+            del n["joint"]
+        else:
+            n["joint"] = kind
+    return d
 PLACED = {}  # filled by placed_design(): (owner, to) -> {"at": [...], "axis": [...] or None}
 
 
@@ -335,7 +353,8 @@ class JointsBrowserTest(unittest.TestCase):
             (runs / run_id).mkdir(parents=True)
             (runs / run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         from tests.web.modules_fixture import RUN_ID as MODULES_RUN, module_events
-        cls.extra = {"place": placed_design(), "ladder": dict(design(), archetype="ladder_4w"), "other": dict(design(), archetype="care_bed")}
+        cls.extra = {"place": placed_design(), "ladder": dict(design(), archetype="ladder_4w"), "other": dict(design(), archetype="care_bed"),
+                     "free": free_design()}
         for name, d in cls.extra.items():
             (runs / EXTRA_RUNS[name]).mkdir(parents=True)
             evs = joints_events(d)
@@ -630,14 +649,38 @@ class JointsBrowserTest(unittest.TestCase):
         self.assertEqual(got["counts"], {k: v for k, v in less.items() if v})
         self.assertIn(f"枠の節 {rule} 所はつなぎ方がデータに無いので印なし", legend["text"])
         self.assertNotIn("決まりで溶接", legend["text"])
-        # no archetype (a design made before it was recorded): the rule on every frame node, said so
+        # no archetype (here a design made before it was recorded, no node.joint): the rule on its
+        # frame nodes, said as their joint not written, not as an old design
         page = self.bench("zu")
         got, legend = page.evaluate(SUMMARY), page.evaluate(LEGEND)
         page.close()
-        self.assertEqual((got["frameRule"], got["ruleBasis"]), (rule, "old"))
-        self.assertIn("前の設計なので", legend["text"])
+        self.assertEqual((got["frameRule"], got["ruleBasis"]), (rule, "unwritten"))
+        self.assertIn("設計につなぎ方の書いていない枠の節を、決まりで溶接として描いている", legend["text"])
+        self.assertNotIn("前の設計", legend["text"])
         # THROUGH_COS in words
         self.assertIn("一直線に続く同じ断面の 2 本は 1 本の管として、つなぎ目に数えない", legend["text"])
+
+    def test_node_joint_without_archetype(self):
+        # a design Claude could write (no archetype): each node's node.joint is drawn as written,
+        # and only the node without one follows the rule (not every node welded as an old design)
+        d = self.extra["free"]
+        want, rule = expected_counts(d)
+        self.assertEqual(rule, 1)
+        page = self.bench("zu", run=EXTRA_RUNS["free"])
+        got, legend = page.evaluate(SUMMARY), page.evaluate(LEGEND)
+        self.assertEqual(page.errors, [])
+        page.close()
+        self.assertEqual(got["counts"], want)
+        self.assertEqual((got["frameRule"], got["ruleBasis"], got["unstated"]), (1, "unwritten", 0))
+        nodes = [m for m in got["marks"] if m["source"] == "node"]
+        for kind, shape in (("bolt", "hex"), ("pin", "pin")):
+            mine = [m for m in nodes if m["to"] == FREE_NODES[kind]]
+            self.assertEqual([(m["kind"], m["shape"], m["rule"]) for m in mine], [(kind, shape, False)], kind)
+        self.assertEqual({m["rule"] for m in nodes if m["to"] == FREE_NODES["unwritten"]}, {True})
+        self.assertEqual({m["rule"] for m in nodes if m["to"] not in (FREE_NODES["unwritten"],)}, {False})
+        self.assertEqual({m["kind"] for m in nodes if m["to"] not in FREE_NODES.values()}, {"weld"})
+        self.assertIn("設計につなぎ方の書いていない枠の節", legend["text"])
+        self.assertNotIn("前の設計", legend["text"])
 
     def test_colours_apart_with_modules(self):
         # joints and modules on one bench: each drawn joint kind's colour apart from each module colour

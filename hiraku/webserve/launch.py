@@ -108,15 +108,15 @@ def put_inbox(run_dir: Path, kind: str, fields: dict[str, Any]) -> str:
     return f"{INBOX_DIR}/{name}"
 
 
-def check_designable(requirements: Path) -> None:
-    """Refuse a request whose product no kind of design suits (the run could not make version 1)."""
-    import yaml
-
+def design_way(flags: Any) -> dict[str, Any]:
+    """How version 1 of a product's design is made (docs/contract.md, Claude が書く設計): from a kind
+    of design (hiraku.designgen archetypes that suit the flags: propose_design), or, when none suits,
+    written by Claude itself (write_design). A product is never refused for having no kind of design.
+    {"design_way": "archetype" | "written", "archetypes": [names]}."""
     from hiraku.designgen import archetypes
 
-    flags = (yaml.safe_load(requirements.read_text(encoding="utf-8")) or {}).get("flags") or {}
-    if not archetypes(flags):
-        raise LaunchError(422, "この製品の設計の作り方がまだ無いので、走らせられません (製品の性質に合う設計の型が無い)")
+    names = [a["name"] for a in archetypes(flags if isinstance(flags, dict) else {})]
+    return {"design_way": "archetype" if names else "written", "archetypes": names}
 
 
 def read_requirements(path: Path) -> dict[str, Any]:
@@ -386,8 +386,8 @@ class Launcher:
             raise LaunchError(400, f"mode must be one of {', '.join(MODES)}")
         events = None
         if request is not None:
+            # a product no kind of design suits runs too: Claude writes its design (design_way)
             path, events = self._request_of(request)
-            check_designable(path)
         else:
             path = self._path_of(name)
             listed = self.demo_modes().get(name)
