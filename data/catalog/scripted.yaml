@@ -79,8 +79,11 @@ offroad-4w:
         # width designgen builds, in 5 mm steps from 1200 (1200 refused: side_post_LS2_1 21.4 mm into the floor)
         rollbar_width: {value: 1265, unit: mm}
         # the side guard's foot arm needs its own section, or the shell mesh joins it with cross_S1 into one tube
-        # through the rail's node LS1 (the analysis department, on version 2 of run 20261104-072246)
-        rollbar_foot_h: {value: 60, unit: mm}
+        # through the rail's node LS1 (the analysis department, on version 2 of run 20261104-072246). 70 mm, the value of
+        # v5 (rev_joints) already here: in rev_joints the frame's proposal (cross_h 60) comes before the occupant's, and
+        # with the outriggers still at 60 mm it was refused (side_foot_LS2 through rail node LS2, the EC2 scripted runs
+        # of c14bd653, 2026-11-07)
+        rollbar_foot_h: {value: 70, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
         H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す。
