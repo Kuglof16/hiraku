@@ -116,6 +116,19 @@ class BrokenChainTest(unittest.TestCase):
         next(p for p in d["parts"] if p["id"] == "motor")["connects_to"][0].pop("carries")
         self.assertEqual(hit_ids(check("SY-01", d)), ["support:RL", "support:RR"])
 
+    def test_the_hit_says_where_the_chain_is_cut(self):
+        # the motor's link to the driveshaft carries "power" instead of "torque": the two sides are linked, with something else
+        d = vehicle()
+        next(p for p in d["parts"] if p["id"] == "motor")["connects_to"][0]["carries"] = "power"
+        msg = check("SY-01", d)["hits"][0]["message"]
+        self.assertIn("motor と driveshaft のつながりはありますが、carries が power です", msg)
+        self.assertIn("「torque」にすると鎖がつながります", msg)
+        # no link at all between the two sides: the last part each side reaches, and the link to write
+        msg = check("SY-01", unlink(vehicle(), "driveshaft", "RR"))["hits"][0]["message"]
+        self.assertIn("切れ目はこのあたりです", msg)
+        self.assertIn("connects_to に", msg)
+        self.assertIn("(carries: torque) を足してください", msg)
+
     def test_no_rack(self):
         rec = check("SY-02", without(vehicle(), "rack"))
         self.assertEqual(hit_ids(rec), ["support:FL", "support:FR"])

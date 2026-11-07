@@ -129,6 +129,34 @@ def _ends(ids: set[str] | list[str], limit: int = 6) -> str:
     return "・".join(items[:limit]) + (f" ほか {len(items) - limit} 件" if len(items) > limit else "")
 
 
+def _by_distance(net: Net, starts: list[str], carries: str) -> list[str]:
+    """The nodes joined to the starts by links that carry `carries`, the farthest first (the ends of the chain so far)."""
+    dist = {s: 0 for s in starts}
+    queue = deque(starts)
+    while queue:
+        n = queue.popleft()
+        for m, c in net.adj.get(n, ()):
+            if c == carries and m not in dist:
+                dist[m] = dist[n] + 1
+                queue.append(m)
+    return [n for n, _ in sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def _gap_hint(net: Net, sources: list[str], end: str, reached: set[str], other: set[str], carries: str) -> str:
+    """Where the chain is cut, as the code finds it: a link between the two sides that carries something else (or nothing),
+    else the last part each side reaches, and the link to write between them."""
+    wrong = [(a, b, c) for a in sorted(reached) for b, c in net.adj.get(a, ()) if b in other and c != carries][:3]
+    if wrong:
+        return "。切れ目: " + "、".join(
+            f"{a} と {b} のつながりはありますが、carries が {c or '(書かれていない)'} です (「{carries}」にすると鎖がつながります)" for a, b, c in wrong)
+    ours = [n for n in _by_distance(net, sources, carries) if n in net.parts][:2]
+    theirs = [n for n in _by_distance(net, [end], carries) if n in net.parts and n != end][:2] or [end]  # the end itself when nothing else hangs on it
+    if ours and theirs:
+        return (f"。切れ目はこのあたりです: {_ends(ours)} から先 (carries: {carries} のつながりが無い) と、{_ends(theirs)} の手前の間。"
+                f"例えば {ours[0]} の connects_to に {theirs[0]} (carries: {carries}) を足してください")
+    return ""
+
+
 def _chain(net: Net, sources: list[str], ends: list[str], carries: str, from_label: str, to_label: str) -> Result:
     """Every end reached from the sources through links that carry `carries`; else a hit saying where it stops."""
     if not net.linked:
@@ -142,7 +170,8 @@ def _chain(net: Net, sources: list[str], ends: list[str], carries: str, from_lab
         hits.append(_hit(end, (
             f"{from_label} ({_ends(sources)}) から{to_label} {end} まで、{CARRIES[carries]}を伝える鎖 (carries: {carries}) が切れています。"
             f"{from_label}の側でつながっているのは {_ends(reached)}、{end} の側は {_ends(other_side)} です。"
-            f"この間をつなぐ部品を足し、両側の部品の connects_to に carries: {carries} で書いてください"), connected=0))
+            f"この間をつなぐ部品を足し、両側の部品の connects_to に carries: {carries} で書いてください"
+            + _gap_hint(net, sources, end, reached, other_side, carries)), connected=0))
     return [*sources, *ends], hits, []
 
 

@@ -192,15 +192,19 @@ requirements:
     basis: assumption
   - key: Q62
     name: 人に当たったときの力
-    value: "ISO/TS 15066 の部位ごとの値 (準静的、下腿 130・大腿 220・胸 140・頭 130 N) を借用"
+    value: 130
+    unit: N
     source: default
     trust: 2
     basis: >-
       ISO/TS 15066 の体のモデルの表を載せた論文, Table 1, https://arxiv.org/pdf/2311.13814;
-      read 2026-11-03 in a source check. 産業用ロボットの値を借りる (配膳ロボの規格の値ではない)
+      read 2026-11-03 in a source check. The table's quasi-static values by body part (lower leg 130, thigh 220, chest 140,
+      head 130 N) are borrowed from industrial robots (not a standard's value for a serving robot); 130 N is the smallest of
+      them (computed: min), the safe side for one number
   - key: Q63
     name: 挟み込みの隙間
-    value: ISO 13854 (指 25 mm)
+    value: 25
+    unit: mm
     source: default
     trust: 1
     basis: >-
