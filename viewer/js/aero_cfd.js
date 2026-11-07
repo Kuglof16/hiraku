@@ -18,6 +18,14 @@ HV.fields = HV.fields || {};
     return start.apply(this, args);
   };
 
+  // a stored sample's large arrays are hex (viewer/src/aero_cfd.py says why): back to the page's packed form
+  function unpack(p) {
+    if (!p.hex) return HV.unpack(p);
+    let bin = '';
+    for (let i = 0; i < p.hex.length; i += 2) bin += String.fromCharCode(parseInt(p.hex.substr(i, 2), 16));
+    return HV.unpack(Object.assign({}, p, { b64: btoa(bin) }));
+  }
+
   const LOOK = { body: [0.55, 0.57, 0.6], frame: [0.1, 0.11, 0.13], occupant: [0.28, 0.3, 0.33], cargo: [0.17, 0.22, 0.29], other: [0.19, 0.2, 0.22], tyre: 0x1b1b1e, net: 0xaeb2b8, ground: 0x101216, back: 0x08090c };
   const lookOf = p => (['body', 'fender', 'rollbar'].includes(p.kind) ? LOOK.body : p.kind === 'occupant' || p.module === 'occupant' ? LOOK.occupant : p.kind === 'cargo' ? LOOK.cargo : LOOK.other);
   const toLinear = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));   // HV.colour gives display values; vertex colours are linear
@@ -144,7 +152,7 @@ HV.fields = HV.fields || {};
     const tyre = view.material(new T.MeshLambertMaterial({ color: LOOK.tyre }));
     for (const w of D.wheels) { const m = new T.Mesh(new T.CylinderGeometry(w.r, w.r, w.width, 48), tyre); m.position.set(...w.c); m.userData.kind = 'tyre'; extras.add(m); }
     // the side nets: their wires
-    const netPts = await HV.unpack(D.nets);
+    const netPts = await unpack(D.nets);
     if (netPts.length) { const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(netPts, 3)); extras.add(new T.LineSegments(g, view.material(new T.LineBasicMaterial({ color: LOOK.net })))); }
     // the dark background and floor belong to this field: they leave with it (ctx.root), the page's background stays as it is
     const backdrop = new T.Mesh(new T.SphereGeometry(120000, 24, 12), new T.MeshBasicMaterial({ color: LOOK.back, side: T.BackSide, depthWrite: false }));
@@ -174,7 +182,7 @@ HV.fields = HV.fields || {};
     const paint = () => { const a = S.lines.a, c = specOf(), v = S.by === 'speed' ? a.speed : a.cp; S.lines.paint(i => HV.colour(c, v[i]).map(toLinear)); };
     async function linesOf(i) {
       if (cache.has(i)) return cache.get(i);
-      const Y = D.yaws[i], L = Y.lines, a = { points: await HV.unpack(L.points), speed: await HV.unpack(L.speed), cp: await HV.unpack(L.cp), time: await HV.unpack(L.time), offsets: await HV.unpack(L.offsets) };
+      const Y = D.yaws[i], L = Y.lines, a = { points: await unpack(L.points), speed: await unpack(L.speed), cp: await unpack(L.cp), time: await unpack(L.time), offsets: await unpack(L.offsets) };
       const o = new Lines(view, Y, a); cache.set(i, o); return o;
     }
     const setYaw = async i => {
