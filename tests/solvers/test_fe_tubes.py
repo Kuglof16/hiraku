@@ -348,9 +348,11 @@ class SpaceFrameShellTest(unittest.TestCase):
             xyz = tubes.design_xyz(self.d)
             for l in mounts:  # K2's mount points come back to the hardpoints in the design's axes
                 np.testing.assert_allclose(l.point_mm, xyz[l.carriers[0]], atol=1e-6)
-        # standing still the mounts carry the sprung weight
+        # standing still the mounts carry the sprung weight: within 0.5 % (the state is a record of K2's step run
+        # before the push; with the tyre at 60 N/mm the body still moves a little there: 5500.5 N against 5479.6 N,
+        # 0.38 %; within 0.1 % at 150 N/mm)
         up = sum(l.force_N[2] for l in tubes.body_loads(self.d, veh, self.st["static"]) if l.kind == "mount")
-        self.assertAlmostEqual(up, veh.m_s * 9.80665, delta=1e-3 * veh.m_s * 9.80665)
+        self.assertAlmostEqual(up, veh.m_s * 9.80665, delta=5e-3 * veh.m_s * 9.80665)
 
     def test_quality_and_solve(self):
         for case in ("static", "lift"):
@@ -380,7 +382,8 @@ class SpaceFrameShellTest(unittest.TestCase):
         self.assertGreaterEqual(yield_mpa / abs(st["hot_spot_max"]["value"]), 1.5)
         self.assertIn(lift["hot_spot_max"]["joint"], ("RQ3", "LQ3"))
         self.assertTrue(lift["hot_spot_max"]["member"].startswith("rear_lower_link"))
-        self.assertAlmostEqual(abs(lift["hot_spot_max"]["value"]), 231.2, delta=5.0)
+        # 212.4 MPa with the decided tyre 60 N/mm (231.2 at the earlier 150 N/mm: the softer tyre lowers K2's forces)
+        self.assertAlmostEqual(abs(lift["hot_spot_max"]["value"]), 212.4, delta=5.0)
         d0 = max(abs(h["value"]) for h in st["hot_spots"] if h["joint"] == "D0")
         self.assertLess(d0, 0.65 * yield_mpa)
 
@@ -403,7 +406,8 @@ class SpaceFrameShellTest(unittest.TestCase):
 @SLOW
 class RearLinkRevisionTest(unittest.TestCase):
     """RQ3 (the rear lower link's end at the lift-off, above the yield with 34 x 2.3) can be brought under the
-    yield by the revisable variable rear_link_tube_d. Measured at 40 mm, lift-off: Q3 231.2 (34 x 2.3), 156.5
+    yield by the revisable variable rear_link_tube_d. With tyre 60 N/mm, at 40 mm, lift-off: Q3 212.4 (34 x 2.3),
+    143.7 (42.7 x 2.3). The values below were measured with the earlier tyre 150 N/mm. Measured at 40 mm, lift-off: Q3 231.2 (34 x 2.3), 156.5
     (42.7 x 2.3; the frame's largest then 182.7 MPa at LP3), 175.5 (48.6 x 3.2), 204.3 MPa (60.5 x 3.2): a
     stiffer link draws more load, so the hot spot rises again past 42.7. At the default 20 mm, lift-off (step 100
     mm): RQ3 233.2 (34 x 2.3); with 42.7 x 2.3 LQ3 158.1, RQ3 147.2 and the frame's largest 182.7 MPa at LP3."""
@@ -414,7 +418,9 @@ class RearLinkRevisionTest(unittest.TestCase):
         r = tubes.analyse(d, 40.0)
         lift = r["cases"]["lift"]
         q3 = max(abs(h["value"]) for h in lift["hot_spots"] if h["joint"] in ("RQ3", "LQ3"))
-        self.assertAlmostEqual(q3, 156.5, delta=5.0)
+        # 143.68 MPa with the decided tyre 60 N/mm (156.5 at the earlier 150 N/mm; the same 0.92 drop as the
+        # 34 x 2.3 case's 231.2 -> 212.4: the softer tyre lowers K2's forces), measured in trial 7c2g's slow run
+        self.assertAlmostEqual(q3, 143.7, delta=5.0)
         for case in ("static", "lift"):
             self.assertLess(abs(r["cases"][case]["hot_spot_max"]["value"]), yield_mpa, case)
 

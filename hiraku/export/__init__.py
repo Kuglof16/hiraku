@@ -47,8 +47,8 @@ def _check(store: RunStore, parts: Iterable[str], versions: Iterable[int] | None
         versions = [int(v) for v in versions]
         missing = [v for v in versions if v not in have]
         if missing:
-            raise ExportError(f"版 {', '.join(map(str, missing))} はこの実行にありません (ある版: "
-                              f"{', '.join(map(str, have)) or 'なし'})")
+            raise ExportError(f"{', '.join(f'v{v}' for v in missing)} はこの実行にありません (ある版: "
+                              f"{', '.join(f'v{v}' for v in have) or 'なし'})")
     if domains is not None:
         domains = list(domains)
         known = sorted({lc["domain"] for lc in store.project.get("load_cases", [])})
@@ -57,9 +57,9 @@ def _check(store: RunStore, parts: Iterable[str], versions: Iterable[int] | None
             raise ExportError(f"分野 {', '.join(missing)} はこの実行にありません (ある分野: {', '.join(known) or 'なし'})")
     if diff_from is not None:
         if int(diff_from) not in have:
-            raise ExportError(f"比べる前の版 {diff_from} はこの実行にありません (ある版: {', '.join(map(str, have)) or 'なし'})")
+            raise ExportError(f"比べる前の版 v{diff_from} はこの実行にありません (ある版: {', '.join(f'v{v}' for v in have) or 'なし'})")
         if [int(diff_from)] == (versions or have[-1:]):
-            raise ExportError(f"比べる前の版 {diff_from} と、書き出す版が同じです。別の版を選んでください")
+            raise ExportError(f"比べる前の版 v{diff_from} と、書き出す版が同じです。別の版を選んでください")
     return parts, versions, domains
 
 

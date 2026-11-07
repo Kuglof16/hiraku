@@ -17,6 +17,7 @@ import { BASE_JA, DOMAINS, DOMAIN_JA, fmt, fmtPct, quantityName, unitLabel } fro
 import { fill, h } from "./intake/dom.js";
 import { domainIconSvg } from "./domain_icons.js";
 import { getUrl } from "./source.js";
+import { mountMaterials } from "./materials.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
 const MODES = [["domain", "分野から"], ["base", "土台から"]];
@@ -77,6 +78,10 @@ const DEV = URLQ.get("dev") === "1";
 // filter and ?tool=<name> the tool whose card is open, from the start.
 const START_FILTER = Object.hasOwn(FILTER_FN, URLQ.get("shelf") ?? "") ? URLQ.get("shelf") : "all";
 const START_TOOL = URLQ.get("tool") || null;
+// the shelf's two views: the tools, and the material cards (js/materials.js); ?materials=1 or
+// ?material=<id> (that card open) opens on the materials
+const VIEWS = [["tools", "ツール"], ["materials", "材質"]];
+const START_VIEW = URLQ.get("materials") === "1" || URLQ.get("material") ? "materials" : "tools";
 const SETTLE_CAP_MS = 60000; // settled() waits for the server's shelf at most this long
 
 // A formula's expression as K0 writes it (plain ASCII), shown with the usual signs: only a sign is put
@@ -119,7 +124,7 @@ function marks(t) {
 }
 
 export function mountShelf(el, api) {
-  const ui = { mode: "domain", filter: START_FILTER, query: "", collapsed: new Set(), selected: START_TOOL };
+  const ui = { view: START_VIEW, mode: "domain", filter: START_FILTER, query: "", collapsed: new Set(), selected: START_TOOL };
   const shelf = { ready: false, tools: [], formulas: [], archetypes: {}, error: null, asked: false, failed: null };
   const code = new Map(); // `${runId}|${name}` -> {state: "loading"|"none"|"ok"|"error", n, text}
   const codeDone = new Map(); // same key -> the promise of that read (for settled())
@@ -150,9 +155,13 @@ export function mountShelf(el, api) {
   const tree = h("ul", { class: "sh-tree", dataset: { keepScroll: "a4-tree" } });
   const treeBox = h("section", { class: "sh-left" }, note, tree);
   const detailBox = h("section", { class: "sh-right" });
+  const viewSeg = h("div", { class: "sh-seg sh-view" });
+  const toolsBody = h("div", { class: "sh-body" }, treeBox, detailBox);
+  const materialsBox = h("div", { class: "mt-host" });
   fill(el, h("div", { class: "sh-host" },
-    h("div", { class: "sh-bar" }, search, modeSeg, filterSeg, sum),
-    h("div", { class: "sh-body" }, treeBox, detailBox)));
+    h("div", { class: "sh-bar" }, viewSeg, search, modeSeg, filterSeg, sum),
+    toolsBody, materialsBox));
+  const materials = mountMaterials(materialsBox, () => render());
 
   // The formulas' titles from GET /api/formulas (light: ids and titles only), so a run's tool names its
   // formulas while the shelf is still being built. Asked once; on a failure the ids stay as they are.
@@ -330,6 +339,17 @@ export function mountShelf(el, api) {
     const ok = tools.filter(allPassed).length;
     // before the shelf is built only this run's tools are known: no count until then
     sum.textContent = shelf.ready ? `${tools.length} ツール・確かめた ${ok}` : shelf.error ? "" : "棚を確かめています…";
+    // the view: the tools, or the material cards (js/materials.js, asked for when first shown)
+    const onMaterials = ui.view === "materials";
+    fill(viewSeg, VIEWS.map(([k, label]) => h("button", { type: "button", class: ui.view === k ? "on" : "", dataset: { view: k },
+      onclick: () => { ui.view = k; render(); } }, label)));
+    for (const x of [search, modeSeg, filterSeg, toolsBody]) x.hidden = onMaterials;
+    materialsBox.hidden = !onMaterials;
+    if (onMaterials) {
+      materials.render();
+      const m = materials.summary();
+      sum.textContent = m ? `${m.cards} 材質・読んで確かめた ${m.ok}` : "";
+    }
     // the tools Claude wrote are all in the run's records: under that filter nothing waits for the server
     note.hidden = (shelf.ready || ui.filter === "claude") && !shelf.error && !shelf.failed;
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
@@ -363,6 +383,7 @@ export function mountShelf(el, api) {
       const t = mergeTools(shelf.tools, api.tools()).find((x) => x.name === ui.selected);
       const key = t && isClaude(t) ? `${api.runId()}|${t.name}` : null;
       if (key && codeDone.has(key)) await Promise.race([codeDone.get(key), cap]);
+      if (ui.view === "materials") await Promise.race([materials.settled(), cap]);
       render();
     },
   };

@@ -422,7 +422,7 @@ def write_load_case(ctx: RunContext, args: dict[str, Any], agent: str | None = N
         raise ToolError(f"{test_id} ({domain}) の荷重条件を書けるのは、その分野の役 ({role}) かまとめ役 (lead) です。"
                         f"{agent} は書きません")
     if not ctx.version:
-        raise ToolError("まだ設計の版がありません。限度は設計 (材料・断面) から計算するので、版 1 ができてから書いてください")
+        raise ToolError("まだ設計の版がありません。限度は設計 (材料・断面) から計算するので、v1 ができてから書いてください")
     catalog = load_catalog()
     try:
         spec = catalog.test(test_id)
@@ -444,7 +444,7 @@ def write_load_case(ctx: RunContext, args: dict[str, Any], agent: str | None = N
     v = ctx.version
     crit = lc["criterion"]
     limit = f"{crit['quantity']} {crit['op']} {_short(crit['limit']['value'])} {crit['limit']['unit']}"
-    _save(ctx, before + [lc], agent, f"版 {v} に、{test_id} の荷重条件 {lc_id} を書きました ({limit}、{crit['basis']})")
+    _save(ctx, before + [lc], agent, f"v{v} に、{test_id} の荷重条件 {lc_id} を書きました ({limit}、{crit['basis']})")
     _add_role(ctx, catalog, role, domain, agent)
     ctx.store.emit("agent.said", agent=agent, domain=domain, design_version=v,
                    text=f"{test_id} の荷重条件 {lc_id}「{lc['title']}」を書きました。限度は {limit} ({crit['basis']})。"

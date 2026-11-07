@@ -88,7 +88,24 @@ def smallest(m: dict[str, tuple[float, str]] | None) -> float:
 def _pairs(design: Record) -> set[tuple[str, str]]:
     """The pairs of bodies that overlap at rest by more than they may (k4_geometry.model's allowance and
     shape_overlap: the tool's H1-interference at rest), found fast: the axis-aligned boxes round all bodies compared
-    at once, the exact test only for the pairs whose boxes meet."""
+    at once, the exact test only for the pairs whose boxes meet. With a sliding seat, also the pairs of a moved part
+    at either end of the slide (k4_geometry.people.slide_ends, as the tool), each tagged with the end's label; a moved
+    seat part against its rider's body is left out, as the tool does (shelf.assembly._rider_pair)."""
+    from hiraku.solvers.k4_geometry.people import occupants, slide_ends
+
+    out = {(a, b) for a, b in _rest_pairs(design)}
+    riders = {f"part:{o['id']}" for o in occupants(design)}
+    for label, d_end, moved in slide_ends(design):
+        keys = {f"part:{pid}" for pid in moved}
+        for a, b in _rest_pairs(d_end):
+            if (a in keys or b in keys) and not any(x in keys and y.split(".", 1)[0] in riders
+                                                    for x, y in ((a, b), (b, a))):
+                out.add((f"{a}@{label}", b))
+    return out
+
+
+def _rest_pairs(design: Record) -> set[tuple[str, str]]:
+    """_pairs at rest only: the bodies' pairs that overlap by more than they may."""
     import numpy as np
 
     from hiraku.solvers.k4_geometry import model as k4

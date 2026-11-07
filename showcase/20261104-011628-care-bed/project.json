@@ -1,0 +1,525 @@
+{
+  "run_id": "20261104-011628-care-bed",
+  "created_at": "2026-11-04T01:16:28.766+09:00",
+  "want": "在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)",
+  "product": "care-bed",
+  "flags": {
+    "lean": true,
+    "electric": true,
+    "pinch": true,
+    "cargo": true,
+    "standing": true,
+    "assembly": true
+  },
+  "round_limit": 1,
+  "cost_limit_usd": 2.0,
+  "requirements": [
+    {
+      "key": "Q03",
+      "name": "使う頻度・年数",
+      "value": "1 日 6 回の乗り降りを 10 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer; no source)"
+    },
+    {
+      "key": "Q11",
+      "name": "路面・床と摩擦係数",
+      "value": "床",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (an indoor floor; no friction coefficient looked up)"
+    },
+    {
+      "key": "Q19",
+      "name": "気温 (範囲の高い端)",
+      "value": 40,
+      "unit": "degC",
+      "source": "default",
+      "trust": 1,
+      "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), LINAK LA31 datasheet, https://media.distrelec.com/Web/Downloads/14/22/05451422.pdf; read 2026-11-03 in a source check",
+      "note": "低い端は +5 degC"
+    },
+    {
+      "key": "Q20",
+      "name": "水・ほこり",
+      "value": "IPX4",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy): IPX4, 6.1 g, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q30",
+      "name": "人数と荷重の組み合わせ",
+      "value": "driver",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer): the one occupant is the bed's user; the carer stands beside the bed and is not counted (only people on board are)"
+    },
+    {
+      "key": "Q31",
+      "name": "体格の範囲",
+      "value": "高齢女性 5 % 〜 若年男性 95 %",
+      "source": "default",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: the AIST page is a list only; not reachable)"
+    },
+    {
+      "key": "Q33",
+      "name": "体重 (強さの不利側)",
+      "value": 1350,
+      "unit": "N",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), 9.2.1 a, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q34",
+      "name": "弱い人がいるか",
+      "value": "高齢者",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (a home care bed is used by older people)"
+    },
+    {
+      "key": "Q40",
+      "name": "積載",
+      "value": 1700,
+      "source": "hearing",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy): 安全動作荷重 SWL 1700 N 以上 (= 利用者 1350 + マットレス 200 + 付属品 150), 9.2.1 a, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
+      "unit": "N"
+    },
+    {
+      "key": "Q56",
+      "name": "アクチュエータの動く範囲 (背上げ)",
+      "value": 70,
+      "unit": "deg",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q60",
+      "name": "静的に倒れない限界 (側端にかける力)",
+      "value": 1350,
+      "unit": "N",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, 9.3 a, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q61",
+      "name": "安全率 (摩耗・疲労する部品)",
+      "value": 4,
+      "unit": "1",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, 8.1.1, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
+    },
+    {
+      "key": "Q63",
+      "name": "挟み込みの隙間",
+      "value": "JIS T 9254 の型と FDA の区分 (Zone 1-4)",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https://www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf. The FDA zones: FDA guidance, read 2026-11-03 in a source check. The JIS T 9254 part: not checked in this repository"
+    },
+    {
+      "key": "Q72",
+      "name": "なぞる規格",
+      "value": "JIS T 9254・FDA",
+      "source": "default",
+      "trust": 2,
+      "basis": "catalog research (not checked in this repository; tried 2026-11-03: the basis has no URL; not reachable)"
+    },
+    {
+      "key": "Q80",
+      "name": "材料と接合",
+      "value": "鋼",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q81",
+      "name": "組む人と工具",
+      "value": "2 人",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q82",
+      "name": "出荷の形",
+      "value": "分割",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q92",
+      "name": "繰り返し回数",
+      "value": "着座 10000 回・昇降 3000 回・背上げと膝上げ 1000 回・柵の上げ下げ 30000 回",
+      "source": "default",
+      "trust": 2,
+      "basis": "JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された), 9.5 c, 9.8 c, 9.7.2 c, 9.4 a 1, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
+    }
+  ],
+  "domain_picks": [
+    {
+      "domain": "handling",
+      "shown_name": "安定 (転倒)",
+      "reason": "端に座ったときや背上げのときに倒れないかを見る",
+      "test_ids": [
+        "S1"
+      ]
+    },
+    {
+      "domain": "powertrain",
+      "shown_name": "動力 (アクチュエータ)",
+      "reason": "背上げ・昇降のアクチュエータが人を載せたまま持ち上げる力と速さが要る",
+      "test_ids": [
+        "P5"
+      ]
+    },
+    {
+      "domain": "strength",
+      "shown_name": "強度信頼性",
+      "reason": "寝る人と端に座る人の重さを骨組みと支点で受ける",
+      "test_ids": [
+        "R1",
+        "R2",
+        "R3",
+        "R5",
+        "R8"
+      ]
+    },
+    {
+      "domain": "nvh",
+      "shown_name": "騒音",
+      "reason": "寝ている人の近くで動くので、音と振れを見る",
+      "test_ids": [
+        "N3"
+      ]
+    },
+    {
+      "domain": "thermal",
+      "shown_name": "熱 (デューティ)",
+      "reason": "アクチュエータのモーターの発熱を見る",
+      "test_ids": [
+        "T3"
+      ]
+    }
+  ],
+  "load_cases": [
+    {
+      "load_case_id": "S1-edge1350N",
+      "test_id": "S1",
+      "domain": "handling",
+      "title": "側端に 1350 N を下向きにかけて倒れないか (利用者は降り、マットレスは載せたまま)",
+      "params": {
+        "loading": "empty",
+        "load_node": "LK",
+        "load_z": {
+          "value": -1350.0,
+          "unit": "N"
+        },
+        "load_point_x": {
+          "value": -695.0,
+          "unit": "mm"
+        },
+        "load_point_y": {
+          "value": 330.0,
+          "unit": "mm"
+        },
+        "load_point_z": {
+          "value": 450.0,
+          "unit": "mm"
+        }
+      },
+      "requirement_keys": [
+        "Q60",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "lighter_side_load",
+        "op": ">=",
+        "limit": {
+          "value": 0.0,
+          "unit": "N"
+        },
+        "basis": "Q60: with 1350 N on the side edge (250 mm wide area, its centre 125 mm in from the edge) the casters of the far side keep a load (below 0 the bed tips)",
+        "requirement_keys": [
+          "Q60"
+        ]
+      },
+      "tolerance_rel": 0.02
+    },
+    {
+      "load_case_id": "S1-side-rail-push",
+      "test_id": "S1",
+      "domain": "handling",
+      "title": "サイドレールの上の棒の真ん中を外へ 675 N で押して倒れないか (R5-side-rail と同じ力: 利用者の体重 Q33 の 50%、仮定。利用者は降り、マットレスは載せたまま)",
+      "params": {
+        "loading": "empty",
+        "load_node": "LSM",
+        "load_y": {
+          "value": 675.0,
+          "unit": "N"
+        }
+      },
+      "requirement_keys": [
+        "Q33",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "lighter_side_load",
+        "op": ">=",
+        "limit": {
+          "value": 0.0,
+          "unit": "N"
+        },
+        "basis": "with the side rail pushed outward by 675 N (half of Q33, an assumption) the casters of the far side keep a load (below 0 the bed tips); the casters are taken not to slide",
+        "requirement_keys": [
+          "Q33"
+        ]
+      },
+      "tolerance_rel": 0.02
+    },
+    {
+      "load_case_id": "P5-back",
+      "test_id": "P5",
+      "domain": "powertrain",
+      "title": "背上げのアクチュエーターの力 (安全動作荷重 Q40 を載せて 0〜70° 起こす)",
+      "params": {
+        "loading": "driver",
+        "actuator": "back"
+      },
+      "requirement_keys": [
+        "Q56",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "actuator_force",
+        "op": "<=",
+        "limit": {
+          "value": 4000.0,
+          "unit": "N"
+        },
+        "basis": "the design variable actuator_rated_force 4000 N (the actuator picked; an assumption of the generator, not checked against a catalogue)"
+      },
+      "tolerance_rel": 0.2,
+      "feeds": [
+        "T3-6uses"
+      ]
+    },
+    {
+      "load_case_id": "P5-knee",
+      "test_id": "P5",
+      "domain": "powertrain",
+      "title": "膝上げのアクチュエーターの力 (安全動作荷重 Q40 を載せて 0〜25° 起こす)",
+      "params": {
+        "loading": "driver",
+        "actuator": "knee"
+      },
+      "requirement_keys": [
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "actuator_force",
+        "op": "<=",
+        "limit": {
+          "value": 4000.0,
+          "unit": "N"
+        },
+        "basis": "the design variable actuator_rated_force 4000 N (the actuator picked; an assumption of the generator, not checked against a catalogue); the knee raise angle is the design's knee_angle_max (no requirement gives it)"
+      },
+      "tolerance_rel": 0.2,
+      "feeds": [
+        "T3-6uses"
+      ]
+    },
+    {
+      "load_case_id": "R3-uses",
+      "test_id": "R3",
+      "domain": "strength",
+      "title": "使う回数の疲労: 着座 10000 回・昇降 3000 回・背上げと膝上げ 1000 回・柵の上げ下げ 30000 回 (柵と昇降は枠の応力を変えないとみる)",
+      "params": {
+        "loading": "driver",
+        "n_seat": {
+          "value": 10000.0,
+          "unit": "1"
+        },
+        "n_lift": {
+          "value": 3000.0,
+          "unit": "1"
+        },
+        "n_raise": {
+          "value": 1000.0,
+          "unit": "1"
+        },
+        "n_rail": {
+          "value": 30000.0,
+          "unit": "1"
+        }
+      },
+      "requirement_keys": [
+        "Q92",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "fatigue_damage",
+        "op": "<",
+        "limit": {
+          "value": 1.0,
+          "unit": "1"
+        },
+        "basis": "Miner's rule over the counts of Q92: the welds last while the damage stays below 1",
+        "requirement_keys": [
+          "Q92"
+        ],
+        "stand_in_quantity": "stress_range"
+      },
+      "tolerance_rel": 0.5
+    },
+    {
+      "load_case_id": "R5-deck",
+      "test_id": "R5",
+      "domain": "strength",
+      "title": "床に安全動作荷重 (Q40 1700 N: 利用者とマットレス・付属品) を載せたときの枠",
+      "params": {
+        "loading": "driver"
+      },
+      "requirement_keys": [
+        "Q33",
+        "Q40",
+        "Q61"
+      ],
+      "criterion": {
+        "quantity": "max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 61.25,
+          "unit": "MPa"
+        },
+        "basis": "yield 245 MPa (JIS G 3466 STKR400 (square and rectangular steel tube for general structure), not checked) / Q61 4 (Q61 is the factor for parts that wear or tire; taken here for the static load too, the safe side)",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.2
+    },
+    {
+      "load_case_id": "R5-side-rail",
+      "test_id": "R5",
+      "domain": "strength",
+      "title": "サイドレールの上の棒の真ん中を外へ 675 N で押したとき (利用者の体重 Q33 の 50%、仮定)",
+      "params": {
+        "loading": "empty",
+        "load_node": "LSM",
+        "load_y": {
+          "value": 675.0,
+          "unit": "N"
+        }
+      },
+      "requirement_keys": [
+        "Q33",
+        "Q61"
+      ],
+      "criterion": {
+        "quantity": "max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 53.75,
+          "unit": "MPa"
+        },
+        "basis": "yield 215 MPa (JIS G 3445 STKM13A (carbon steel tube for machine structural purposes), not checked) / Q61 4; the push is an assumption (half of Q33)",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.2
+    },
+    {
+      "load_case_id": "T3-6uses",
+      "test_id": "T3",
+      "domain": "thermal",
+      "title": "背上げのアクチュエーターの使う割合 (1 日 6 回の使い方をいちばん忙しい 1 時間に集める)",
+      "params": {
+        "loading": "driver",
+        "actuator": "back",
+        "uses_per_hour": {
+          "value": 6.0,
+          "unit": "1"
+        },
+        "strokes_per_use": {
+          "value": 2.0,
+          "unit": "1"
+        }
+      },
+      "requirement_keys": [
+        "Q03"
+      ],
+      "criterion": {
+        "quantity": "actuator_duty",
+        "op": "<=",
+        "limit": {
+          "value": 10.0,
+          "unit": "%"
+        },
+        "basis": "the design variable actuator_rated_duty 10 % (the actuator picked; an assumption of the generator, not checked); Q03's uses all in one hour and 2 strokes per use are assumptions"
+      },
+      "tolerance_rel": 0.1
+    }
+  ],
+  "agents": [
+    {
+      "agent_id": "lead",
+      "role": "lead",
+      "prop": "binder"
+    },
+    {
+      "agent_id": "designer",
+      "role": "designer",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "cae.handling",
+      "role": "cae",
+      "domain": "handling",
+      "prop": "steering_wheel"
+    },
+    {
+      "agent_id": "cae.powertrain",
+      "role": "cae",
+      "domain": "powertrain",
+      "prop": "battery"
+    },
+    {
+      "agent_id": "cae.strength",
+      "role": "cae",
+      "domain": "strength",
+      "prop": "i_beam"
+    },
+    {
+      "agent_id": "cae.thermal",
+      "role": "cae",
+      "domain": "thermal",
+      "prop": "thermometer"
+    }
+  ],
+  "speed_class": "static",
+  "driver": "claude_code_plugin",
+  "status": "done",
+  "cost_usd": null,
+  "design_versions": [
+    1,
+    2
+  ]
+}

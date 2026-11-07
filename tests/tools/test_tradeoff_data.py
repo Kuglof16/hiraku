@@ -23,7 +23,8 @@ STAGES = {"assembly": 0, "frame_static": 1, "frame_shell": 3, "launch": 2}
 
 
 class CollectTest(unittest.TestCase):
-    def collect(self, only, paths=("variables.v",)):
+    def collect(self, only, paths=("variables.v",), rebuilds=False):
+        """rebuilds: k5_rebuilds() for the call, set here so the tests do not depend on K5's REBUILDS_DESIGN."""
         ctx = SimpleNamespace(version=2, load_cases=LCS)
         by_id = {x["load_case_id"]: x for x in LCS}
         asked = []
@@ -40,7 +41,8 @@ class CollectTest(unittest.TestCase):
         with mock.patch.object(tradeoff_data, "latest_verdicts", lambda c, v: dict(by_id)), \
                 mock.patch.object(tradeoff_data.report, "verdict_sources", lambda c, ver: (None, analysis(ver))), \
                 mock.patch.object(tradeoff_data, "tool_stage", lambda c, t: STAGES[t]), \
-                mock.patch.object(tradeoff_data.report, "sensitivities", sensitivities):
+                mock.patch.object(tradeoff_data.report, "sensitivities", sensitivities), \
+                mock.patch.object(tradeoff_data, "k5_rebuilds", lambda: rebuilds):
             got = tradeoff_data.collect(ctx, list(paths), only)
         return got, asked
 
@@ -70,7 +72,7 @@ class CollectTest(unittest.TestCase):
 
     def test_when_k5_rebuilds_the_shape_tools_and_variables_are_looked_at(self):
         with mock.patch.object(tradeoff_data, "k5_rebuilds", lambda: True):
-            got, asked = self.collect(set(), paths=("variables.v", "variables.wheelbase"))
+            got, asked = self.collect(set(), paths=("variables.v", "variables.wheelbase"), rebuilds=True)
             design = {"archetype": "ladder_4w", "variables": {"rail_t": {}, "gear_ratio": {}, "wheelbase": {}}}
             ctx = SimpleNamespace(version=1, store=SimpleNamespace(design=lambda: design))
             defaults = tradeoff_data.default_variables(ctx)

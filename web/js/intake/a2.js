@@ -2,7 +2,7 @@
 
 import { fill, h } from "./dom.js";
 import { ITEM_CHOICES, ITEM_CHOICES_ALT, ITEM_HELP } from "./data.js";
-import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, tradeoffChoiceJa, tradeoffRows, TRUST_JA } from "./model.js";
+import { assumptions, hearingRows, pastRounds, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, tradeoffChoiceJa, tradeoffRows, TRUST_JA } from "./model.js";
 
 const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました", ended: "実行が終わりました" };
 
@@ -41,9 +41,19 @@ function question(q, api, ui) {
     q.ask === "must" && !q.answer && q.state !== "ended" ? h("p", { class: "in-default must" }, "この質問に答えるまで先へ進めません") : null,
     q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この質問への答えは使われません") : null,
     q.answer
-      ? h("p", { class: "in-answer" }, h("b", {}, q.answer.source === "hearing" ? "答え" : "標準の値"), " ",
+      ? h("p", { class: "in-answer" }, h("b", {}, q.answer.source === "hearing" ? "あなたの答え" : "標準の値"), " ",
           choiceLabel(q, q.answer.value) || showValue(q.answer.value, q.answer.unit))
       : null);
+}
+
+/** The parts a rule hit, by name: the host gives the design's part names (api.partName(id) -> the part's name, or null); a part with no
+ *  name is not shown by its id (the ids light the part in the 3D, they are not for reading): only how many, with the ids in the tooltip. */
+function partsHit(parts, api) {
+  const names = parts.map((p) => api.partName?.(p) || null);
+  const known = names.filter(Boolean);
+  const unknown = parts.length - known.length;
+  const label = [...known, ...(unknown ? [`ほか ${unknown} 個の部品`] : [])];
+  return h("p", { class: "in-parts-hit", title: parts.join(", ") }, "どの部品か: ", label.map((n) => h("span", { class: "in-partname" }, n)));
 }
 
 /** A rule that hit: the parts, the sentence, and the two things a person can decide. Hovering a part tells the host. */
@@ -57,7 +67,7 @@ function ruleQuestion(q, api, ui) {
       h("span", { class: "in-badge" }, "ルールに引っかかりました"),
       h("span", { class: "in-state" }, STATE_JA[q.state])),
     h("p", { class: "in-qtext" }, q.text),
-    q.parts?.length ? h("p", { class: "in-parts-hit" }, "どの部品か: ", q.parts.map((p) => h("code", {}, p))) : null,
+    q.parts?.length ? partsHit(q.parts, api) : null,
     h("p", { class: "in-why" }, "守るなら設計を直します。守らなくてよい理由があれば、このルールを使わないことにできます。"),
     h("div", { class: "in-choices" }, q.choices.map((c) =>
       h("button", {
@@ -70,7 +80,7 @@ function ruleQuestion(q, api, ui) {
           oninput: (e) => { const v = e.target.value.trim(); if (v) ui.ruleAnswers[q.rule_id].note = v; else delete ui.ruleAnswers[q.rule_id].note; } })
       : null,
     q.answer
-      ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", RULE_CHOICE_JA[q.answer.choice] || q.answer.choice,
+      ? h("p", { class: "in-answer" }, h("b", {}, "あなたの答え"), " ", RULE_CHOICE_JA[q.answer.choice] || q.answer.choice,
           q.answer.note ? h("small", {}, ` (${q.answer.note})`) : null)
       : null,
     q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null,
@@ -95,7 +105,7 @@ function tradeoffQuestion(q, api, ui) {
         type: "button", disabled: !interactive,
         onclick: () => { ui.tradeoffAnswers[q.tradeoff_id] = { tradeoff_id: q.tradeoff_id, choice: c }; ui.rerender(); },
       }, tradeoffChoiceJa(q, c)))),
-    q.answer ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", tradeoffChoiceJa(q, q.answer.choice)) : null,
+    q.answer ? h("p", { class: "in-answer" }, h("b", {}, "あなたの答え"), " ", tradeoffChoiceJa(q, q.answer.choice)) : null,
     q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null,
     q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この判断は使われません") : null);
 }
@@ -182,6 +192,17 @@ export async function submit(api, ui, body) {
   ui.rerender();
 }
 
+/** The rounds asked before this one, in the order they were asked, each with what it asked and how it was answered (read only). */
+function pastBlock(m, api, ui) {
+  const rounds = pastRounds(m);
+  if (!rounds.length) return null;
+  return h("details", { class: "in-past", dataset: { rounds: String(rounds.length) } },
+    h("summary", {}, `前に聞いたこと (${rounds.length} 回)`),
+    rounds.map((r, i) => h("section", { class: "in-round" },
+      h("h3", {}, `${i + 1} 回目`, r.t != null ? h("small", {}, ` ${Math.round(r.t)} 秒のとき`) : null),
+      [...r.questions.map((q) => question(q, api, ui)), ...r.rules.map((q) => ruleQuestion(q, api, ui)), ...r.trades.map((q) => tradeoffQuestion(q, api, ui))])));
+}
+
 export function renderA2(el, m, api, ui) {
   // the questions that need an answer come first (and keep their order among themselves)
   const rows = hearingRows(m).map((r, i) => [r, i]).sort((a, b) => (b[0].ask === "must" && b[0].state === "asking") - (a[0].ask === "must" && a[0].state === "asking") || a[1] - b[1]).map(([r]) => r);
@@ -205,6 +226,7 @@ export function renderA2(el, m, api, ui) {
       h("div", { class: "in-qs", dataset: { keepScroll: "a2-qs" } },
         rows.length || rules.length || trades.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui)), ...trades.map((q) => tradeoffQuestion(q, api, ui))]
           : h("p", { class: "in-empty" }, m.requirements.length ? "足りない情報はないので、そのまま進みます" : "いまは聞くことがありません")),
+      pastBlock(m, api, ui),
       rows.length || rules.length || trades.length
         ? h("div", { class: "in-composer" },
             h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えたいこと", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !canSend }),

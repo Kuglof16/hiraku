@@ -13,6 +13,8 @@ data/catalog/scripted.yaml without load_case: the tool, a sentence, and the
 predictions (K0 formula id, output, inputs as refs). A `from.<name>` ref is
 read from the prediction's inputs_from(design, load_case): the K2 model's
 masses, heights, rates and areas for the load case's loading (no simulation).
+PLANS also holds PLANS_DRIVE, the steps of the drive records keyed by load case id
+(S1-tilt-<loading>-rollover-drive: the tool rollover_tilt).
 
 S5 has no criterion: no K0 formula predicts the lowest uphill wheel load on
 the rough road, only the mean (the static load on the slope). Its step first
@@ -35,9 +37,10 @@ from __future__ import annotations
 import math
 from typing import Any, Callable
 
-from hiraku.catalog.build import CatalogError, check_design_loading
+from hiraku.catalog.build import DRIVE_SUFFIX, S1_DRIVE_INFIX, CatalogError, check_design_loading
 from hiraku.catalog.builders.common import BuildError, entry, loading, number, q, text, tolerance
 from hiraku.contract.loading import CARGO, LOADING_JA
+from hiraku.contract.protocols import LOADINGS
 
 Record = dict[str, Any]
 
@@ -588,6 +591,18 @@ PLANS: dict[str, Record] = {
                                "全切り: 内側の前輪が max_steer_angle、外側はアッカーマンの角度"],
                "inputs": {"L": "from.L", "t": "from.t", "delta_i": "from.delta_i"}, "inputs_from": turning_inputs}]},
 }
+
+# The steps of the drive records (requirements `drive`, hiraku.catalog.build DRIVE_BUILDERS) that differ from their
+# test's, keyed by load case id (recipe_for takes a load case's own step first); PLANS carries them too.
+# S1-tilt-<loading>-rollover-drive: rollover_tilt (planned_only: it covers no test, so only this step names it), the
+# same prediction as S1's: the tool's tip_angle is the tilt tool's tilt_angle, paired with the same formula.
+_S1_ROLLOVER = {
+    "tool": "rollover_tilt",
+    "say": "傾斜台で倒れる角度を、ばねで車体がロールする分を入れた式で先に見積もります。台はその角度より先まで傾けて止め、"
+           "車が床へ横転するところを、車体と台・床の当たりつきで記録します (判定なし)",
+    "predictions": [dict(PLANS["S1"]["predictions"][0], quantity="tip_angle")]}
+PLANS_DRIVE: dict[str, Record] = {f"S1-tilt-{on}{S1_DRIVE_INFIX}{DRIVE_SUFFIX}": _S1_ROLLOVER for on in LOADINGS}
+PLANS.update(PLANS_DRIVE)
 
 # The steps of the cases past the limit that differ from PLANS (F1 and S4 predict as PLANS).
 PLANS_BEYOND: dict[str, Record] = {

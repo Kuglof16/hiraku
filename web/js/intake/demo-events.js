@@ -469,7 +469,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
+   "text": "確かめる分野を 7 つ、試験を 26 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -521,9 +521,10 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "空力",
-      "reason": "外・走 に当てはまるので、F1 横風 を当てる。F2 空気抵抗 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
       "test_ids": [
-       "F1"
+       "F1",
+       "F2"
       ]
      },
      {
@@ -2162,7 +2163,8 @@ export const DEMOS = {
      },
      "occupant_mass": {
       "value": 76.6,
-      "unit": "kg"
+      "unit": "kg",
+      "basis": "Q33: AIST anthropometric database 1991-92 item N1 Weight, young adult male 95th percentile (the README lists it as not checked)"
      },
      "cargo_mass": {
       "value": 150.0,
@@ -2186,27 +2188,33 @@ export const DEMOS = {
      },
      "drivetrain_efficiency": {
       "value": 0.95,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "motor_efficiency": {
       "value": 0.88,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "controller_efficiency": {
       "value": 0.96,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "regen_efficiency": {
       "value": 0.5,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "aux_power": {
       "value": 150.0,
-      "unit": "W"
+      "unit": "W",
+      "basis": "assumption"
      },
      "battery_voltage": {
       "value": 51.2,
-      "unit": "V"
+      "unit": "V",
+      "basis": "16 x 3.2 V: cell nominal voltage, EVE LF50K product specification LF50K-73103 Ver. D, section 3 (checked 2026-11-03); 16 in series is HIRAKU's choice"
      },
      "battery_capacity": {
       "value": 100.0,
@@ -2214,71 +2222,88 @@ export const DEMOS = {
      },
      "battery_resistance": {
       "value": 0.02,
-      "unit": "ohm"
+      "unit": "ohm",
+      "basis": "assumption"
      },
      "mass_factor": {
       "value": 1.05,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "rolling_resistance": {
       "value": 0.03,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "battery_heat_capacity": {
       "value": 50000.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
      },
      "battery_thermal_resistance": {
       "value": 0.25,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
      },
      "motor_heat_capacity": {
       "value": 11000.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
      },
      "motor_thermal_resistance": {
       "value": 0.06,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
      },
      "controller_heat_capacity": {
       "value": 3600.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
      },
      "controller_thermal_resistance": {
       "value": 0.1,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
      },
      "drag_coefficient": {
       "value": 0.8,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "frontal_area": {
       "value": 1.6,
-      "unit": "m^2"
+      "unit": "m^2",
+      "basis": "assumption"
      },
      "side_force_coefficient": {
       "value": 1.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "side_area": {
       "value": 2.4,
-      "unit": "m^2"
+      "unit": "m^2",
+      "basis": "assumption"
      },
      "centre_of_pressure_height": {
       "value": 800.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "air_density": {
       "value": 1.225,
-      "unit": "kg/m^3"
+      "unit": "kg/m^3",
+      "basis": "ICAO standard atmosphere (ICAO Doc 7488), sea level (not checked)"
      },
      "front_cornering_stiffness": {
       "value": 25000.0,
-      "unit": "N/rad"
+      "unit": "N/rad",
+      "basis": "assumption"
      },
      "rear_cornering_stiffness": {
       "value": 30000.0,
-      "unit": "N/rad"
+      "unit": "N/rad",
+      "basis": "assumption"
      },
      "max_steer_angle": {
       "value": 30.0,
@@ -2286,7 +2311,8 @@ export const DEMOS = {
      },
      "bumper_stiffness": {
       "value": 100.0,
-      "unit": "N/mm"
+      "unit": "N/mm",
+      "basis": "assumption"
      },
      "bumper_stroke": {
       "value": 80.0,
@@ -2298,23 +2324,28 @@ export const DEMOS = {
      },
      "fatigue_fat_class": {
       "value": 71.0,
-      "unit": "MPa"
+      "unit": "MPa",
+      "basis": "assumption"
      },
      "fatigue_slope": {
       "value": 3.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (not checked)"
      },
      "fatigue_knee_cycles": {
       "value": 10000000.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (not checked)"
      },
      "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "tyre_stiffness": {
-      "value": 150.0,
-      "unit": "N/mm"
+      "value": 60.0,
+      "unit": "N/mm",
+      "basis": "60 N/mm, range 45 to 90 N/mm: HIRAKU's judgement from three sources on ATV-class tyres (not measurements of this vehicle's tyre), read 2026-11-06 via web.archive.org copies: (1) D. R. Krueger, Investigation of Lateral Performance of an ATV Tire on Natural, Deformable Surfaces, MS thesis, Auburn University, 2007, Appendix B, Fig. 6.4: Dunlop KT 821 22x8-10 measured statically at 0.69 / 1.03 / 1.38 bar, about 57 / 62 / 74 N/mm read off the figure; (2) BKT technical data sheets, Sierra Max Pro AT 25x8 R12 and Sierra Max AT 25x10 R12: from the rated load and the static loaded radius HIRAKU computes the mean stiffness from 0 to the rated load, 54.3 and 71.7 N/mm (the sheets give no pressure for the loaded radius; such a secant is below the tangent); (3) G. N. Wilson, Towards Speed Selection for High-Speed Operation of Autonomous Ground Vehicles on Rough Off-Road Terrains, PhD thesis, University of Calgary, 2018, Appendix B.3.5.1: ATV 16x8-7 at about 0.69 bar, 36 to 44 N/mm static and 0.1-10 Hz dynamic (dynamic / static about 1.0-1.2)"
      },
      "rail_b": {
       "value": 40.0,
@@ -2410,35 +2441,43 @@ export const DEMOS = {
      },
      "battery_max_temperature": {
       "value": 55.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "cell limit, EVE LF50K product specification, section 3 (checked)"
      },
      "controller_max_temperature": {
       "value": 85.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "Curtis 1234/36/38 manual, Appendix D Table D-1 (checked)"
      },
      "motor_max_temperature": {
       "value": 155.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "assumption: insulation class F of IEC 60085 (not checked)"
      },
      "tyre_damping_ratio": {
       "value": 0.05,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "tyre_slip_stiffness_coeff": {
       "value": 10.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "bump_stop_factor": {
       "value": 10.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "driveshaft_diameter": {
       "value": 30.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "driveshaft_wall": {
       "value": 5.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "driveshafts": {
       "value": 1.0,
@@ -2482,7 +2521,8 @@ export const DEMOS = {
      },
      "tyre_relaxation_length": {
       "value": 300.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "wheel_inertia": {
       "value": 0.63,
@@ -3975,7 +4015,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "RS1",
        "RS2"
@@ -4046,7 +4086,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "LS1",
        "LS2"
@@ -4212,6 +4252,334 @@ export const DEMOS = {
        }
       ],
       "module": "body"
+     },
+     {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        -300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_R1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         -310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        -300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         -300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R1",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -290.0,
+         400.0
+        ]
+       },
+       {
+        "to": "rail_R_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         -330.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R2",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_L2",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L1",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L2",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "rail_L_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         330.0,
+         400.0
+        ]
+       },
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         290.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
      },
      {
       "id": "occupant_R.neck",
@@ -5980,8 +6348,8 @@ export const DEMOS = {
         "carries": "load",
         "at_mm": [
          -2140.0,
-         265.0,
-         271.4
+         275.0,
+         271.6
         ],
         "axis": [
          0.0,
@@ -6089,8 +6457,8 @@ export const DEMOS = {
         "carries": "load",
         "at_mm": [
          -2140.0,
-         -265.0,
-         271.4
+         -275.0,
+         271.6
         ],
         "axis": [
          0.0,
@@ -7892,16 +8260,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -1900.0,
-        265.5,
+        275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "LB"
       ],
@@ -7945,16 +8313,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -2140.0,
-        265.5,
+        275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "LB"
       ],
@@ -8104,16 +8472,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -1900.0,
-        -265.5,
+        -275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "RB"
       ],
@@ -8157,16 +8525,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -2140.0,
-        -265.5,
+        -275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "RB"
       ],
@@ -11938,7 +12306,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         308.0866577448127,
+         313.0866577448127,
          267.0824073268455
         ]
        },
@@ -11951,7 +12319,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         -308.0866577448127,
+         -313.0866577448127,
          267.0824073268455
         ]
        },
@@ -12094,7 +12462,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -12107,7 +12475,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -12159,7 +12527,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -12172,7 +12540,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -12840,24 +13208,24 @@ export const DEMOS = {
        {
         "center_mm": [
          -1900.0,
-         265.5,
+         275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
        {
         "center_mm": [
          -2140.0,
-         265.5,
+         275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
@@ -12888,24 +13256,24 @@ export const DEMOS = {
        {
         "center_mm": [
          -1900.0,
-         -265.5,
+         -275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
        {
         "center_mm": [
          -2140.0,
-         -265.5,
+         -275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
@@ -14150,7 +14518,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         308.0866577448127,
+         313.0866577448127,
          267.0824073268455
         ]
        },
@@ -14163,7 +14531,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         -308.0866577448127,
+         -313.0866577448127,
          267.0824073268455
         ]
        },
@@ -14306,7 +14674,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -14319,7 +14687,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -14371,7 +14739,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -14384,7 +14752,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -14433,6 +14801,7 @@ export const DEMOS = {
        "cross_h",
        "cross_members_through",
        "cross_t",
+       "gusset_ends",
        "gusset_leg",
        "gusset_thickness",
        "lower_b",
@@ -15385,7 +15754,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         308.0866577448127,
+         313.0866577448127,
          267.0824073268455
         ]
        },
@@ -15398,7 +15767,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         -308.0866577448127,
+         -313.0866577448127,
          267.0824073268455
         ]
        },
@@ -15541,7 +15910,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -15554,7 +15923,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -15606,7 +15975,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -15619,7 +15988,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -16237,6 +16606,102 @@ export const DEMOS = {
        },
        {
         "center_mm": [
+         -1325.0,
+         -300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         -300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
          -1233.53436097791,
          -300.0,
          1417.0500000000002
@@ -16707,6 +17172,8 @@ export const DEMOS = {
        "grab_bar_d",
        "grab_bar_gap",
        "grab_bar_t",
+       "headrest_gap",
+       "headrest_height",
        "rollbar",
        "rollbar_b",
        "rollbar_d",
@@ -17427,6 +17894,7 @@ export const DEMOS = {
      "cross_h": "横の部材の管の高さ",
      "cross_members_through": "横の部材がレールを通り抜けるか",
      "cross_t": "横の部材の管の厚さ",
+     "gusset_ends": "フレームの両端の角にもガセット (あり・なし)",
      "gusset_leg": "ガセットの辺の長さ",
      "gusset_thickness": "ガセットの板の厚さ",
      "lower_b": "下の脚の管の幅",
@@ -17458,6 +17926,8 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
+     "headrest_gap": "頭とヘッドレストの前後のすき間",
+     "headrest_height": "ヘッドレストの上端の高さ (座面から)",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -22634,13 +23104,13 @@ export const DEMOS = {
      {
       "part_id": "seat_R",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
       "part_id": "seat_L",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
@@ -22712,6 +23182,14 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "occupant_R.neck",
      "occupant_R.head",
      "occupant_R.thigh_L",
@@ -23007,6 +23485,54 @@ export const DEMOS = {
       "part_id": "cargo",
       "values": {
        "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seatback_R",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_R",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_R1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_R2",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "seatback_L",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_L",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_L1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_L2",
+      "values": {
+       "bottom_z_mm": 400.0
       }
      },
      {
@@ -24080,7 +24606,7 @@ export const DEMOS = {
      {
       "part_id": "support:FL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24088,7 +24614,7 @@ export const DEMOS = {
      {
       "part_id": "support:FR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24096,7 +24622,7 @@ export const DEMOS = {
      {
       "part_id": "support:RL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24104,7 +24630,7 @@ export const DEMOS = {
      {
       "part_id": "support:RR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24668,7 +25194,11 @@ export const DEMOS = {
     "rule_id": "SY-04",
     "targets": [
      "seat_R",
-     "seat_L"
+     "seat_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -24814,6 +25344,14 @@ export const DEMOS = {
      "seat_belt_R",
      "seat_L",
      "seat_belt_L",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "wheel_FL",
      "wheel_FR",
      "wheel_RL",
@@ -30365,7 +30903,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
+   "text": "確かめる分野を 7 つ、試験を 26 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -30417,9 +30955,10 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "空力",
-      "reason": "外・走 に当てはまるので、F1 横風 を当てる。F2 空気抵抗 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
       "test_ids": [
-       "F1"
+       "F1",
+       "F2"
       ]
      },
      {
@@ -31809,7 +32348,8 @@ export const DEMOS = {
      },
      "occupant_mass": {
       "value": 76.6,
-      "unit": "kg"
+      "unit": "kg",
+      "basis": "Q33: AIST anthropometric database 1991-92 item N1 Weight, young adult male 95th percentile (the README lists it as not checked)"
      },
      "cargo_mass": {
       "value": 150.0,
@@ -31833,27 +32373,33 @@ export const DEMOS = {
      },
      "drivetrain_efficiency": {
       "value": 0.95,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "motor_efficiency": {
       "value": 0.88,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "controller_efficiency": {
       "value": 0.96,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "regen_efficiency": {
       "value": 0.5,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "aux_power": {
       "value": 150.0,
-      "unit": "W"
+      "unit": "W",
+      "basis": "assumption"
      },
      "battery_voltage": {
       "value": 51.2,
-      "unit": "V"
+      "unit": "V",
+      "basis": "16 x 3.2 V: cell nominal voltage, EVE LF50K product specification LF50K-73103 Ver. D, section 3 (checked 2026-11-03); 16 in series is HIRAKU's choice"
      },
      "battery_capacity": {
       "value": 100.0,
@@ -31861,71 +32407,88 @@ export const DEMOS = {
      },
      "battery_resistance": {
       "value": 0.02,
-      "unit": "ohm"
+      "unit": "ohm",
+      "basis": "assumption"
      },
      "mass_factor": {
       "value": 1.05,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "rolling_resistance": {
       "value": 0.03,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "battery_heat_capacity": {
       "value": 50000.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
      },
      "battery_thermal_resistance": {
       "value": 0.25,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
      },
      "motor_heat_capacity": {
       "value": 11000.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
      },
      "motor_thermal_resistance": {
       "value": 0.06,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
      },
      "controller_heat_capacity": {
       "value": 3600.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
      },
      "controller_thermal_resistance": {
       "value": 0.1,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
      },
      "drag_coefficient": {
       "value": 0.8,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "frontal_area": {
       "value": 1.6,
-      "unit": "m^2"
+      "unit": "m^2",
+      "basis": "assumption"
      },
      "side_force_coefficient": {
       "value": 1.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "side_area": {
       "value": 2.4,
-      "unit": "m^2"
+      "unit": "m^2",
+      "basis": "assumption"
      },
      "centre_of_pressure_height": {
       "value": 800.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "air_density": {
       "value": 1.225,
-      "unit": "kg/m^3"
+      "unit": "kg/m^3",
+      "basis": "ICAO standard atmosphere (ICAO Doc 7488), sea level (not checked)"
      },
      "front_cornering_stiffness": {
       "value": 25000.0,
-      "unit": "N/rad"
+      "unit": "N/rad",
+      "basis": "assumption"
      },
      "rear_cornering_stiffness": {
       "value": 30000.0,
-      "unit": "N/rad"
+      "unit": "N/rad",
+      "basis": "assumption"
      },
      "max_steer_angle": {
       "value": 30.0,
@@ -31933,7 +32496,8 @@ export const DEMOS = {
      },
      "bumper_stiffness": {
       "value": 100.0,
-      "unit": "N/mm"
+      "unit": "N/mm",
+      "basis": "assumption"
      },
      "bumper_stroke": {
       "value": 80.0,
@@ -31945,23 +32509,28 @@ export const DEMOS = {
      },
      "fatigue_fat_class": {
       "value": 71.0,
-      "unit": "MPa"
+      "unit": "MPa",
+      "basis": "assumption"
      },
      "fatigue_slope": {
       "value": 3.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (not checked)"
      },
      "fatigue_knee_cycles": {
       "value": 10000000.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (not checked)"
      },
      "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "tyre_stiffness": {
-      "value": 150.0,
-      "unit": "N/mm"
+      "value": 60.0,
+      "unit": "N/mm",
+      "basis": "60 N/mm, range 45 to 90 N/mm: HIRAKU's judgement from three sources on ATV-class tyres (not measurements of this vehicle's tyre), read 2026-11-06 via web.archive.org copies: (1) D. R. Krueger, Investigation of Lateral Performance of an ATV Tire on Natural, Deformable Surfaces, MS thesis, Auburn University, 2007, Appendix B, Fig. 6.4: Dunlop KT 821 22x8-10 measured statically at 0.69 / 1.03 / 1.38 bar, about 57 / 62 / 74 N/mm read off the figure; (2) BKT technical data sheets, Sierra Max Pro AT 25x8 R12 and Sierra Max AT 25x10 R12: from the rated load and the static loaded radius HIRAKU computes the mean stiffness from 0 to the rated load, 54.3 and 71.7 N/mm (the sheets give no pressure for the loaded radius; such a secant is below the tangent); (3) G. N. Wilson, Towards Speed Selection for High-Speed Operation of Autonomous Ground Vehicles on Rough Off-Road Terrains, PhD thesis, University of Calgary, 2018, Appendix B.3.5.1: ATV 16x8-7 at about 0.69 bar, 36 to 44 N/mm static and 0.1-10 Hz dynamic (dynamic / static about 1.0-1.2)"
      },
      "rail_b": {
       "value": 40.0,
@@ -32057,35 +32626,43 @@ export const DEMOS = {
      },
      "battery_max_temperature": {
       "value": 55.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "cell limit, EVE LF50K product specification, section 3 (checked)"
      },
      "controller_max_temperature": {
       "value": 85.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "Curtis 1234/36/38 manual, Appendix D Table D-1 (checked)"
      },
      "motor_max_temperature": {
       "value": 155.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "assumption: insulation class F of IEC 60085 (not checked)"
      },
      "tyre_damping_ratio": {
       "value": 0.05,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "tyre_slip_stiffness_coeff": {
       "value": 10.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "bump_stop_factor": {
       "value": 10.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
      },
      "driveshaft_diameter": {
       "value": 30.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "driveshaft_wall": {
       "value": 5.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "driveshafts": {
       "value": 1.0,
@@ -32129,7 +32706,8 @@ export const DEMOS = {
      },
      "tyre_relaxation_length": {
       "value": 300.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
      },
      "wheel_inertia": {
       "value": 0.63,
@@ -33622,7 +34200,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "RS1",
        "RS2"
@@ -33693,7 +34271,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "LS1",
        "LS2"
@@ -33859,6 +34437,334 @@ export const DEMOS = {
        }
       ],
       "module": "body"
+     },
+     {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        -300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_R1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         -310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        -300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         -300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R1",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -290.0,
+         400.0
+        ]
+       },
+       {
+        "to": "rail_R_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         -330.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R2",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_L2",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L1",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L2",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "rail_L_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         330.0,
+         400.0
+        ]
+       },
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         290.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
      },
      {
       "id": "occupant_R.neck",
@@ -35627,8 +36533,8 @@ export const DEMOS = {
         "carries": "load",
         "at_mm": [
          -2140.0,
-         265.0,
-         271.4
+         275.0,
+         271.6
         ],
         "axis": [
          0.0,
@@ -35736,8 +36642,8 @@ export const DEMOS = {
         "carries": "load",
         "at_mm": [
          -2140.0,
-         -265.0,
-         271.4
+         -275.0,
+         271.6
         ],
         "axis": [
          0.0,
@@ -37539,16 +38445,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -1900.0,
-        265.5,
+        275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "LB"
       ],
@@ -37592,16 +38498,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -2140.0,
-        265.5,
+        275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "LB"
       ],
@@ -37751,16 +38657,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -1900.0,
-        -265.5,
+        -275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "RB"
       ],
@@ -37804,16 +38710,16 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -2140.0,
-        -265.5,
+        -275.5,
         252.5
        ],
        "size_mm": [
         50.0,
-        169.0,
+        189.0,
         175.0
        ]
       },
-      "mass_kg": 1.4858480000000003,
+      "mass_kg": 1.6616880000000003,
       "carried_by": [
        "RB"
       ],
@@ -41585,7 +42491,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         308.0866577448127,
+         313.0866577448127,
          267.0824073268455
         ]
        },
@@ -41598,7 +42504,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         -308.0866577448127,
+         -313.0866577448127,
          267.0824073268455
         ]
        },
@@ -41741,7 +42647,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -41754,7 +42660,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -41806,7 +42712,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -41819,7 +42725,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -42487,24 +43393,24 @@ export const DEMOS = {
        {
         "center_mm": [
          -1900.0,
-         265.5,
+         275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
        {
         "center_mm": [
          -2140.0,
-         265.5,
+         275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
@@ -42535,24 +43441,24 @@ export const DEMOS = {
        {
         "center_mm": [
          -1900.0,
-         -265.5,
+         -275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
        {
         "center_mm": [
          -2140.0,
-         -265.5,
+         -275.5,
          252.5
         ],
         "size_mm": [
          100.0,
-         219.0,
+         239.0,
          225.0
         ]
        },
@@ -43797,7 +44703,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         308.0866577448127,
+         313.0866577448127,
          267.0824073268455
         ]
        },
@@ -43810,7 +44716,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         -308.0866577448127,
+         -313.0866577448127,
          267.0824073268455
         ]
        },
@@ -43953,7 +44859,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -43966,7 +44872,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -44018,7 +44924,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -44031,7 +44937,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -44080,6 +44986,7 @@ export const DEMOS = {
        "cross_h",
        "cross_members_through",
        "cross_t",
+       "gusset_ends",
        "gusset_leg",
        "gusset_thickness",
        "lower_b",
@@ -45032,7 +45939,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         308.0866577448127,
+         313.0866577448127,
          267.0824073268455
         ]
        },
@@ -45045,7 +45952,7 @@ export const DEMOS = {
         "via": "ball_joint",
         "point_mm": [
          -2140.0,
-         -308.0866577448127,
+         -313.0866577448127,
          267.0824073268455
         ]
        },
@@ -45188,7 +46095,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -45201,7 +46108,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         304.25,
+         309.25,
          216.25
         ]
        },
@@ -45253,7 +46160,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1930.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -45266,7 +46173,7 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -2110.0,
-         -304.25,
+         -309.25,
          216.25
         ]
        },
@@ -45884,6 +46791,102 @@ export const DEMOS = {
        },
        {
         "center_mm": [
+         -1325.0,
+         -300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         -300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
          -1233.53436097791,
          -300.0,
          1417.0500000000002
@@ -46354,6 +47357,8 @@ export const DEMOS = {
        "grab_bar_d",
        "grab_bar_gap",
        "grab_bar_t",
+       "headrest_gap",
+       "headrest_height",
        "rollbar",
        "rollbar_b",
        "rollbar_d",
@@ -47074,6 +48079,7 @@ export const DEMOS = {
      "cross_h": "横の部材の管の高さ",
      "cross_members_through": "横の部材がレールを通り抜けるか",
      "cross_t": "横の部材の管の厚さ",
+     "gusset_ends": "フレームの両端の角にもガセット (あり・なし)",
      "gusset_leg": "ガセットの辺の長さ",
      "gusset_thickness": "ガセットの板の厚さ",
      "lower_b": "下の脚の管の幅",
@@ -47105,6 +48111,8 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
+     "headrest_gap": "頭とヘッドレストの前後のすき間",
+     "headrest_height": "ヘッドレストの上端の高さ (座面から)",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -52281,13 +53289,13 @@ export const DEMOS = {
      {
       "part_id": "seat_R",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
       "part_id": "seat_L",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
@@ -52359,6 +53367,14 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "occupant_R.neck",
      "occupant_R.head",
      "occupant_R.thigh_L",
@@ -52654,6 +53670,54 @@ export const DEMOS = {
       "part_id": "cargo",
       "values": {
        "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seatback_R",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_R",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_R1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_R2",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "seatback_L",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_L",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_L1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_L2",
+      "values": {
+       "bottom_z_mm": 400.0
       }
      },
      {
@@ -53727,7 +54791,7 @@ export const DEMOS = {
      {
       "part_id": "support:FL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -53735,7 +54799,7 @@ export const DEMOS = {
      {
       "part_id": "support:FR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -53743,7 +54807,7 @@ export const DEMOS = {
      {
       "part_id": "support:RL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -53751,7 +54815,7 @@ export const DEMOS = {
      {
       "part_id": "support:RR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1442.6874254294041,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -54315,7 +55379,11 @@ export const DEMOS = {
     "rule_id": "SY-04",
     "targets": [
      "seat_R",
-     "seat_L"
+     "seat_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -54461,6 +55529,14 @@ export const DEMOS = {
      "seat_belt_R",
      "seat_L",
      "seat_belt_L",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "wheel_FL",
      "wheel_FR",
      "wheel_RL",

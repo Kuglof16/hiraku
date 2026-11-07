@@ -56,7 +56,7 @@ def contract_input_schema(name: str) -> Record:
 
 COMPARE_WHERE = {"type": "string", "description": (
     "場所 (部材・部品・支持の ID)。解析の結果が場所ごとに出ていて、予測がその場所の式 (レールの式ならレールの部材) の"
-    "ときだけ付ける。その場所の結果と照合する。合否は全部の場所のうち不合格に近い方でしか作らない")}
+    "ときだけ付ける。その場所の結果と比べる。合否は全部の場所のうち NG に近い方でしか作らない")}
 
 
 def compare_input_schema() -> Record:
@@ -131,7 +131,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
 
 DESCRIPTIONS = {
     "get_context": (
-        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections を付けなければ小さな一覧 (overview: "
+        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い不一致。sections を付けなければ小さな一覧 (overview: "
         "荷重条件の ID・分野・担当・段・feeds、分野ごとの判定の札、記録の種類ごとの数、部分の名前と中身) だけが返る。"
         "sections で要る部分を名前で頼み、大きな部分は絞る (load_cases と formula_inputs は domain か load_case_id、records は "
         "record_kinds と load_case_id、requirements は requirement_keys、archetypes は archetype)。設計を直した版では、最初に "
@@ -168,23 +168,23 @@ DESCRIPTIONS = {
         "結果は analysis の記録 (analysis_id、results)"
     ),
     "compare": (
-        "予測と解析の結果を照合する。許す幅は荷重条件で決まっている。一致して基準があれば合否 (verdict、値は解析) も作る。"
-        "食い違えば record_cause を書くまでその分野は先に進めない。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の"
+        "予測と解析の結果を比べる。許す幅は荷重条件で決まっている。差が幅に入れば予想通り、外れれば不一致。予想通りで基準があれば"
+        "合否 (verdict、値は解析、基準の判定の OK / NG) も作る。不一致なら record_cause を書くまでその分野は先に進めない。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の"
         "式 (レールの式など) のときは where に部材の ID を付け、その場所の結果と比べる (付けないと全部の場所の不利な方、"
-        "別の部材の最大と比べてしまう)。合否は全部の場所のうち不合格に近い方でしか作らない"
+        "別の部材の最大と比べてしまう)。合否は全部の場所のうち NG に近い方でしか作らない"
     ),
     "record_cause": (
-        "食い違った照合の原因と直し方を書く。これで分野の止まりが解ける。原因で差が説明でき、予測が本当の値を"
+        "予測と比べて不一致だった結果 (comparison) の原因と直し方を書く。これで分野の止まりが解ける。原因で差が説明でき、予測が本当の値を"
         "安全側から押さえていると判断できるときだけ safe_side: true と理由 (safe_side_reason) を付ける。"
         "ツールが数字の向きを確かめ、合っていれば予測 (不利な方の値) で合否を作る。向きが逆なら断る。"
         "手計算が値に届かない (式が無い、上から押さえる式がゆるい、など) ときは、その版で load_path.free_parts の予測で"
         "力の道がつながる (0) ことを確かめ、道をたどるツールの解析に支えのない荷重 (unsupported_load) が無ければ、"
         "tool_decides: true と理由 (tool_decides_reason) を付ける。ツールが道の確かめを見て、ツールの値で合否を作る "
-        "(path_checked、合格も赤もある)。道の確かめが無いか通っていなければ断る。道の確かめもできないときだけ "
+        "(path_checked、OK も NG もある)。道の確かめが無いか通っていなければ断る。道の確かめもできないときだけ "
         "ends_case: true を付ける。その荷重条件は判定なしで終わり、待たれない。safe_side・tool_decides・ends_case は"
         "どれも一緒に付けない。"
-        "手計算が予測していない場所の赤 (解析の hot_spots から作られた合否、basis hot_spot) の原因は、comparison_id の"
-        "代わりに verdict_id を付けて書く (印は付けない。直した版でその場所が許しの内になれば赤は消える)"
+        "手計算が予測していない場所の NG (解析の hot_spots から作られた合否、basis hot_spot) の原因は、comparison_id の"
+        "代わりに verdict_id を付けて書く (印は付けない。直した版でその場所が許しの内になれば NG は消える)"
     ),
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
@@ -201,13 +201,13 @@ DESCRIPTIONS = {
         "新しい版では全部の荷重条件の判定がやり直しになる"
     ),
     "propose_design": (
-        "設計役だけが使う。設計がまだ無い (版 0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
+        "設計役だけが使う。設計がまだ無い (v0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
         "最初の版を作る。座標はツールが出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
-        "版 1 ができると試験の荷重条件と担当の役が決まる"
+        "v1 ができると試験の荷重条件と担当の役が決まる"
     ),
     "write_design": (
         "設計役だけが使う。合う型が無い製品や、型では作れない形のときに、設計そのもの (nodes・members・sections・"
-        "materials・parts・supports、variables は無ければ {}) を書いて版にする。1 回目は版 1、2 回目からは次の版 "
+        "materials・parts・supports、variables は無ければ {}) を書いて版にする。1 回目はv1、2 回目からは次の版 "
         "(回数は round_limit まで、新しい版では全部の荷重条件をやり直す)。design_version・parent_version・change_reason は"
         "ツールが付ける。型を下書きに使ったら based_on にその型を書く。ツールが check_design で確かめ、通らない設計は"
         "問題を全部挙げて断る。モジュールに分かれた設計では使わない"
@@ -228,7 +228,7 @@ DESCRIPTIONS = {
     ),
     "write_report": (
         "まとめ役が最後に 1 回呼ぶ。summary (分野ごとの結果を記録の ID と一緒に) と next (次に変えるなら: 分野・変更・理由) "
-        "だけを書く。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値はツールが記録から入れる。"
+        "だけを書く。分野ごとの結果・効いている項・前提・不一致と原因・確かめていない値はツールが記録から入れる。"
         "文の中の「数 + 単位」は記録にある値と合わなければ断られる"
     ),
     "check_tool": (
@@ -263,6 +263,7 @@ for _name, _t in INTAKE_TOOLS.items():
 HANDLERS["rule_check"] = rule_check  # the intake's, then the assembly tile again (system rules)
 HANDLERS["write_load_case"] = write_load_case  # hiraku.tools.load_case_writer
 from hiraku.tools import cad_tools  # noqa: E402,F401 (adds export_step, import_step, edit_step to the tables above)
+from hiraku.tools import cfd_tools  # noqa: E402,F401 (adds cfd_aero to the tables above)
 
 
 def _text(obj: Any) -> str:

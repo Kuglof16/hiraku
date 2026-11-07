@@ -28,12 +28,18 @@ mesh of the tube walls:
   in the mount) are left out of the peak stress, the safety factors and
   everything read at the peak: there the bracket is welded over the wall
   and reinforces it, so the local stress where the load is put in is not a
-  measure of the joint. Their stresses stay in the fields. This is how the
-  suspension mounts are treated until the bracket plates are meshed into
-  the shell (like gussets, with welds along the plates' bases and the pin
-  loads spread over the hole edges) and judged by load case R9; until then
-  R9 shows the hand calculation of the pins, plates and welds only
-  (k0_handcalc.library_bracket, not judged).
+  measure of the joint. Their stresses stay in the fields. The wheel mount
+  still takes the ground forces, a support's moment and the unsprung parts,
+  so it stays left out.
+- suspension mount brackets (parts of kind bracket with part.joint) that
+  stand on a tube wall are plates of the mesh (k1_shell.brackets: the two
+  cheeks, base nodes shared with the wall, an O-grid round the pin hole).
+  With mount loads, the force at such a bracket's mount goes on its pin
+  holes' edges (brackets.pin_load) instead of the joint nodes; the result's
+  "brackets" are their base weld and plate root values (brackets.
+  bracket_values, judged by load case R9). Their elements are left out of
+  member_max and the safety factors (read by bracket_values only). The
+  brackets not meshed (mesh.bracket_skipped) keep the joint-node path.
 - gusset parts (kind "gusset") are shell elements of the mesh, so their
   mass is in the shell's element masses and not added again as parts; so
   are the through parts (shell_parts) at the joints meshed as through.
@@ -67,6 +73,7 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, node_table, resultant, support_loads
 from ..k1_frame.analyze import BALANCE_TOL, _split, mount_carriers, mount_share, rigid_fit, sprung_items
 from . import cache
+from .brackets import bracket_values, pin_load
 from .mesh import ELEMENT_SIZE_MM, ShellMesh, build_mesh
 from .solve import ShellModel, StaticSolver, dofs_of, solver_choice, spread_load
 from .stress import ShellStress, element_stresses, hot_spots
@@ -168,7 +175,7 @@ def shell_parts(design: dict, ms: ShellMesh) -> set[str]:
     carried_by [node]) at the joints the mesh made through (ms.through_joints), where the branch's
     elements run on to the far wall and the near wall's hole is cut out. A through part at a joint the
     mesh left as a plain T stays a part (a point mass at its node)."""
-    out = set(ms.part_material)
+    out = set(ms.part_material) | set(getattr(ms, "bracket_material", {}))
     for p in design.get("parts", []):
         cb = p.get("carried_by") or []
         if (p.get("kind") == "frame" and len(cb) == 1 and cb[0] in ms.through_joints
@@ -367,6 +374,10 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     for sid, g in ground.items():
         fn = fr.support_node[sid]
         for kind, p, f in g["vectors"]:
+            bk = ms.bracket_of(sid, kind) if mount_loads is not None else None
+            if bk is not None:  # a meshed bracket: on its pin holes' edges
+                Fv += pin_load(X, bk, f, n_dof)
+                continue
             at = carriers.get(sid, {}).get(kind) or []
             for n in at:
                 if n not in ms.joints:
@@ -412,6 +423,9 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     # ---- read back (the elements inside the wheel mounts are left out)
     members = np.asarray(ms.element_member)
     kept = ~fr.excluded
+    for b in ms.brackets:  # the brackets are read by bracket_values (R9), not as members
+        for el in b.elements:
+            kept[el] = False
     member_max: dict[str, tuple[float, int]] = {}
     for mid in dict.fromkeys(ms.element_member):
         idx = np.nonzero((members == mid) & kept)[0]
@@ -427,6 +441,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     ex_idx = np.nonzero(fr.excluded)[0]
     excluded_max = (float(vm["max"][ex_idx].max()), int(ex_idx[np.argmax(vm["max"][ex_idx])])) if len(ex_idx) else None
     hs = hot_spots(ms, st, fr.excluded)
+    bvals = bracket_values(model, ms, U, vm["max"]) if ms.brackets else {}
     hs_max = max(hs, key=lambda h: abs(h["value"])) if hs else None
 
     u = U.reshape(-1, 6)[:, :3]
@@ -476,6 +491,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "excluded_max": excluded_max,
         "hot_spots": hs,
         "hot_spot_max": hs_max,
+        "brackets": bvals,
         "displacements": disp,
         "worst_node": worst_node,
         "worst_node_member": node_member.get(worst_node, worst),

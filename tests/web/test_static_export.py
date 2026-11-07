@@ -44,6 +44,18 @@ CHECK_1 = json.dumps({"tool": "rollbar", "checks": []})
 README_START = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"
 
 
+# ①'s first screen: the top row, the footer, ①'s いま and its domain cards (js/app.js opensAtRequest)
+ONE_MOMENT = """() => ({
+  openedAt: document.documentElement.dataset.openedAt ?? null,
+  pill: document.getElementById('pill-version').textContent,
+  mode: document.getElementById('mode').innerText,
+  activity: document.getElementById('activity').innerText.trim(),
+  now: document.getElementById('tab-head-intake')?.innerText ?? '',
+  cards: [...document.querySelectorAll('.in-pane.a1 .in-card')].map((c) => [...c.classList].find((k) => ['lit', 'off', 'draft', 'wait'].includes(k))),
+  head: document.querySelector('.in-pane.a1 .in-headtext')?.innerText ?? '',
+})"""
+
+
 def fake_shelf() -> Shelf:
     return Shelf(lambda: {"tools": SHELF_TOOLS, "formulas": FORMULAS, "archetypes": ARCHETYPES})
 
@@ -133,6 +145,7 @@ class ExportTest(unittest.TestCase):
             pairs = {"/api/runs": data / "runs.json", "/api/launch": data / "launch.json",
                      "/api/assets": data / "assets.json", "/api/modules": data / "modules.json",
                      "/api/formulas": data / "formulas.json", f"/api/runs/{RUN_ID}/tools": data / "runs" / RUN_ID / "tools.json",
+                     "/api/materials": data / "materials.json",
                      "/layout.json": self.out / "layout.json"}
             for route, f in pairs.items():
                 self.assertEqual(json.loads(get(base + route)), json.loads(f.read_text(encoding="utf-8")), route)
@@ -162,6 +175,15 @@ class ExportTest(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_the_material_cards_are_in(self):
+        from hiraku.webserve.materials import CARDS_DIR
+
+        got = json.loads((self.out / "data" / "materials.json").read_text(encoding="utf-8"))
+        files = sorted(CARDS_DIR.glob("*.json"))
+        self.assertGreaterEqual(len(files), 4)
+        self.assertEqual(got["cards"], [json.loads(p.read_text(encoding="utf-8")) for p in files])
+        self.assertEqual(got["skipped"], [])
 
     def test_only_tool_files_and_the_runs_taken(self):
         tools = sorted(p.name for p in (self.out / "data" / "runs" / RUN_ID / "tools").iterdir())
@@ -207,7 +229,7 @@ class ExportTest(unittest.TestCase):
         self.assertEqual([str(f) for f in findings if f.level == "error"], [])
         root = self.tmp / "planted"
         root.mkdir()
-        home = "C:" + "/Users/someone/x"  # (split so this file holds no such path)
+        home = "C:" + "/Users/" + "someone/x"  # (split so no line of this file holds such a path)
         line = json.dumps({"seq": 999, "t": 99.0, "ts": "", "run_id": RUN_ID, "kind": "agent.said", "agent": "lead",
                            "text": f"zqprivatezq {home} D:\\\\work\\\\a"})
         saved = make_saved(root, extra_line=line)
@@ -230,7 +252,7 @@ class StaticBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         saved = make_saved(cls.tmp)
-        site = cls.tmp / "site"
+        site = cls.site = cls.tmp / "site"
         ex.export(site / "hiraku", saved_dir=saved, shelf=fake_shelf())
         cls.formulas = {f["formula_id"]: f["title"] for f in json.loads((site / "hiraku" / "data" / "formulas.json").read_text(encoding="utf-8"))["formulas"]}
         cls.server = ThreadingHTTPServer(("127.0.0.1", STATIC_PORT), partial(QuietHandler, directory=str(site)))
@@ -281,10 +303,14 @@ class StaticBrowserTest(unittest.TestCase):
         # the way back to the list: 「☰ 一覧へ」 at the top left (no 「▶ その場で走らせる」 without a server)
         self.assertEqual(page.get_attribute("#back-link", "href"), "?list=1")
         self.assertIsNone(page.query_selector("#mode a.launch-link"))
-        # ④: the strength tile replays its analyses in the tab; the prediction names its formula
+        # ④: the strength tile opens its analysis in the viewer inside the tab (test_grid_viewer_browser)
         page.click('.tab[data-tab="grid"]')
-        page.click('.tile[data-domain="strength"]')
-        page.wait_for_function("!document.getElementById('domain-head').hidden")
+        page.click('.tile[data-domain="strength"] .th')
+        page.wait_for_function("!document.getElementById('grid-viewer').hidden")
+        page.click("#grid-viewer .gv-back")
+        # ③: the prediction names its formula
+        page.click('.tab[data-tab="bench"]')
+        page.click('#tests button[data-lc]:not([data-lc=""])')
         page.evaluate("window.hiraku.seek(1e6)")
         title = self.formulas["frame_static.rail_bending"]
         # (textContent: the card is folded under ③'s くわしく)
@@ -293,6 +319,13 @@ class StaticBrowserTest(unittest.TestCase):
         page.click('.tab[data-tab="A4"]')
         page.wait_for_function(f"document.querySelectorAll('#view-shelf .sh-tool').length >= {len(SHELF_TOOLS)}", timeout=10000)
         self.assertIn("レールの曲げ", page.inner_text("#view-shelf"))
+        # A4's 材質: the material cards from data/materials.json
+        page.click('#view-shelf .sh-view button[data-view="materials"]')
+        cards = json.loads((self.site / "hiraku" / "data" / "materials.json").read_text(encoding="utf-8"))["cards"]
+        page.wait_for_function(f"document.querySelectorAll('#view-shelf .mt-row').length === {len(cards)}", timeout=10000)
+        page.click(f'#view-shelf .mt-row[data-material="{cards[0]["id"]}"]')
+        shown = page.eval_on_selector_all("#view-shelf .mt-detail .mt-val", "(xs) => xs.map((x) => x.textContent)")
+        self.assertEqual(len(shown), len(cards[0]["properties"]))
         self.clean(page, seen)
 
     def test_the_run_list_only_replays(self):
@@ -334,6 +367,18 @@ class StaticBrowserTest(unittest.TestCase):
         self.assertIn(want, got["bar"])
         self.assertIn("この記録を再生する", got["bar"])
         self.assertIn(want, page.inner_text("#intake-host"))
+        # one moment, the request's: no design yet (v —), the status of then, no footer line, the
+        # domain cards picked (not 候補 / 考えています)
+        moment = page.evaluate(ONE_MOMENT)
+        self.assertEqual(moment["openedAt"], "request", moment)
+        self.assertTrue(moment["pill"].startswith("v—"), moment)
+        self.assertIn("依頼の時点", moment["mode"])
+        self.assertNotIn("記録の途中", moment["mode"])
+        self.assertEqual(moment["activity"], "")
+        self.assertIn("lit", moment["cards"])
+        self.assertFalse({"draft", "wait"} & set(moment["cards"]), moment)
+        self.assertNotIn("考えています", moment["head"])
+        self.assertNotIn("候補", moment["head"])
         # the steps in order; the run list is 「☰ 一覧へ」 at the top left, not a tab
         order = page.evaluate("[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.tab ?? t.getAttribute('href'))")
         self.assertEqual(order[:3], ["A1", "A2", "bench"])
@@ -352,6 +397,9 @@ class StaticBrowserTest(unittest.TestCase):
         first_design = page.evaluate("window.hiraku.player.events.find((e) => e.kind === 'design.created').t")
         self.assertGreaterEqual(got["playhead"], first_design)
         self.assertLess(got["playhead"], page.evaluate("window.hiraku.player.duration") / 2)
+        # the top row goes on with the replay (the first design in: v1)
+        page.wait_for_function("document.getElementById('pill-version').textContent.startsWith('v1')")
+        self.assertNotIn("依頼の時点", page.inner_text("#mode"))
         # 「☰ 一覧へ」 at the top left opens the list (no tab of its own beside the domain chips)
         self.assertIsNone(page.query_selector("#tabs a.tab-list"))
         page.click("#back-link")

@@ -137,7 +137,7 @@ class ExportTest(RunCase, unittest.TestCase):
         self.assertFalse([n for n in names if n.endswith(".zip")])
 
     def test_refusals_name_what_the_run_has(self):
-        cases = [({"parts": ["pictures"]}, "選べるのは"), ({"versions": [2]}, "ある版: 1"),
+        cases = [({"parts": ["pictures"]}, "選べるのは"), ({"versions": [2]}, "ある版: v1"),
                  ({"domains": ["nvh"]}, "ある分野"), ({"diff_from": 1}, "同じです"), ({"diff_from": 5}, "ある版")]
         for kw, needle in cases:
             with self.subTest(kw=kw), self.assertRaises(ExportError) as cm:

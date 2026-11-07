@@ -130,6 +130,65 @@ class BeyondBuildTest(unittest.TestCase):
         with builders(named_badly), self.assertRaisesRegex(CatalogError, "id ending -beyond"):
             build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], beyond=["H1"])
 
+    def test_the_drive_record_feeds_nothing(self):
+        """requirements `drive`: P1's record of the run at speed (record_run speed), no criterion, feeding nothing,
+        so R1 keeps reading the push's forces."""
+        out = build_load_cases(self.catalog, self.req, fakes.loaded_design(), ["P1", "R1"], drive=["P1"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        self.assertEqual(list(by_id), ["P1-step100", "R1-step100", "P1-step100-drive"])
+        drive = by_id["P1-step100-drive"]
+        self.assertEqual(drive["params"]["record_run"], "speed")
+        self.assertEqual(drive["params"]["step_height"], by_id["P1-step100"]["params"]["step_height"])
+        self.assertNotIn("criterion", drive)
+        self.assertNotIn("feeds", drive)
+        self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100"])
+        self.assertEqual(contract.errors("load_case", drive), [])
+        with self.assertRaisesRegex(CatalogError, "no drive record"):
+            build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], drive=["H1"])
+
+
+class LaneChangeDriveTest(unittest.TestCase):
+    """The real builders package (no fakes): S3 is built by catalog/builders/k2_tests."""
+
+    def test_the_lane_change_drive_record_is_faster_and_not_judged(self):
+        """requirements `drive`: S3's lane change at S3_DRIVE_FACTOR times the speed, no criterion, feeding nothing."""
+        from hiraku.catalog.build import S3_DRIVE_FACTOR
+        from tests.solvers.k2.test_builders import demo
+
+        design, req = demo()
+        out = build_load_cases(load_catalog(), req, design, ["S3"], drive=["S3"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        s3 = next(lc for lc in out if lc["test_id"] == "S3" and "criterion" in lc)
+        drive = next(lc for lc in out if lc["load_case_id"].endswith("-drive"))
+        self.assertAlmostEqual(drive["params"]["speed"]["value"], s3["params"]["speed"]["value"] * S3_DRIVE_FACTOR)
+        self.assertEqual(drive["load_case_id"], f"S3-dlc{drive['params']['speed']['value']:g}-drive")
+        self.assertNotIn("criterion", drive)
+        self.assertNotIn("feeds", drive)
+        self.assertEqual(contract.errors("load_case", drive), [])
+        self.assertEqual(len(by_id), 2)
+
+    def test_the_tilt_rollover_drive_record_is_past_the_tip_and_not_judged(self):
+        """requirements `drive`: S1's tilt case held S1_DRIVE_PAST_DEG past the tip (rollover_tilt's hold_past), no
+        criterion, feeding nothing; S1's own case is unchanged."""
+        from hiraku.catalog.build import DRIVE_TITLE, S1_DRIVE_PAST_DEG
+        from tests.solvers.k2.test_builders import demo
+
+        design, req = demo()
+        alone = build_load_cases(load_catalog(), req, design, ["S1", "S3"])
+        out = build_load_cases(load_catalog(), req, design, ["S1", "S3"], drive=["S1", "S3"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        s1 = next(lc for lc in out if lc["test_id"] == "S1" and "criterion" in lc)
+        self.assertEqual(s1, next(lc for lc in alone if lc["test_id"] == "S1"))
+        drive = by_id[s1["load_case_id"] + "-rollover-drive"]
+        self.assertEqual(drive["load_case_id"], f"S1-tilt-{s1['params']['loading']}-rollover-drive")
+        self.assertEqual(drive["test_id"], "S1")
+        self.assertEqual(drive["params"], dict(s1["params"], hold_past={"value": S1_DRIVE_PAST_DEG, "unit": "deg"}))
+        self.assertTrue(drive["title"].startswith(DRIVE_TITLE))
+        self.assertNotIn("criterion", drive)
+        self.assertNotIn("feeds", drive)
+        self.assertEqual(contract.errors("load_case", drive), [])
+        self.assertEqual(len(by_id), 4)  # S1, S3 and their drive records
+
 
 class SystemCheckTest(BuildersCase, unittest.TestCase):
     """A system rule (category system) that hits a part turns the assembly tile red."""
@@ -334,9 +393,9 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         started = [e["agent"] for e in self.events("agent.started")]
         self.assertEqual(started, ["lead", "packager", "designer", "cae.strength"])
         said = [e["text"] for e in self.events("agent.said")]
-        self.assertIn("設計の版 2 で、段 0 から全部の荷重条件をやり直します", said)
-        self.assertIn("版 1、段 0 (レイアウトと規則)の荷重条件を確かめます: H1-steer30", said)
-        self.assertIn("版 2、段 1 (軽い計算)の荷重条件を確かめます: P1-step100、R1-step100", said)
+        self.assertIn("設計の v2 で、段 0 から全部の荷重条件をやり直します", said)
+        self.assertIn("v1、段 0 (レイアウトと規則)の荷重条件を確かめます: H1-steer30", said)
+        self.assertIn("v2、段 1 (軽い計算)の荷重条件を確かめます: P1-step100、R1-step100", said)
         self.assertNotIn("hook.denied", [e["kind"] for e in self.ctx.store.events()
                                          if (e.get("data") or {}).get("rule") == "HK5_light_first"])
         events = self.ctx.store.events()
@@ -361,7 +420,7 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual((self.ctx.version, self.ctx.store.judgements()[-1]["state"]), (2, "red"))
         finished = self.events("run.finished")[-1]["data"]
         self.assertEqual((finished["status"], finished["stop_code"]), ("stopped", "round_limit"))
-        self.assertIn("組み立てが赤のまま", finished["stop_reason"])
+        self.assertIn("組み立てが NG のまま", finished["stop_reason"])
         events = self.ctx.store.events()
         self.assertEqual(contract.errors("event", events[-1]), [])
 
