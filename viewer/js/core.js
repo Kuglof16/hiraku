@@ -312,13 +312,14 @@ window.HV = window.HV || {};
 
   // A part moved by a fitted rigid motion (viewer/src/common.py rigid_fit): fit centre c, translation t and
   // rotation vector w per unit of the shape, times k. Returns the box centre offset and the rotation (a proper
-  // rotation by the angle |k w|, so a large display scale turns the box without stretching it).
+  // rotation by the angle |k w|, so a large display scale turns the box without stretching it). k < 0 (the other half
+  // of the swing) turns it the other way: the angle k |w| is signed (until 2026-11-07 only k > 0 turned the box).
   HV.rigidPose = function (pc, c, t, w, k) {
-    const T = window.THREE, ang = k * Math.hypot(w[0], w[1], w[2]);
+    const T = window.THREE, ang = k * Math.hypot(w[0], w[1], w[2]), turns = Math.abs(ang) > 1e-12;
     const q = new T.Quaternion();
-    if (ang > 1e-12) q.setFromAxisAngle(new T.Vector3(w[0], w[1], w[2]).normalize(), ang);
+    if (turns) q.setFromAxisAngle(new T.Vector3(w[0], w[1], w[2]).normalize(), ang);
     const r = new T.Vector3(pc[0] - c[0], pc[1] - c[1], pc[2] - c[2]).applyQuaternion(q);
-    return { off: [c[0] + k * t[0] + r.x - pc[0], c[1] + k * t[1] + r.y - pc[1], c[2] + k * t[2] + r.z - pc[2]], q: ang > 1e-12 ? q : null };
+    return { off: [c[0] + k * t[0] + r.x - pc[0], c[1] + k * t[1] + r.y - pc[1], c[2] + k * t[2] + r.z - pc[2]], q: turns ? q : null };
   };
 
   // Tyres (a ring of the support's radius and width) and their springs (a coil from the wheel node to a fixed
