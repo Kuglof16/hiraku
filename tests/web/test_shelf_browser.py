@@ -186,7 +186,7 @@ class ShelfBrowserTest(unittest.TestCase):
                      rb: r('rollbar').querySelector('.sh-name').textContent, rc: r('roof_crush').querySelector('.sh-name').textContent }; }""")
         self.assertIn("フレームの静的", row["fs"])
         self.assertIn("R1", row["fs"])
-        self.assertIn("K1", row["fs"])
+        self.assertIn("3D の梁", row["fs"])  # (the step by its name; K1 only under ?dev=1)
         self.assertEqual(row["fsK0"], "レールの曲げ")
         self.assertEqual(row["fsName"], "フレームの静的")
         self.assertEqual(row["rbK0"], "rollbar.portal_sway")  # not in the shelf's formulas: no title, the id as it is

@@ -233,7 +233,9 @@ class StaticLoadBrowserTest(unittest.TestCase):
 
     def test_first_screen_reads_no_heavy_part_and_little_data(self):
         page, errors = self.page()
-        page.goto(self.base)
+        # ① of the run at the request's moment (the bare page opens the run as it ended, on ④, whose tiles'
+        # pictures read the design's heavy parts: test_static_export)
+        page.goto(f"{self.base}?run={RUN_ID}&tab=A1")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.wait_for_function("document.getElementById('replaybar')?.innerText.includes('この記録を再生する')")

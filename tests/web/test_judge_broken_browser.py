@@ -33,7 +33,7 @@ from tests.web.test_browser import ENABLED, sync_playwright
 ROOT = Path(__file__).resolve().parents[2]
 CLAUDE = "20261105-160725-offroad-4w"
 STOPPED_NG = "20261105-091217-offroad-4w"
-ROBOT = "20261104-001809-serving-robot"
+ROBOT = "20261104-002518-offroad-4w"  # (a showcase run that stopped before v1)
 
 
 def events(run):
