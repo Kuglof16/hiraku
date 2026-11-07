@@ -225,5 +225,20 @@ class DemoV1Test(unittest.TestCase):
         self.assertFalse(judged(lc, rec))
 
 
+class NoRiderR8Test(unittest.TestCase):
+    """A product nobody rides (the serving robot: no occupant parts, no Q33): R8 builds without the occupants'
+    inertia and without Q33 (common.loading reads Q33 only when the design carries people)."""
+
+    def test_no_q33_without_occupants(self):
+        d = copy.deepcopy(V1)
+        d["parts"] = [p for p in d["parts"] if p.get("kind") != "occupant"]
+        req = requirements(drop=("Q33",))  # Q30 stays two_cargo, as the serving robot run had it
+        cases = BUILDERS["R8"](SPECS["R8"], req, d)
+        for lc in cases:
+            self.assertNotIn("occupant_mass", lc["params"])
+            self.assertNotIn("Q33", lc["requirement_keys"])
+        self.assertIn("R8-free", [lc["load_case_id"] for lc in cases])
+
+
 if __name__ == "__main__":
     unittest.main()
