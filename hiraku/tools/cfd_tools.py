@@ -1,13 +1,16 @@
-"""The flow tool (cfd_aero): a thin adapter between the MCP tools and hiraku.cfd.
+"""The flow tools (cfd_aero, cfd_water): a thin adapter between the MCP tools and hiraku.cfd.
 
 The only module outside hiraku/cfd that imports it. hiraku/tools/mcp.py imports this module in one line, and on
-import it adds its tool to mcp's tables. The name is in RUN_TOOLS and in the aero CAE role's tools (roles.AERO_TOOLS);
+import it adds its tools to mcp's tables. The names are in RUN_TOOLS and in the aero CAE role's tools (roles.AERO_TOOLS);
 removing those, that line, this file and hiraku/cfd leaves the rest working.
 
 A sweep runs on the GPU only: with no GPU the tool says so and does not run; it never falls back to the CPU.
 Its record goes to <run folder>/cfd/v<N>/<speed>_<grid>/ (each case in its own folder). A replay reads a stored
 record and touches no GPU. The hand defaults come from the design and the run's load cases here, as plain
 numbers, so hiraku.cfd stays free of the catalog and the solvers.
+
+cfd_water is a pass through a flooded road, on the GPU in the same way: 見せるための計算で、走破の判定ではない. Its record holds no
+OK / NG and no criterion. By default the vehicle answers the water through K2 (hiraku.cfd.water_coupled gets K2 from here, k2_parts).
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from typing import Any
 
 from hiraku import contract
 from hiraku.catalog.build import CatalogError
-from hiraku.cfd import aero_map, cuda, record, solver, uncertainty
+from hiraku.cfd import aero_map, cuda, record, solver, uncertainty, water, water_coupled, water_record
 from hiraku.contract.loading import loading_of
 from hiraku.contract.protocols import DEFAULT_LOADING, ToolError
 from hiraku.store import StoreError
@@ -75,13 +78,13 @@ def _version(ctx: Any, args: Record) -> int:
     return int(v)
 
 
-def _replay_path(ctx: Any, args: Record) -> Path:
+def _replay_path(ctx: Any, args: Record, record_file: str = record.RECORD_FILE) -> Path:
     run = _run_dir(ctx)
     root = (run / CFD_DIR).resolve()
     replay = args["replay"]
     if replay is True:
         v = _version(ctx, args)
-        found = sorted(root.glob(f"v{v}/*/{record.RECORD_FILE}"), key=lambda p: p.stat().st_mtime_ns)
+        found = sorted(root.glob(f"v{v}/*/{record_file}"), key=lambda p: p.stat().st_mtime_ns)
         if not found:
             raise ToolError(f"v{v} の流れの記録はまだありません。replay を外して回してください")
         return found[-1]
@@ -281,14 +284,119 @@ def k2_parts() -> Any:
                            build_vehicle=model.build_vehicle, settle=scenario.settle, hold=scenario.hold, Sim=sim.Sim, quat_from_euler=sim.quat_from_euler)
 
 
-def _input_schema() -> Record:
+WATER_NAME = "cfd_water"
+WATER_DEFAULTS = {"depth_mm": 200.0, "speed_kmh": 18.0, "dx_mm": 30.0, "frame_hz": 30.0}
+WATER_TIME_LIMIT_S = 6.0  # a vehicle the water slows to a stop ends the pass here
+WATER_RANGE = {"depth_mm": (50.0, 350.0), "speed_kmh": (5.0, 36.0), "dx_mm": (25.0, 60.0), "frame_hz": (10.0, 90.0)}
+
+WATER_INPUT_SCHEMA: Record = {
+    "description": "Agent-facing MCP tool (hiraku/tools/cfd_tools.py). 設計の版が冠水路を通るときの水を GPU で解き、実行のフォルダに記録を書く。見せるための計算で、走破の判定ではない。GPU が無ければ回さない。",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "design_version": {"type": "integer", "minimum": 1, "description": "Missing: the latest version."},
+        "depth_mm": {"type": "number", "minimum": WATER_RANGE["depth_mm"][0], "maximum": WATER_RANGE["depth_mm"][1], "description": "The depth asked of the dip; the settled water line is a little lower (the record has it). Missing: 200."},
+        "speed_kmh": {"type": "number", "minimum": WATER_RANGE["speed_kmh"][0], "maximum": WATER_RANGE["speed_kmh"][1], "description": "The vehicle's speed; with vehicle_moves the speed the driver aims for. Missing: 18."},
+        "dx_mm": {"type": "number", "minimum": WATER_RANGE["dx_mm"][0], "maximum": WATER_RANGE["dx_mm"][1], "description": "Grid size. Missing: 30."},
+        "vehicle_moves": {"type": "boolean", "description": "true: the vehicle answers the water through K2 (slows, pitches, rises). false: it keeps a fixed path at the speed. Missing: true."},
+        "frame_hz": {"type": "number", "minimum": WATER_RANGE["frame_hz"][0], "maximum": WATER_RANGE["frame_hz"][1], "description": "Saved frames per second. Missing: 30."},
+        "keep_particles": {"type": "boolean", "description": "Keep every frame's particles in the run's folder, for pictures made afterwards (about 8 MB a frame at 30 mm). Missing: false."},
+        "replay": {"anyOf": [{"type": "boolean"}, {"type": "string", "minLength": 1, "pattern": "\\.json$"}],
+                   "description": "Read a stored record instead of running: its path relative to the run's folder, or true for the newest of the version. Needs no GPU."},
+    },
+}
+
+WATER_DESCRIPTION = (
+    "設計の版が冠水路 (水の入った窪み、両端は斜面) を通るときの水を GPU で解き (MLS-MPM)、実行のフォルダの cfd/ に記録を書く。"
+    "見せるための計算で、走破の判定ではない。OK / NG は出さず、判定の根拠にもしない。値は実験と比べて確かめていない (physically_validated: false)。"
+    "返すのは、水の高さ、床下の水の深さ、水の運動量の収支。vehicle_moves が true (既定) なら K2 の車両と水を双方向につなぎ、速さの落ち方、路面に対するピッチと高さ、前輪が路面を離れた時間も返す。"
+    "1 回に数分。GPU が無いときは回さず、そう答える。GPU のメモリが足りないときは待つように答える。"
+    "replay を付けると保存した記録を GPU なしで読む (true か、実行のフォルダからの path)"
+)
+
+
+def _water_replay(ctx: Any, args: Record) -> Record:
+    p = _replay_path(ctx, args, water_record.RECORD_FILE)
+    try:
+        rec = water_record.load_record(p)
+    except ValueError as e:
+        raise ToolError(f"冠水路の記録を読めませんでした: {e}") from None
+    if args.get("design_version") and rec["design_version"] != args["design_version"]:
+        raise ToolError(f"この記録は v{rec['design_version']} のものです (頼まれたのは v{args['design_version']})")
+    return water_record.answer(rec, p.relative_to(_run_dir(ctx)).as_posix(), replayed=True)
+
+
+def _water_folder(run: Path, version: int, depth_mm: float, speed_kmh: float, dx_mm: float, moves: bool) -> Path:
+    base = run / CFD_DIR / f"v{version}" / f"water_{depth_mm:g}mm_{speed_kmh:g}kmh_dx{dx_mm:g}{'' if moves else '_fixed'}"
+    folder, n = base, 1
+    while folder.exists():  # never over an earlier pass
+        n += 1
+        folder = base.with_name(f"{base.name}-{n}")
+    return folder
+
+
+def _water_pass(ctx: Any, args: Record) -> Record:
+    run = _run_dir(ctx)
+    version = _version(ctx, args)
+    try:
+        design = ctx.store.design(version)
+    except StoreError:
+        raise ToolError(f"設計の版 v{version} はありません (今は v{ctx.store.design_version} まで)") from None
+    asked = {k: float(args.get(k) or d) for k, d in WATER_DEFAULTS.items()}
+    for k, (lo, hi) in WATER_RANGE.items():
+        if not lo <= asked[k] <= hi:
+            raise ToolError(f"{k} は {lo:g} から {hi:g} までです ({asked[k]:g})")
+    moves, keep = bool(args.get("vehicle_moves", True)), bool(args.get("keep_particles", False))
+    try:
+        gpu, reason = cuda.gpu_or_reason("water")
+    except cuda.CudaError as e:
+        raise ToolError(f"GPU を使えませんでした ({e})。{WAIT}") from None
+    if gpu is None:
+        raise ToolError(NO_GPU.format(reason=reason))
+    gpu.close()
+    p4 = _case_of(ctx.store, version, "P4")
+    loading = loading_of(p4) if p4 else DEFAULT_LOADING
+    folder = _water_folder(run, version, asked["depth_mm"], asked["speed_kmh"], asked["dx_mm"], moves)
+    depth, speed, dx, frame_dt = asked["depth_mm"] / 1000.0, asked["speed_kmh"] / 3.6, asked["dx_mm"] / 1000.0, 1.0 / asked["frame_hz"]
+    t0 = time.perf_counter()
+    try:
+        with cuda.gpu_turn(GPU_WAIT_S), cuda.Gpu("water") as live:
+            if moves:
+                water_coupled.run_coupled(live, k2_parts(), design, water_coupled.LIFT_RATIO, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, frame_dt=frame_dt, t_max_s=WATER_TIME_LIMIT_S)
+            else:
+                water.run_flooded_road(live, design, depth_m=depth, speed_ms=speed, dx=dx, out=folder, loading=loading, analyse=False, frame_dt=frame_dt)
+    except TimeoutError:
+        raise ToolError(f"GPU の順番が回ってきませんでした。{WAIT}") from None
+    except solver.MemoryBudgetError as e:
+        raise ToolError(f"{e}。{WAIT}") from None
+    except (ValueError, KeyError) as e:  # a design the shapes or K2 cannot read (no four wheels, no motor), or a loading it does not fit
+        hint = "。vehicle_moves を false にすると、車を動かさずに回せます" if moves else ""
+        raise ToolError(f"この設計では冠水路の計算を回せません: {e}{hint}") from None
+    except cuda.GpuUnavailable as e:
+        raise ToolError(NO_GPU.format(reason=e)) from None
+    except cuda.CudaError as e:
+        raise ToolError(f"GPU の呼び出しが失敗しました ({e})。{WAIT}") from None
+    case = water.analyse_case(folder, design, keep_particles=keep)  # on the CPU, after the GPU's turn
+    rec = water_record.make_record(case, design_version=version, requested={**asked, "vehicle_moves": moves, "keep_particles": keep, "loading": loading}, kept_particles=keep, wall_time_s=time.perf_counter() - t0)
+    path = water_record.save_record(rec, folder)
+    return water_record.answer(rec, path.relative_to(run).as_posix(), replayed=False)
+
+
+def cfd_water(ctx: Any, args: Record | None = None, agent: str | None = None) -> Record:
+    """A pass through the flooded road on the GPU into the run's folder, or read a stored record."""
+    args = dict(args or {})
+    return _water_replay(ctx, args) if args.get("replay") else _water_pass(ctx, args)
+
+
+def _input_schema(name: str = NAME, here: Record = INPUT_SCHEMA) -> Record:
     """The contract's tool_input once it has it; until then the same shape from here (the lead adds it to the contract)."""
-    schema = dict(contract.schema()["$defs"].get(f"tool_input.{NAME}") or INPUT_SCHEMA)
+    schema = dict(contract.schema()["$defs"].get(f"tool_input.{name}") or here)
     schema.pop("description", None)
     return schema
 
 
-TOOLS: dict[str, Record] = {NAME: {"description": DESCRIPTION, "input_schema": _input_schema(), "function": cfd_aero}}
+TOOLS: dict[str, Record] = {NAME: {"description": DESCRIPTION, "input_schema": _input_schema(), "function": cfd_aero},
+                            WATER_NAME: {"description": WATER_DESCRIPTION, "input_schema": _input_schema(WATER_NAME, WATER_INPUT_SCHEMA), "function": cfd_water}}
 
 
 def _register() -> None:
