@@ -180,12 +180,15 @@ offroad-4w:
         side_bar_d: {value: 60.5, unit: mm}
         side_bar_t: {value: 3.2, unit: mm}
         side_bar_high: {value: 800, unit: mm}
-        # the grab bars inside the roll bar's line: with the seats back the right grip's top stood 119 mm outside it and
-        # reached the ground first in the rollover (the K2 team, 2026-11-07)
-        grab_bar_inboard: {value: 1, unit: '1'}
+        # the side frame's front post (and its grab bar) back where o2 had it: the post stands side_bar_reach ahead of the
+        # driver's point R at the front of the seat's travel, which is 122 mm shorter here (seat_slide 56 mm, o2 300 mm);
+        # with the post 122 mm back the right grip reached the ground first in the rollover (the K2 team, 2026-11-07;
+        # inside the post, grab_bar_inboard, the grip itself came into the occupant's room)
+        side_bar_reach: {value: 222, unit: mm}
       reason: >-
         座席: 前の衝突 (C1) で足もとが前の塔の柱に近いので、座席と電池を -1170 mm へ下げ、ステアリングを -646 mm、ペダルを -527 mm へ
-        下げる (膝の角度とハンドルへの届きを保つ)。握り棒は、横転でロールバーより先に地面に着かないよう、横の枠の柱の内側へ付け替える。
+        下げる (膝の角度とハンドルへの届きを保つ)。横の枠の前の柱と握り棒は、横転でロールバーより先に地面に着かないよう、
+        座席の動く幅が短くなった分 (122 mm) 前へ出す (side_bar_reach 100 から 222 mm)。
         組み立て (H1): 補強が荷台の床と荷とガセットに入るので、ガセットの脚を 80 mm にし、補強の足を 150 mm 内へ寄せ、荷台と荷の幅を
         補強の内側に合わせて狭める (553 mm から 430 mm)。
         ロールバー: 後ろの支え (42.7 mm・厚さ 2.3 mm の丸管) を、ロールバーの上の角から、ロールバーの足から後ろの端までの 0.3 の所の
