@@ -1,11 +1,15 @@
-# HIRAKU
+# HIRAKU 0.1
 
-作りたいもの (たとえば、林道を走れる小さな車) の条件を渡すと、Claude のエージェントたちが、分野ごとに「手計算で結果を予測する → CAE (コンピューターでの解析) で解析する → 予測と比べる → 判定する」を進め、NG の所の設計を直していくアプリです。
-計算の様子は、3D の画面で見られます。使うのは Windows の PC と Python 3.12 で、Claude を呼ばない「台本の運転」なら API キーは要りません。
+HIRAKU は CAE (コンピューターでの解析) のエージェントです。作りたいもの (たとえば、林道を走れる小さな車) を文で書くと、Claude のエージェントたちが確かめる分野と試験を選び、設計を作り、試験ごとに「手計算で結果を予測する → CAE のツールで解析する → 予測と比べる → 判定する」を進め、NG の所の設計を直して確かめ直します。数はどれもツール (コード) が計算し、Claude は式・入力・設計の直し方を選びます。
+
+まず見る所: 下の再生のページ (保存した実行を、何も計算せずに 3D で再生します)。手元で動かすなら「動かし方」、保存した実行ごとの中身は [showcase/README.md](showcase/README.md)、主な主張ごとの記録・コード・試験の場所は「主張と確かめる場所」です。
+
+- 再生のページ: https://kuglof16.github.io/hce992216cd55727ff7/ (8 分野の解析の結果から見るなら [こちら](https://kuglof16.github.io/hce992216cd55727ff7/?run=20261105-150416-offroad-4w-scripted&tab=grid))
+- 紹介のページ: https://kuglof16.github.io/h860337f9b68847f246/
 
 HIRAKU: Claude agents predict each result by hand calculation before running the CAE analysis, check one against the other, and revise the design.
 
-Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作っています。
+使うのは Windows の PC と Python 3.12 です。Claude を呼ばない「台本の運転」なら API キーは要りません。Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作りました。版は 0.1 です (`hiraku/__init__.py` の `__version__` は 0.1.0)。
 
 ## 動かし方
 
@@ -50,15 +54,29 @@ Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作ってい
 
 ## 保存した実行を見る
 
-画面を開くと、まず一覧「HIRAKU でできること」が出ます (`?list=1` も同じ一覧)。「まずはこれ」の「見る」を押すと、リポジトリの `showcase/` に保存した実行のうちいちばん新しいもの (Claude Code のプラグインで回し、v7 で終わった `20261105-160725-offroad-4w`) を再生します。何も計算せず、無料です。
+画面を開くと、まず一覧「HIRAKU でできること」が出ます (`?list=1` も同じ一覧)。「まずはこれ」の「見る」を押すと、リポジトリの `showcase/` に保存した実行のうちいちばん新しいもの (実行の名前の順) を再生します。何も計算せず、無料です。Claude の運転で v7 まで直して全部 OK で終わった実行は `20261105-160725-offroad-4w` で、一覧の「記録を見る」か `?run=20261105-160725-offroad-4w` で開きます。
 
 - 再生は長いので、下の時間の棒を右端まで送ると、終わったときの判定 (④ 解析結果) と組み立て (⑤ 組み立て) が見られます。棒の横の「1×」を押すと、速さが 0.5× から 8× まで変わります。
-- `showcase/` には 4 つの実行と、動画の N10 の場面の記録 (`n10/`) があります。ほかの実行は、一覧の「記録を見る」か、URL の `?run=<実行の名前>` で開きます。実行ごとの中身と見る順のおすすめは [showcase/README.md](showcase/README.md)。
-- 終わった実行で、合わないように見える所:
+- `showcase/` には 8 つの実行 (Claude が回したもの 7 つ、台本の運転 1 つ) と、動画の N10 の場面の記録 (`n10/`) があります。オフロードの車のほかに、依頼の文から 7 分野を選んで v5 まで直した実行 (`20261107-164004-free-utv`)、合う型が無く設計役が設計そのものを書いた配膳ロボットの実行 (`20261107-190633-serving-robot-claude`)、介護ベッドの実行 (`20261104-011628-care-bed`) があります。ほかの実行は、一覧の「記録を見る」か、URL の `?run=<実行の名前>` で開きます。実行ごとの中身と見る順のおすすめは [showcase/README.md](showcase/README.md)。
+- 解析の「ビューアで見る」は、結果のビューア (`viewer/`) を開きます。`showcase/` の実行は記録のフォルダ (`v00N/`) を持たないので、ビューアに出るのはその分野の見本で、その解析の絵ではありません (`hiraku/webserve/viewer_link.py` の冒頭)。
+- `20261105-160725-offroad-4w` で、合わないように見える所:
   - 記録の最後の「まだ確かめていない 45」は、要件の値のうち出典を確かめていない (仮定を含む) ものの数です。
   - この実行で選んだ分野は、強度信頼性と組み立てだけです。P1 (段差越え) は R1 に力を渡すために回した「参考 (判定しない)」なので、④ の動力は「選んでいない」と出ます。
   - ⑤ の手順ごとの「工具」「手」の × は、見せるだけで判定に入りません (手と工具の通り道の決まりに出典が無いため。`hiraku/catalog/builders/analysis.py` の `H5_HANDS_NOTE`)。
   - 上の「費用 不明」は、プラグインの実行では使った額が HIRAKU に届かないためです (下の「Claude Code のプラグインで回す」)。
+
+### 再生だけのページを書き出す
+
+保存した実行を、サーバー無しで再生するページ (静的なサイト) のフォルダに書き出せます。計算はせず、ページの中の道はどれも相対なので、置いた所のどの道の下でも開けます (`hiraku/webserve/export_static.py` の冒頭)。
+
+```
+.venv\Scripts\python -m hiraku.webserve.export_static --out <書き出すフォルダ>
+```
+
+- `--run <実行の名前>` (何度でも付けられる) で入れる実行を選びます。付けなければ `showcase/` の全部です。`--default-run <実行の名前>` で一覧のおすすめを変えます (付けなければ、いちばん新しい実行)。`--saved <フォルダ>` で保存した実行のフォルダを変えます。
+- ツールの棚の確かめ (答えの分かっている例) は、書き出すときに回して結果を書きます。
+- 書き出したあと、公開してはいけない字 (メールのアドレス・ホームのフォルダ・鍵・ドライブの道) が無いかを読み、あれば終了コードを 1 にします (何も消しません。`--no-scan` で読まない)。
+- 3D の部品 (three.js) は jsDelivr から読むので、見る側はインターネットにつながっている必要があります。
 
 ## 台本の運転
 
@@ -163,7 +181,7 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
 | hooks | 実行の途中で、順番を守らせるために止める決まり (HK1〜HK6)。たとえば「予測が先」「不一致は原因が先」 |
 | 台本の運転 / Claude の運転 | 決まった順にツールを呼ぶ運転 (Claude を呼ばない) / Claude が自分で考えて進める運転 (API キーが要る) |
 | 役 | エージェントの役目: まとめ役・設計役 (設計がモジュールに分かれているときは、モジュールごとの設計役)・パッケージ役・分野ごとの CAE 役 |
-| K0〜K5 | 解析の土台: K0 手計算の式・K1 梁と板の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度 |
+| K0〜K5 | 解析の土台: K0 手計算の式・K1 梁と板の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度。これとは別に、GPU の流れの計算 (`hiraku/cfd/`) と STEP の出し入れ (`hiraku/cad/`) がある |
 | 記録 (events.jsonl) | 実行の中で起きたことを 1 行ずつ書いたファイル。画面はこれだけから描く |
 | 要件 | 作りたいものの条件 (使う場所・荷・速さ・基準など)。`data/requirements/` にある |
 
@@ -175,7 +193,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 .venv\Scripts\python -m unittest
 ```
 
-試験の数は、下の「試験の数」にあります。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照らし合わせ・重い試験)。
+試験の数は、下の「試験の数」にあります。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照らし合わせ・重い試験・GPU の無い PC での流れの計算)。
 
 板とソリッドの大きなモデルを速く解く道 (任意。Windows と Linux だけ。無ければ SciPy の SuperLU で解く):
 
@@ -193,25 +211,34 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 ## いま動くもの
 
 - デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 11 の試験 (段差越え P1・強度 R1・レールの継ぎ目の局所の応力 R1s・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「予測 → 解析 → 比べる → 判定」で回す流れ。基準のある試験は OK か NG かまで出す (P1 は基準が無く、予測と比べるまで)。予測の無い解析は hooks が止め、不一致は原因を書くまで先へ進めない。説明できて安全側と判断できる不一致は、不利な方の値で OK か NG かを出す
-- 設計役が設計の変数を変えて次の設計を作る (`revise_design`)。v ごとに何が NG で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
-- 解析のツール 27 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 17 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 10 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`)。数は `hiraku.solvers.builtin_tools()` の長さ、2026-11-06)。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 17 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 10 には付かない)。感度の試験があるのは frame_static だけ
-- 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
+- 設計役が設計の変数を変えて次の設計を作る (`revise_design`)。合う型の無い製品では、設計役が設計そのもの (節点・部材・断面・材料・部品・支え) を書き (`write_design`)、版にする前に `check_design` で確かめ、次の v を変える所だけで作る (`edit_design`。skill `write-a-design`)。v ごとに何が NG で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
+- 解析のツール 31 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 18 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 13 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`)。数は `hiraku.solvers.builtin_tools()` の長さ、2026-11-07)。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 18 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 13 には付かない)。報告 (`write_report`) で感度を求めると、設計の変数は設計を組み直して測る (`hiraku/tools/report.py` の `sensitivities`、試験は `tests/solvers/test_k5.py`)
+- GPU の流れの計算のツール 2 つ (`cfd_aero`・`cfd_water`。NVIDIA の GPU とそのドライバが要る。GPU が無ければ回さず、CPU では回さない。保存した記録の再生は GPU 無しで動く)。空力の CAE 役とまとめ役が呼べる。どちらの値も実験と比べていない (記録の `physically_validated` は false。`hiraku/cfd/README.md`、`hiraku/tools/cfd_tools.py`)
+  - `cfd_aero` (風洞): 設計の形のまわりの空気を格子ボルツマン法で解き、ヨーの角ごとの力と係数を出す。`judge` を付けると、試験 F4 (止まった車が横風を受けたとき、風上の輪が浮く風速が F1 の限度 (要件 Q18) 以上か) の荷重条件・手計算・解析・比べるまでを進めて判定する
+  - `cfd_water` (冠水路): 水の入った窪みを通る車のまわりの水を MLS-MPM で解く。車は K2 で水に答えて動く (遅くなる・鼻が上がる)。`judge` を付けると、試験 F5 (電池・モーター・制御器のどれにも水が届かない) を判定まで進める。水深 200 mm と 18 km/h は HIRAKU の仮定で、要件から来ていない。見るのは水が届くかだけで、水の力の値としては読まない。水深を振ると、電池・モーター・制御器が水に浸からない深さ (渡れる水深、計算) を速さごとに出す (しぶきは数えない)。動画の車 (v5) では、5 km/h で 50 mm、18 km/h で 50 mm 未満 (要件に水深が無いので OK / NG は出さない)
+- STEP (ISO 10303-21) の出し入れのツール 3 つ。設計役とモジュールの設計役が実行の中で呼べる (`hiraku/agent/roles.py` の `DESIGNER_TOOLS`・`MODULE_DESIGNER_TOOLS`、`hiraku/cad/README.md`)
+  - `export_step`: 設計の v を STEP (AP214) に書く。部材と部品が 1 つずつ名前つきの立体になる
+  - `import_step`: STEP を読み、設計の記録の形 (部材・節点・断面・部品) と、立体ごとに部材か部品か (理由つき) を返す。寸法・体積・質量はコードが形から測る。v は作らない
+  - `edit_step`: 立体を名前で選び、動かす・回す・消す・箱や筋かいを足す・断面や肉厚を変える。別のファイルに書き、元は書き換えない
+- 試験ごとの荷重条件の作り方は、カタログ (`data/catalog/tests.yaml`) の 44 試験のうち 31 試験ぶんある。要件のファイルに並べれば実行に乗る。作り方の無い試験は、分野の役かまとめ役が `write_load_case` で荷重条件を書ける (限度は式で書き、数はコードが計算する)。F4・F5 は流れのツールが `judge` で書く。最近足したもの:
+  - S2 (旋回での転倒): 半径 25 m の円を、最高速度 (Q50) まで速さを上げて回り、内側の 2 輪が浮かない (`steady_circle`。半径は HIRAKU の仮定。`hiraku/catalog/builders/k2_tests.py`)
+  - R4 (横転時の保護枠): 傾斜台で倒れる角を越えて傾けた車が床に落ち、ロールバーで着地する。その骨組みを降伏する梁として解き、どの部材も乗員の空間に入らない (隙間 ≥ 0 mm)。地面は土 (R4-rollover) と舗装 (R4-rollover-pavement) の 2 通りで、両方 OK のときだけ R4 は OK。HIRAKU 独自の計算の確かめで、規格の試験ではない (`rollover_beam`、`hiraku/catalog/builders/analysis.py` の `r4_rops`)。着地の形は触れる順番で大きく変わるので、隙間は計算機の浮動小数の差でも動く: 同じコードと同じ設計 (デモの v1) で、Windows では土 +48.2 mm・舗装 +45.4 mm の OK、Linux では直した v2 でも −4.2 mm・−10.5 mm の NG だった (差の大きさは確かめていない)。境目に近い設計の R4 の判定は、計算機が変わると入れ替わることがある
+  - F2 (空気抵抗): 最高速度 (Q50) で受ける空気抵抗の力が、その速さで使える駆動力から転がり抵抗を引いた残り以下 (平らな道で無風。作者の決め、2026-11-07。`hiraku/catalog/builders/drag.py`)。棚に F2 を解くツールは無い
+  - R9 (サスペンションの取付): 金具の板の根元の曲げ・根元の溶接・ピンのせん断と支圧の利用率がどれも 1 以下 (K2 の取付点の力の最大で。`hiraku/catalog/builders/mounts_r9.py`)
 - 実行の記録 (`runs/<id>/events.jsonl`) を再生する画面「③ 解析」(3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
 - 画面から実行を始める口。一覧「HIRAKU でできること」の行ごとに、走らせ方を選ぶ: 「見る」(記録を再生する。無料)、「再現する」(決まった手順の運転。無料、Claude を呼ばない)、「実行する」(Claude で新しく実行する。Anthropic の API キーが要り、行ごとの費用の上限で止まる)。「試す」は、その依頼の文を入れた依頼の画面を開く。「自分で頼む」で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。「実行する」は、HIRAKU を起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
 
-まだのもの: 20 試験ぶんを全部まとめて回すこと、実行の最後の報告 (`write_report`) を読む画面。
-
 ## 主張と確かめる場所
 
-`showcase/` の 4 つの実行のうち、Claude が回したのは `20261105-160725-offroad-4w`・`20261105-094333-offroad-4w`・`20261105-091217-offroad-4w` (どれも Claude Code のプラグイン。`project.json` の `driver` が `claude_code_plugin`)。`20261105-150416-offroad-4w-scripted` は台本の運転です (`driver` が `scripted`。Claude を呼ばない)。下の表では実行を名前の真ん中 (160725 など) で書き、seq は `events.jsonl` の event の番号です。
+`showcase/` の 8 つの実行のうち、Claude が回したのは 7 つです: `20261107-190633-serving-robot-claude`・`20261107-164004-free-utv`・`20261105-160725-offroad-4w`・`20261105-094333-offroad-4w`・`20261105-091217-offroad-4w`・`20261104-011628-care-bed`・`20261104-002518-offroad-4w` (どれも Claude Code のプラグイン。`project.json` の `driver` が `claude_code_plugin`)。`20261105-150416-offroad-4w-scripted` は台本の運転です (`driver` が `scripted`。Claude を呼ばない)。下の表では実行を名前の真ん中 (160725 など) で書き、seq は `events.jsonl` の event の番号です。
 
 | 主張 | 記録 (`showcase/`) | コード | 試験 |
 |---|---|---|---|
 | 解析の前に、手計算で予測する | 160725 (Claude): R4-rops の予測 pred-0029〜0032 (seq 261〜264) のあとに、解析 ana-0022 (seq 266) | `hiraku/tools/rules.py` の `check_analyze` (HK1)、`hiraku/tools/functions.py` の `_gate` | `tests/tools/test_functions.py` の `test_hk1_analyze_needs_a_prediction_of_this_load_case` |
-| hooks が実行を止める | Claude の 3 つの実行で止めたのは HK3・HK5・HK6 (`hook.denied`) と HK4 (終わりを断る `hook.blocked_stop`)。160725 では HK5 が seq 260・436、HK4 が seq 276・277、HK3 が seq 953。「予測が無い」の HK1 で止めた例は、Claude の実行の記録には無い。台本の 150416 は、わざと予測の前に `analyze` を呼んで HK1 を見せる (seq 50。`data/catalog/scripted.yaml` の `show_hk1`) | `hiraku/tools/rules.py`、`hiraku/agent/hooks.py`、`plugins/hiraku/hooks/hooks.json` | `tests/agent/test_hooks.py` の `test_hk1_denial_is_recorded_and_explained`、`tests/agent/test_plugin_path.py` の `test_hk1_deny_as_the_sdk_hook_and_recorded_by_the_server` |
-| Claude が実行の中でツールを書き、確かめてから使った | 160725: `tools/rops_pushover-1.py` と `tools/rops_pushover-1.check.json`。`tool.checked` (seq 265、cae.strength、使える) のあと、ana-0022 (seq 266) で使った。094333 の `tools/` にも 2 つ | `hiraku/tools/functions.py` の `check_tool`・`make_tool`、HK2 (`rules.py`) | `tests/tools/test_tool_template.py` の `test_the_example_passes_check_tool` |
+| hooks が実行を止める | Claude の 6 つの実行で止めたのは HK3・HK5・HK6 (`hook.denied`) と HK4 (終わりを断る `hook.blocked_stop`)。160725 では HK5 が seq 260・436、HK4 が seq 276・277、HK3 が seq 953。「予測が無い」の HK1 で止めた例は、Claude の実行の記録には無い。台本の 150416 は、わざと予測の前に `analyze` を呼んで HK1 を見せる (seq 50。`data/catalog/scripted.yaml` の `show_hk1`) | `hiraku/tools/rules.py`、`hiraku/agent/hooks.py`、`plugins/hiraku/hooks/hooks.json` | `tests/agent/test_hooks.py` の `test_hk1_denial_is_recorded_and_explained`、`tests/agent/test_plugin_path.py` の `test_hk1_deny_as_the_sdk_hook_and_recorded_by_the_server` |
+| Claude が実行の中でツールを書き、確かめてから使った | 160725: `tools/rops_pushover-1.py` と `tools/rops_pushover-1.check.json`。`tool.checked` (seq 265、cae.strength、使える) のあと、ana-0022 (seq 266) で使った。ほかに `tools/` に 091217 は 1 つ、094333 は 2 つ、164004 は 3 つ | `hiraku/tools/functions.py` の `check_tool`・`make_tool`、HK2 (`rules.py`) | `tests/tools/test_tool_template.py` の `test_the_example_passes_check_tool` |
 | 設計を、解析の結果から v1 → v7 と直した | 160725: `design.created` が 7 つ (v7 は seq 966)。v7 の `module_changes` は、v6 の R1-step100 の NG (ver-0077、シェルの解析 ana-0083) に答えて `rail_t` を 2.3 → 3.2 mm にした。v ごとの NG は [showcase/README.md](showcase/README.md) | `hiraku/tools/functions.py` の `revise_design`・`build_version`、`hiraku/designgen/` | `tests/tools/test_functions.py` の `test_revise_design_builds_the_load_cases_again_for_the_new_version` |
-| CAE の役は、作るものに合わせて決まる | 160725: 選んだ分野は強度信頼性と組み立て (`domains.picked`、seq 1)、CAE 役は `cae.strength` だけ (`project.json` の `agents`)。保存した実行はどれもオフロードの車で、ほかの製品の記録は `showcase/` に無い | `hiraku/intake/domains.py` の `pick_domains`、`hiraku/catalog/project.py` の `agents_for` | `tests/intake/test_domains.py` の `test_which_domains` (ギターは強度信頼性と音振、介護ベッドは 5 分野) |
+| CAE の役は、作るものに合わせて決まる | 160725: 選んだ分野は強度信頼性と組み立て (`domains.picked`、seq 1)、CAE 役は `cae.strength` だけ (`project.json` の `agents`)。011628 (介護ベッド): 5 分野を選び、CAE 役は `cae.handling`・`cae.powertrain`・`cae.strength`・`cae.thermal` (音振は荷重条件が作られなかった)。164004: 依頼の文から 7 分野を選び、まとめ役が `add_tests` で見直した (足した試験は無く、理由は seq 17 の `no_addition_reason`) | `hiraku/intake/domains.py` の `pick_domains`、`hiraku/catalog/project.py` の `agents_for` | `tests/intake/test_domains.py` の `test_which_domains` (ギターは強度信頼性と音振、介護ベッドは 5 分野) |
 | 数はツールが出す | 160725 の `report.json`: 分野ごとの数はコードが記録から入れ、Claude が書いたのは `summary` と `next` だけ | `hiraku/agent/prompts.py` の `COMMON_RULES`、`hiraku/tools/report.py` の `unknown_numbers` (記録に無い数のある報告を断る) | `tests/tools/test_report.py` の `test_numbers_with_units_must_be_recorded` |
 
 ## 中身
@@ -219,6 +246,8 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 - `hiraku/agent/` エージェントのループ・hooks・役 (まとめ役・設計役・パッケージ役・分野ごとの CAE 役)、`plugins/hiraku/` skills
 - `hiraku/tools/` エージェントが呼ぶツール (MCP)。数値はツールが計算し、モデルには書かせない
 - `hiraku/solvers/` 手計算の式 (K0) と CAE の土台 (K1 梁の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度)
+- `hiraku/cfd/` GPU の流れの計算 (空気と冠水路の水)、`hiraku/cad/` STEP の出し入れ。どちらも外からはツールのアダプタ (`hiraku/tools/cfd_tools.py`・`cad_tools.py`) だけが使う
+- `viewer/` 解析の結果を分野ごとに見るビューア (画面の「ビューアで見る」)
 - `hiraku/intake/` 受付 (分野を選ぶ・ヒアリング・ナレッジの取り込み・規則と系の点検)
 - `hiraku/catalog/` 要件から試験の荷重条件を作る、`hiraku/designgen/` 設計の変数から設計を組む
 - `hiraku/store/` 実行の記録、`hiraku/contract/` 記録の形 (JSON Schema)、`web/` 画面、`data/` 要件・試験・デモの車両
@@ -233,10 +262,10 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 - 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の v1 とツールの棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときはv0 から始め、設計役が `propose_design` で v1 を作る (同)。
 - 役は 5 種類ある (設計がモジュールに分かれているときは、設計役がモジュールごとに 1 人になる) (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
   - まとめ役 (lead): メインのエージェント。仕事を役に渡し、判定を確かめ、最後に `write_report` を呼ぶ (`prompts.py` の `LEAD_PROMPT`)。
-  - 分野ごとの CAE 役 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。
+  - 分野ごとの CAE 役 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。作り方の無い試験の荷重条件を `write_load_case` で書ける。空力の CAE 役は、流れのツール `cfd_aero`・`cfd_water` も呼べる (`roles.py` の `CAE_TOOLS`・`AERO_TOOLS`)。
   - パッケージ役 (`packager`): 組み立ての荷重条件を受け持つ。ナレッジの規則を当てる `rule_check` も使う (`roles.py` の `PACKAGER_TOOLS`)。 設計がモジュールに分かれているときは、`build_version` で、その回の提案を 1 つの v にまとめる (`roles.py`)。
-  - 設計役 (`designer`): `propose_design` と `revise_design` で設計の v を作る。effort は high (`roles.py`)。
-  - モジュールの設計役 (`designer.<モジュール>`): 設計がモジュールに分かれているときの設計役で、モジュールごとに 1 人。自分のモジュールの変数か選択を `revise_design` (module つき) で直す提案を出し、v は作らない。直せないものはパッケージ役に渡す (`roles.py`、skill は `revise-a-module`)。
+  - 設計役 (`designer`): `propose_design` と `revise_design` で設計の v を作る。合う型が無いときは `write_design`・`edit_design` で設計そのものを書く (確かめは `check_design`、skill は `write-a-design`)。STEP のツール (`export_step`・`import_step`・`edit_step`) も呼べる。effort は high (`roles.py` の `DESIGNER_TOOLS`)。
+  - モジュールの設計役 (`designer.<モジュール>`): 設計がモジュールに分かれているときの設計役で、モジュールごとに 1 人。自分のモジュールの変数か選択を `revise_design` (module つき) で直す提案を出し、v は作らない。直せないものはパッケージ役に渡す。STEP のツールも呼べる (`roles.py` の `MODULE_DESIGNER_TOOLS`、skill は `revise-a-module`)。
 - サブエージェントはどれも前景で動く (`background=False`)。まとめ役はその報告を待つ (`roles.py`、`runner.py` の `FOREGROUND_ROLES_ENV`)。
 - 荷重条件 1 つの進め方は CAE 役の指示に書いてある (`prompts.py` の `cae_prompt`)。
   1. `get_context` で荷重条件と設計の値を読む。
@@ -275,7 +304,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### MCP のツール (`hiraku/tools/`)
 
-サーバーの名前は `hiraku`。ツールの名前は、API キーの道では `mcp__hiraku__<名前>`、プラグインの道では `mcp__plugin_hiraku_hiraku__<名前>` (`hiraku/agent/hooks.py` の `PREFIX`・`PLUGIN_PREFIX`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。プラグインの道には、ほかに `start_run` (実行を始める)・`open_run` (走っている実行を開き直す)・`wait_for_roles` (役が終わるのを待つ) がある (`hiraku/agent/plugin.py` の `OWN_TOOLS`)。
+サーバーの名前は `hiraku`。ツールの名前は、API キーの道では `mcp__hiraku__<名前>`、プラグインの道では `mcp__plugin_hiraku_hiraku__<名前>` (`hiraku/agent/hooks.py` の `PREFIX`・`PLUGIN_PREFIX`)。実行で呼べるツールは 29 (`hiraku/tools/functions.py` の `RUN_TOOLS` の長さ。受付の 6 を含む、2026-11-07)。説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。プラグインの道には、ほかに `start_run` (実行を始める)・`open_run` (走っている実行を開き直す)・`wait_for_roles` (役が終わるのを待つ) がある (`hiraku/agent/plugin.py` の `OWN_TOOLS`)。
 
 - 読むツール
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
@@ -290,6 +319,15 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - `propose_design`: v0 から最初の v (v1) を作る。
   - `revise_design`: 設計の変数を変えて、次の設計を作る。モジュールに分かれた設計では、module をつけて提案として記録する (v は作らない)。
   - `build_version`: パッケージ役だけが使う (モジュールに分かれた設計)。その回の提案を全部まとめ、次の v を組み直して記録する。
+  - `write_design`: 合う型が無い製品で、設計そのもの (節点・部材・断面・材料・部品・支え) を書いて v にする。通らない設計は問題を全部挙げて断る。
+  - `edit_design`: Claude が書いた設計の次の v を、変える所 (`edits`) だけで作る。
+  - `check_design`: 書いた設計を v にせずに確かめる (形・参照・支えまでつながるか・干渉の数・質量の和)。数はコードが出す。
+- STEP (設計役とモジュールの設計役)
+  - `export_step`・`import_step`・`edit_step`: 上の「いま動くもの」。道は実行のフォルダの中だけで、ほかの記録は読みも書きもしない (`hiraku/cad/README.md`)。
+- 荷重条件
+  - `write_load_case`: カタログに作り方の無い試験の荷重条件を書く。限度の数は書かず、式 (`limit_from`) からコードが計算する。
+- 流れの計算 (空力の CAE 役とまとめ役。NVIDIA の GPU が要る)
+  - `cfd_aero`・`cfd_water`: 上の「いま動くもの」。`replay` で、保存した記録を GPU 無しで読む。
 - ツールを作る
   - `get_tool_template`: ツールを書くときの見本。強度のツール 1 つ分の通して動くコードと、決まりの説明。
   - `check_tool`: Claude が書いたツールのコードを、別のプロセスで、答えの分かっている例と比べて確かめる。
@@ -298,6 +336,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - `write_report`: まとめ役が最後に 1 回呼ぶ。文の中の「数 + 単位」が記録と合わなければ断る。
 - 受付 (`hiraku/intake/tools.py`)
   - `pick_domains`: 分野を選ぶ。分野と試験はカタログからコードが決める。
+  - `add_tests`: コードが選んだ分野と試験を、まとめ役が見直す。要ると判断した試験をカタログから足す (足すだけで外せない)。足さないときも、見直した理由を書いて呼ぶ。
   - `ask_user`: 足りない要件をまとめて 1 回聞く。
   - `import_knowledge`: 渡されたファイルを規則にする。
   - `rule_check`: 規則を設計の部品に当てる。
@@ -306,11 +345,12 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 ### Skills と plugin (`plugins/hiraku/`)
 
 - ローカルの plugin `hiraku` が 1 つある (`plugins/hiraku/.claude-plugin/plugin.json`)。実行で読む skill はこの plugin のものだけ (`runner.py` の `plugins`・`skills`、`roles.py` の `plugin_skills`)。
-- skill は 4 つ。
+- skill は 5 つ (`plugins/hiraku/skills/*/SKILL.md` の数)。
   - `take-the-request`: まとめ役が依頼を受ける手順。分野を選び、要件を聞き、ナレッジを規則にし、規則を当てる。途中で届く伝言の受け方も書いてある (`plugins/hiraku/skills/take-the-request/SKILL.md`)。
   - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 比べる → 判定 (OK か NG) まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
   - `find-the-cause`: 不一致のときに原因を探し、`record_cause` に書く手順 (`.../find-the-cause/SKILL.md`)。
   - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの設計役が、NG の荷重条件を読んで自分のモジュールの直しを提案し、直せないものをパッケージ役に渡す手順 (`.../revise-a-module/SKILL.md`)。
+  - `write-a-design`: 合う型が無い製品で、設計役が設計そのものを書き、`check_design` で確かめ、`write_design` で v にし、NG に答えて次の v を `edit_design` で作る手順 (`.../write-a-design/SKILL.md`)。
 
 ### 台本の運転と Claude の運転
 
@@ -365,18 +405,19 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `git grep "def test_" -- "tests/**/*.py"` は 2,969 行、`git grep -c` で 255 ファイル (2026-11-06。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
+  - `python -m unittest` が集める試験は 4,244 (2026-11-07。`unittest.defaultTestLoader.discover(".").countTestCases()`)。
+  - `git grep "def test_" -- "tests/**/*.py"` は 3,919 行、`git grep -c` で 325 ファイル (2026-11-07。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
 ### Codex について
 
 - `git log --all --grep="Drafted with Codex"` に当たるコミットは 0 件。
-- `codex` という字を含むコミット (大文字小文字を区別しない) は 2 件ある。35975dd「first_look: cuts and screens seen as a first-time viewer, judged by an image model」と c22c311「first_look: say plainly when the Codex CLI is not installed」。
+- `codex` という字を含むコミット (大文字小文字を区別しない、`git log --all -i --grep=codex`) は 4 件ある (2026-11-07)。2 件はこの README の変更 (806d09c・7bead7f、この節の文に当たった)。ほかの 2 件は 35975dd「first_look: cuts and screens seen as a first-time viewer, judged by an image model」と c22c311「first_look: say plainly when the Codex CLI is not installed」。
   - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部のツール。
   - このコミットにも `Co-Authored-By: Claude` の行がある。
 - 遅い試験は 2026-11-05 から EC2 の上で回している。EC2 の用意と試験の起動は Codex のセッションが行い、結果を統括部と品質保証部に返す。
-- 全部の branch のコミット 2,177 件のうち、1,652 件に `Co-Authored-By: Claude` の行がある (2026-11-06。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
+- 全部の branch のコミット 3,213 件のうち、2,479 件に `Co-Authored-By: Claude` の行がある (2026-11-07。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
 
 ## 期間中に作ったもの
 
@@ -394,14 +435,14 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ## 前から持っていた知識と、外から持ってきたデータ
 
-動画の N08 で言う 3 つのこと (CAE を扱えるのは専門家だけ、ライセンスに何百万円、計算の準備に数週間) は、CAE の実務者である作者の実務の経験に基づきます。調べた数ではありません。
+動画の N08 で言う 3 つのこと (CAE を扱えるのは専門家だけ、ライセンスに何百万円、計算の準備に数週間) は、CAE の実務者である作者の実務の経験に基づきます。調べた数ではありません。N08 の画面には、ライセンスの値段の例を 1 つ、出典つきで出しています (下の「出典の本文を確かめた値」)。
 
 外から持ってきた値 (規格・統計・材料・人体の寸法など) は、使った所 (データのファイルとコードの中) に出典を書いています。出典の本文をこのリポジトリで読み直していない値には "not checked" と書いています。
 
 ### 単純にした所
 
 - 骨組みの強度 (R1・R1s) と介護ベッドの床と柵 (R5) の限度は、骨組みの部材 (デモでは全部 STKR400、降伏 245 MPa) の降伏 ÷ 安全率 (Q61) の 1 つの数で見る。ロールバーの部材のうち 3 本は STKM13A (215 MPa) で、R1 の中ではこの限度で見られる (ロールバーは R4 と荷重の通り道 (R8-stress) で、それぞれの材料で見る)。N15 の台本の運転 (20261104-015442) の記録では、その 3 本の応力はいちばん大きくて 69.45 MPa (v3、シェルの要素の応力) で、STKM13A の限度 215 ÷ 1.5 = 143.3 MPa に対して 52 % の余裕がある。部材ごとの材料で見るのは、今は R8-stress だけ (`max_utilisation`)
-- サスペンションの取付点 (腕の付け根とダンパーの金具、金具とレールの溶接、ピンとボルト) は、いま判定していない。全体のシェルでは、取付の範囲 (管の壁の前後の一定の範囲。大きさは金具の大きさの仮定で、確かめていない) の要素を、金具が補強する仮定で判定から外している。取付点の判定は足しているところ。使った所: `hiraku/solvers/k1_shell/frame.py`、`hiraku/designgen/kit/mounts.py`
+- サスペンションの取付点 (腕の付け根とダンパーの金具、金具とレールの溶接、ピン) は、骨組み全体のシェルでは見ず、別の試験 R9 で見る。全体のシェルでは、取付の範囲 (管の壁の前後の一定の範囲。大きさは金具の大きさの仮定で、確かめていない) の要素を、金具が補強する仮定で判定から外している。R9 は、金具を板としてメッシュにしたシェルで板の曲げと溶接を、frame_static のツールの中のピンの式でピンのせん断と支圧を、K2 の取付点の力の最大で見る。使った所: `hiraku/solvers/k1_shell/frame.py`・`brackets.py`、`hiraku/designgen/kit/mounts.py`、`hiraku/catalog/builders/mounts_r9.py`
 
 ### 確かめていない値
 
@@ -409,19 +450,27 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 | 値 | 出典として書いたもの | 使った所 |
 |---|---|---|
-| 材料のカード 8 枚 (STKR400・STKM13A・SS400・A6061-T6・HDPE・銅・8.8 のボルト・塩ビの電線) の値。座席のフォームとタイヤのゴムはカードが無い | 値ごとに出典と `checked` を書いた。読んだのは (どれも 2026-11-06): 鋼管と鋼板の降伏点・引張強さ・伸びは鉄鋼メーカーのカタログや東京都の資材の仕様書 (二次の出典。JIS の本文は読んでいない)、A6061-T6 は ASM Aerospace Specification Metals のデータシート (Aluminum Association の代表値、二次)、銅は NBS Handbook 100 の標準の銅 (抵抗率・密度・熱膨張)、8.8 のボルトは ISO 898-1:2013 の表 3 (出版元の無料の見本)、HDPE は Goodfellow の製品のページ (二次、密度と比熱だけ)、塩ビの電線は AVSS の電線の販売会社 3 社のページ (二次、80 ℃ の等級)。確かめていないのは、鋼のヤング率・ポアソン比・密度 (出典を開けていない) と、HDPE のヤング率・ポアソン比・降伏 (仮定) | `data/materials/cards/`、`data/materials/materials.json` |
+| 材料のカード 8 枚 (STKR400・STKM13A・SS400・A6061-T6・HDPE・銅・8.8 のボルト・塩ビの電線) の値。座席のフォームとタイヤのゴムはカードが無い | 値ごとに出典と `checked` を書いた。読んだのは: 鋼管と鋼板の降伏点・引張強さ・伸びは鉄鋼メーカーのカタログや東京都の資材の仕様書 (二次の出典。JIS の本文は読んでいない)、SS400 のヤング率 205,000 MPa とポアソン比 0.3 は国土交通省の建築の構造設計の資料の第 4 章 表 4.2.1 (二次。資料は鋼を SS400 と書くが、値の元の規格は書いていない)、A6061-T6 は ASM Aerospace Specification Metals のデータシート (Aluminum Association の代表値、二次)、銅は NBS Handbook 100 の標準の銅 (抵抗率・密度・熱膨張)、8.8 のボルトは ISO 898-1:2013 の表 3 (出版元の無料の見本)、HDPE は Goodfellow の製品のページ (二次、ポアソン比・密度・比熱)、塩ビの電線は AVSS の電線の販売会社 3 社のページ (二次、80 ℃ の等級)。確かめていないのは、STKR400 と STKM13A のヤング率・ポアソン比、鋼の密度 (出典を読んでいない) と、HDPE のヤング率と降伏 (仮定) | `data/materials/cards/`、`data/materials/materials.json` |
 | 部品の温度の上限 (電池 55 ℃・制御器 85 ℃・モーター 155 ℃) | EVE LF50K の仕様書、Curtis 1236 のマニュアル、IEC 60085 の F 種。確かめたのは 2 つ: 電池 55 ℃ は LF50K の仕様書の 3 節、制御器 85 ℃ は Curtis 1234/36/38 のマニュアルの付録 D の表 D-1 (放熱板の温度で出力を絞り始める温度)。モーター 155 ℃ は IEC 60085 を読めず、Wikipedia だけ | `hiraku/designgen/ladder_4w.py` |
 | 空気の密度 1.225 kg/m³ | ICAO Doc 7488 / ISO 2533 の海面の値 | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_dynamics.py`、`hiraku/solvers/k2_vehicle/` |
 | 疲労の強さ (FAT 71・傾き 3・折れ点 1e7 回) | 傾き 3 と折れ点 1e7 は IIW の疲労設計の推奨 (Hobbacher 2016) の形 (本文は確かめていない)。FAT 71 は仮定。折れ点の後の傾き 2·m − 1 は下の「確かめた値」の表 | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_fatigue.py`、`hiraku/solvers/shelf/fatigue.py` |
-| 路面の粗さ (ISO 8608 の C 級、G_d(n0) = 256×10⁻⁶ m³) | ISO 8608 の表 | `hiraku/solvers/k2_vehicle/road.py`・`shelf/offroad.py`、`hiraku/solvers/shelf/fatigue.py` |
+| 路面の粗さ (ISO 8608 の C 級、G_d(n0) = 256×10⁻⁶ m³。C 級の幅 128〜512×10⁻⁶ m³ の中の値) | ISO 8608 の表 (本文は読んでいない) | `hiraku/solvers/k2_vehicle/road.py`・`shelf/offroad.py`、`hiraku/solvers/shelf/fatigue.py` |
 | 溶接のホットスポット応力 (溶接の線から板厚 t の 0.5 倍と 1.5 倍の表面の応力を、σ = 1.5σ(0.5t) − 0.5σ(1.5t) で線まで外挿) | IIW の疲労設計の推奨 (Hobbacher 2016) | `hiraku/solvers/k1_shell/stress.py`、`hiraku/solvers/shelf/frame_shell.py` |
 | タイヤの MF 6.1 の係数 (205/60R15 の乗用車の例のタイヤ、2.2 bar、98 個)。この車がはく 25x8-12 の UTV のタイヤではない。K2 は曲線の形だけを使い、荷重・半径・摩擦・剛さは設計の値に合わせ、空気圧の項は読まない | Pacejka, Tire and Vehicle Dynamics 3 版 Appendix 3 (公開の .tir から写した。.tir はリポジトリに無く、写しが元と一致するかは確かめていない。本そのものも確かめていない) | `data/tyres/pacejka_tvd3_205_60r15.json` |
 | サスのアームのブッシュの剛さ (径方向 3 kN/mm・軸方向 0.5 kN/mm)、タイロッド 10 kN/mm | 乗用車のアームのブッシュの論文 2 本 (表と頁は `model.py` のコメント。径方向 1.7〜5.0 kN/mm、軸方向 0.23〜0.46 kN/mm)。UTV の値は無い。タイロッドは出典なし | `hiraku/solvers/k2_vehicle/model.py` |
-| K2 の既定の値: タイヤの縦の硬さ 150 N/mm・縦の減衰比 0.05・コーナリング剛さ 8 × 輪の静荷重/rad・前後の滑りの剛さ 10 × 輪の静荷重・緩和長 = 車輪の半径・摩擦 0.8・転がり抵抗 0.015・サスの減衰比 0.3・ストローク 100 mm・バンプストップ 10 倍・ばね下 5 %・最大の切れ角 35°。駆動の効率 0.9 | 出典なし (仮定)。設計か荷重条件に値が無いときだけ使い、解析の記録の前提に書く | `hiraku/solvers/k2_vehicle/model.py` の `DEFAULTS`、`k2_vehicle/shelf/base.py` |
+| K2 の既定の値: タイヤの縦の硬さ 150 N/mm・縦の減衰比 0.05・コーナリング剛さ 8 × 輪の静荷重/rad・前後の滑りの剛さ 10 × 輪の静荷重・緩和長 = 車輪の半径・摩擦 0.8・転がり抵抗 0.015・サスの減衰比 0.3・ストローク 100 mm・バンプストップ 10 倍・ばね下 5 %・最大の切れ角 35°。駆動の効率 0.9 | 出典なし (仮定)。設計か荷重条件に値が無いときだけ使い、解析の記録の前提に書く。デモの車の設計はタイヤの縦の硬さを持つ (次の行) ので、デモの車では 150 N/mm は使わない | `hiraku/solvers/k2_vehicle/model.py` の `DEFAULTS`、`k2_vehicle/shelf/base.py` |
+| デモの車のタイヤの縦の硬さ 60 N/mm (幅 45〜90 N/mm) | HIRAKU の判断。ATV の大きさのタイヤの 3 つの資料 (2026-11-06 に web.archive.org の写しで読んだ) から: Krueger の修士論文 (Auburn University、2007、付録 B の図 6.4。Dunlop KT 821 22x8-10、0.69・1.03・1.38 bar で約 57・62・74 N/mm を図から読んだ)、BKT の技術資料 (Sierra Max Pro AT 25x8 R12 と Sierra Max AT 25x10 R12。定格荷重と静的な負荷半径から HIRAKU が平均の硬さ 54.3・71.7 N/mm を計算)、Wilson の博士論文 (University of Calgary、2018、付録 B.3.5.1。ATV 16x8-7、約 0.69 bar で 36〜44 N/mm)。この車のタイヤを測った値ではない | `hiraku/designgen/ladder_4w.py` の `TYRE_STIFFNESS_BASIS` |
 | 試験の速さ: S4 の制動の初めの速さ 35 km/h、S5 の 20 km/h | 細目告示 第 171 条 第 5 項の制動の表 (この車の種類の表ではなく借用)、林道規程 (3 級の林道の設計速度)。どちらも確かめていない | `hiraku/catalog/builders/k2_tests.py` |
 | 限界の外の試験: 限界の 10 % 先、砂利の摩擦 0.3、坂を 12 s かけて傾ける、タイヤを摩擦 2 で止める | 仮定 (HIRAKU の選び) | `hiraku/catalog/builders/k2_tests.py` |
 | 標準の重力 9.80665 m/s² | 定義値 (出典の本文は確かめていない) | `hiraku/solvers/k2_vehicle/units.py` |
 | 衝突の手計算: 管がつぶれる平均の力 (角パイプ Wierzbicki・Abramowicz 1983、丸パイプ Alexander 1960)、つぶれる所が使える長さ (その長さの 70 %、残りは畳まれた折り目の厚み) | 管の式の論文は本文を確かめていない。70 % は出典なし (HIRAKU の仮定) | `hiraku/solvers/k0_handcalc/library_crash.py` |
+| 衝突 (C1) の梁のモデル: 部材の端の塑性ヒンジの回転が 60° を越えたら折れる、骨組みと壁の摩擦 0.3 | 出典なし (HIRAKU の選び。解析の記録の前提に書く) | `hiraku/solvers/k2_vehicle/shelf/crash_beam.py` |
+| 衝突 (C1) のモデルに入っていないもの: 床の板が骨組みを支える力 (板の質量は骨組みの節点に載せる) と、車輪のリムがつぶれること (タイヤがつぶれ切ると、リムは壁で止まる) | どちらも結果を大きく動かすことがあり、確かめていない (同ファイルの前提の文) | `hiraku/solvers/k2_vehicle/shelf/crash_beam.py` |
+| 横転 (R4) の地面: 接触の点 1 つあたりの硬さ 土 1000 N/mm・舗装 100,000 N/mm、土の減衰 10,000 N·s/m | HIRAKU の仮定 (地面を点で押したときの硬さの測った値は見つからなかった)。舗装の値は、硬さを上げても結果がほぼ動かなくなる所として選んだ。この硬さでは、時間の刻みを細かくすると結果がまだ動く。ロールバーの上からの力 10 kN (OECD Code 4 の 20 N/kg に基準の質量 500 kg を掛けた値) も HIRAKU の仮定。OECD Code 4 と ISO 3471 は 600〜700 kg 以上の機械の静的な試験で、ISO 3471 は確かめていない | `hiraku/solvers/k2_vehicle/contact.py`、`hiraku/catalog/builders/analysis.py` |
+| 旋回 (S2) の円の半径 25 m | HIRAKU の仮定 (出典なし) | `hiraku/catalog/builders/k2_tests.py` |
+| サスの取付 (R9) の耐力: EN 1993-1-8:2005 の式と推奨の部分係数 (γM0 = 1.0、γM2 = 1.25)、溶接の β_w = 0.8 (STKR400 を S235 に近いとみなす) | EN 1993-1-8 の本文はこのリポジトリでは読んでいない (値は品質保証部と合わせたもの)。STKR400 を S235 とみなすのは仮定 | `hiraku/solvers/k0_handcalc/library_bracket.py`、`hiraku/catalog/builders/mounts_r9.py` |
+| 流れの計算の値 (空気の力と係数、冠水路の水) | 実験と比べていない (記録の `physically_validated` は false)。答えの分かる体で確かめた: 球 (Schiller-Naumann の経験式)、立方体と正方形の板 (Hoerner の表の描き直し、原典は読んでいない)、Ahmed body (Ahmed の図を別の資料が読んだ値)。Ahmed body は 2.3〜2.6 倍で合っていない。水の密度 1000 kg/m³ (丸めた値) と重力 9.80665 m/s² は確かめていない。音速の目安と gamma = 7 は Wei ほか (arXiv:1702.07760) で読み、元の Monaghan 1994 は読んでいない。冠水路の水深 200 mm と 18 km/h は HIRAKU の仮定 | `hiraku/cfd/README.md`、`hiraku/cfd/data/validation.json`、`hiraku/cfd/water.py` の `SOURCES`、`hiraku/tools/cfd_tools.py` |
+| 画面のダミー (Hybrid III 50 パーセンタイル男性) の寸法と質量 (in・lb) | Humanetics「Hybrid III 50th Percentile Male Technical Product Sheet」(2012、https://www.humaneticsgroup.com/sites/default/files/2020-06/hybiii50-tps.pdf)。統括部が表から写した (リポジトリでは表を読んでいない)。絵のダミーの形の比率だけに使い、判定の乗員の寸法と質量には使わない | `web/js/hybrid3.js` |
 | 要件の値 (摩擦係数・坂・風・停止距離・倒れない角度・航続 など) | 各項目の `basis` (林道規程・気象庁・細目告示からの借用・CPSC の職員の説明資料 (staff briefing、2016-11-22)・仮定)。確かめたのは、坂 14 % (林道規程 第 20 条 第 4 項)、風 30 m/s (気象庁「風の強さと吹き方」の表と注 2)、14 m と 20 % (細目告示 第 171 条 第 5 項 第 3 号・第 5 号。14 m は最高速度 35〜80 km/h の行を借りた)、倒れない角度 24° とその元の 33° (CPSC の 2016 年の説明資料の PDF 11 ページ)、体重 76.6 kg (AIST 1991-92 の N1 体重、若年男性の 95 パーセンタイル。表を 2026-11-03 と 2026-11-06 に読んだ)。確かめていないのは、路面の C 級の幅 (二次の出典だけ)。「空車で 35°」は出典が見つからない (前に「CPSC (2020)」と書いたが、その資料は見つからない) | `data/requirements/offroad-4w.yaml` |
 | 工具の開口 200×125 mm | MIL-STD-1472H の図 57 | `hiraku/solvers/k4_geometry/assembly.py` |
 | 製品ごとの要件の値 (ギター・介護ベッド・配膳ロボ) | 各項目の `basis` (JIS T 9254 の写し・アクチュエーターの仕様書・FDA の指針・配膳ロボの製品の仕様・ISO/TS 15066 を引いた論文・弦の張力の表・仮定。URL つき)。確かめたのは、介護ベッドの JIS T 9254 の項目 (IPX4、1350 N、70°、安全率 4、繰り返しの回数、答えの見本の 1700 N)・LINAK LA31 の 40 ℃・FDA の 2006 年の指針の隙間の区域、ギターの 456 N (EXL110 の表の和をコードで計算)、配膳ロボの階 (JARI)・こう配 1/12 (バリアフリー法施行令 第 19 条)・1/2 インチ・稼働 9〜18 時間と 4.5 時間・130/220/140/130 N (arXiv 2311.13814 の表 1)・指 25 mm (ISO 13854 の表 1)・UN 38.3・答えの見本の 40 kg と 1.2 m/s、オフロードの答えの見本の ROPS (ROHVA)。配膳ロボの通る幅 0.7 m は、引いた Keenon のページの通路の幅 (T8 0.55 m・T10 0.59 m・T9 0.70 m) の上の端。確かめていないのは、配膳ロボの ISO 13857 の年齢と ISO 13482 (検索の要約だけ)、介護ベッドの AIST の値と出典の URL が無い項目、仮定の項目 | `data/requirements/products/*.yaml`、答えの見本 `*.answers.yaml` |
@@ -459,10 +508,11 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 | 変動振幅の荷重で Miner の和を取るときの折れ点の後の傾き 2·m − 1 (m = 3 で 5)。22 は一定振幅のときだけ | IIW-1823-07 (2008) の 4.3.1 (品質保証部が本文を読んだ) | `hiraku/solvers/k0_handcalc/library_fatigue.py`・`library_bed.py`、`hiraku/solvers/shelf/fatigue.py` |
 | 電池の電圧 51.2 V (LiFePO4 16 直列 × 3.2 V) | EVE LF50K の仕様書 (LF50K-73103 Ver. D) の 3 節の表の 2 行目、セルの公称電圧 3.2 V (https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf、2026-11-03 に本文を確認)。16 直列はこの車の設計 | `hiraku/designgen/ladder_4w.py` |
 | ダブルレーンチェンジのコース (区間 15・30・25・25・15・15 m、横 3.5 m、車線の幅 1.1 W + 0.25 m・1.2 W + 0.25 m・1.3 W + 0.25 m。W はミラーを除く車幅) | ISO 3888-1:2018 の表 1 (iTeh の公開見本 https://cdn.standards.iteh.ai/samples/67973/daa839ed4aca420788d9b4a51cd6cc95/ISO-3888-1-2018.pdf、2026-11-03 に本文を確認) | `hiraku/solvers/k2_vehicle/shelf/lane_change.py` |
+| CAE のツールの値段の例: SOLIDWORKS Simulation 630,000〜2,415,000 円 (Standard〜Premium、1 ライセンス、税抜、2024 年 2 月現在。動画の N08 の画面の注) | 日立製作所「SOLIDWORKS Simulation 価格」https://www.hitachi.co.jp/products/it/industry/solution/swsimulation/price.html (2026-11-06 に読んだ)。1 つの製品の例で、ほかの CAE ツールの値段は確かめていない | `promo/screens/n08.html` |
 | 製造業の企業のうち中小企業の割合 99 % (動画の N08b) | 中小企業庁「2025 年版 中小企業白書」付属統計資料 1 表 (産業別規模別企業数、2021 年 6 月時点) の製造業の行。企業 337,490 のうち中小企業 335,552 (99.4 %)。https://www.chusho.meti.go.jp/pamflet/hakusyo/2025/chusho/excel/f1.xlsx (2026-11-02 に表で確かめた) | `promo/screens/n08b.html` |
 | 自社に CAE ツールを導入している技術者の割合: 従業員 100 人以内 16.0 %・1 万人超 67.9 % (動画の N08b) | 株式会社メイテックの発表「CAEツールの導入率は43.4％。1万人超の企業では67.9％が導入済み」(2017-09-26、「fabcross for エンジニア」調べ、製造系エンジニア 500 人のインターネットリサーチ、2017-08-25)。日刊工業新聞の企業リリース https://www.nikkan.co.jp/releases/view/1612 (2026-11-03 に原文で確かめた。日付は `promo/README.md` の出典の行)。会社の数の割合ではなく、答えた技術者の割合 | `promo/screens/n08b.html` |
 | 静的な安定の基準 T/2h ≥ 1.0 (空車) | 79 FR 68981「The value of Kst for a vehicle at curb weight (without occupants) is required to be no less than 1.0.」。68982 で ROHVA 1-2011・B71.9-2012 の値とし、68968 で SSF = T/2H と定める (https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm、2026-11-03 に本文を確認) | `hiraku/catalog/builders/k2_tests.py` |
-| 横転の保護枠 (R4) の荷重: 横 1.75 M J・後ろ 1.4 M J・上から 20 M N、後ろの力は上の梁の幅の 1/6 の所 (M = 500 kg を入れて 875 J・700 J・10 kN)。トラクターの規格を借りたもので、この車の認証ではない | OECD Code 4 (トラクターの保護枠の静的試験、2026 年 2 月版) の 3.5.2・3.5.3・3.6 (https://www.oecd.org/content/dam/oecd/en/topics/policy-sub-issues/tractors/04-Code4-EN.pdf、2026-11-03 に本文を確認)。M = 500 kg はカタログの値から逆に出した仮定 | `hiraku/catalog/builders/analysis.py` |
+| 横転の保護枠 (R4) の荷重: 横 1.75 M J・後ろ 1.4 M J・上から 20 M N、後ろの力は上の梁の幅の 1/6 の所 (M = 500 kg を入れて 875 J・700 J・10 kN)。トラクターの規格を借りたもので、この車の認証ではない。今は R4 の手計算の荷重で、判定は横転の着地の計算で見る (上の「いま動くもの」) | OECD Code 4 (トラクターの保護枠の静的試験、2026 年 2 月版) の 3.5.2・3.5.3・3.6 (https://www.oecd.org/content/dam/oecd/en/topics/policy-sub-issues/tractors/04-Code4-EN.pdf、2026-11-03 に本文を確認)。M = 500 kg はカタログの値から逆に出した仮定 | `hiraku/catalog/builders/analysis.py` |
 | 乗員と部品に掛かる横 0.70 g・前後 0.90 g (Q75・Q76)、乗員の点 R を外へ押す力 725 N (10 s) と、そのあとの永久の横の変形 25 mm 未満 (Q77・Q78) | CPSC の規則案 79 FR 68964 の § 1422.3(e)・(b)(1)、§ 1422.5(c) (受付部が 2026-11-03 に読んだ) | `data/requirements/offroad-4w.yaml` |
 | 足の操作部の力 500 N (Q68) | UN 規則 13-H 号 付属書 3 の 2.1.1・2.3.4 (50 daN、受付部が 2026-11-03 に読んだ) | `data/requirements/offroad-4w.yaml` |
 | 手の操作部の力 300 N (Q66) | UN 規則 79 号 (1988 年の文) の操舵力の表 (M1、故障時 300 N)。表は読んだ (読んだ日は書いていない)。設計の荷重に使うのは仮定 | `data/requirements/offroad-4w.yaml` |
