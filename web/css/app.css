@@ -1157,6 +1157,11 @@ body.video .mode .stop-btn { display: none; }
 .runlist.plain .dline { font-size: 16px; }
 .runlist.plain .rsum { font-size: 16px; font-weight: 600; }
 .runlist.plain .rmeta { font-size: 14px; color: var(--muted); margin-top: 2px; }
+/* a stopped run's why, one line (the whole as the tooltip) */
+.runlist.plain .rwhy { font-size: 14px; color: #8a5a1c; margin-top: 2px; max-width: 640px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a record that stopped before its first design, over the empty 3D (app.js renderStoppedNote) */
+.stopped-note { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; max-width: min(640px, 80%); background: rgba(251, 249, 244, 0.95); border: 1.5px solid #e9b872; border-radius: 12px; padding: 12px 18px; font-size: 17px; line-height: 1.5; }
+.stopped-note[hidden] { display: none; }
 .runlist.plain td.state[data-state="stopped"], .runlist.plain td.state[data-state="failed"] { color: var(--red); }
 .runlist.plain details.older { margin-top: 14px; }
 .runlist.plain details.older summary { cursor: pointer; font-size: 15px; color: var(--muted); }

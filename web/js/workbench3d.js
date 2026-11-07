@@ -609,6 +609,7 @@ export class Workbench3D {
       ring.visible = false;
       group.add(ring);
       const tag = label(esc(s.id), "lbl-id");
+      tag.visible = !!this.toggles?.names; // (as setToggles: a design loaded after the toggles were set shows no names unless 名前 is on)
       tag.position.set(0, 0, r + 60);
       if (this.labelRenderer) group.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.wheels.add(group);
@@ -718,6 +719,8 @@ export class Workbench3D {
       const tag = label(same.length > 1 ? `${esc(short)}<small>部品 ${same.length} 個</small>` : `${esc(short)}${mass}`, "lbl-part");
       tag.element.title = same.length > 1 ? `${short}: ${same.map((x) => x.name ?? x.id).join("、")}` : p.name ?? p.id;
       if (same.length > 1 && same[0] !== p) tag.element.dataset.named = "0"; // named by the first one's tag
+      // (as setToggles: the names only while 名前 is on, also for a design loaded after the toggles were set)
+      tag.visible = !!this.toggles?.names && tag.element.dataset.named !== "0";
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
