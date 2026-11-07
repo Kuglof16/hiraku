@@ -629,7 +629,43 @@ def foot_wall_theta(design: dict, mp: dict, node: str, y_r: float, z_r: float) -
 
 
 def _member_between(props: dict, n1: str, n2: str):
-    return next((mp for mp in props.values() if {mp["member"]["node_a"], mp["member"]["node_b"]} == {n1, n2}), None)
+    """The member joining n1 and n2, or else a straight run of members of one section and material from n1 to n2
+    through nodes on the line between them (a cross member split where another member stands on it, e.g. cross_B
+    at the tower braces' feet: cross_B_L, cross_B, cross_B_R) as one member: n1's piece's id, the run's length."""
+    direct = next((mp for mp in props.values() if {mp["member"]["node_a"], mp["member"]["node_b"]} == {n1, n2}), None)
+    if direct is not None:
+        return direct
+    ends = {}
+    for mp in props.values():
+        m = mp["member"]
+        ends.setdefault(m["node_a"], []).append((mp, m["node_b"], mp["b"]))
+        ends.setdefault(m["node_b"], []).append((mp, m["node_a"], mp["a"]))
+    if n1 not in ends or n2 not in ends:
+        return None
+    a = next(mp["a"] if mp["member"]["node_a"] == n1 else mp["b"] for mp, _, _ in ends[n1])
+    b = next(mp["a"] if mp["member"]["node_a"] == n2 else mp["b"] for mp, _, _ in ends[n2])
+    span = float(np.linalg.norm(b - a))
+    if span <= 0:
+        return None
+    u = (b - a) / span
+    run, cur, s = [], n1, 0.0
+    while cur != n2 and len(run) < len(props):
+        step = None
+        for mp, other, q in ends[cur]:
+            d = q - a
+            along = float(d @ u)
+            if along > s + 1e-6 and along <= span + 1e-6 and float(np.linalg.norm(d - along * u)) < 1e-6:
+                step = (mp, other, along)
+                break
+        if step is None:
+            return None
+        run.append(step[0])
+        cur, s = step[1], step[2]
+    if cur != n2 or len({(mp["member"]["section"], mp["member"]["material"]) for mp in run}) != 1:
+        return None
+    first = run[0]
+    return {**first, "a": a, "b": b, "length": span,
+            "member": {**first["member"], "node_a": n1, "node_b": n2}, "run": [mp["member"]["id"] for mp in run]}
 
 
 ANTI_DOF = 3  # per station of the antisymmetric chain: v (left rail up), theta (its slope dv/dx), phi (rails' turn)
