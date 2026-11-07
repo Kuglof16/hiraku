@@ -1,0 +1,69 @@
+{
+ "name": "rops_frame_push2",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "rops_frame_push2",
+  "title": "横転したときの乗員の空間: 骨組の全体 (ロールバー・前の柱・後ろの支え・レール) を車輪の所で固定し、ロールバーを横・後ろから押してエネルギーを吸わせ、上から押しつぶして (塑性ヒンジを順に入れる)、乗員の空間との距離を測る。押す力が支えまで届くか (unsupported_load) も出す",
+  "domain": "crash",
+  "base": "K1",
+  "tests": [
+   "C3"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "fixed-base portal h = w = 1000 mm, round tube 42.7 x 2.3, fy 235 MPa, pushed sideways at a corner: sway mechanism",
+    "quantity": "collapse_load",
+    "expected": 3532.5422466666687,
+    "got": 3532.542246669826,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form H_c = 4 M_p / h of the sway mechanism of a fixed-base portal, M_p = Z_p f_y, Z_p = (d^3 - (d - 2t)^3) / 6 (B. G. Neal, The Plastic Methods of Structural Analysis; J. Heyman, Plastic Design of Frames)"
+   },
+   {
+    "case": "the same portal, a force down at mid-span of the top beam: beam mechanism",
+    "quantity": "collapse_load",
+    "expected": 7065.084493333337,
+    "got": 7065.08449333334,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form P_c = 8 M_p / L of the beam mechanism (hinges at both beam ends and mid-span) (Neal; Heyman)"
+   },
+   {
+    "case": "the same portal held at both feet, a push at a corner",
+    "quantity": "unsupported_load",
+    "expected": 0.0,
+    "got": 0.0,
+    "unit": "1",
+    "tolerance_rel": 0.0,
+    "pass": true,
+    "source": "statics: the held feet carry the push (reactions balance it)"
+   },
+   {
+    "case": "a bar joined to nothing beside a portal held at one foot",
+    "quantity": "free_members",
+    "expected": 1.0,
+    "got": 1.0,
+    "unit": "1",
+    "tolerance_rel": 0.0,
+    "pass": true,
+    "source": "graph search: a member with no chain of members to a held node is free"
+   }
+  ],
+  "formulas": [
+   "frame_static.rops_occupant_clearance",
+   "frame_static.portal_frame_side",
+   "frame_static.portal_frame_rear",
+   "frame_static.portal_frame_top",
+   "load_path.free_parts"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T08:46:46+00:00",
+ "reason": "C3 (cause-0017 の続き): rops_frame_push は unsupported_load を出さず、手計算が届かないときにツールの値で合否を出す道 (tool_decides) が使えない。同じ押し方 (骨組の全体・塑性ヒンジ・乗員の空間との距離) に、押す力が車輪の節まで届くかの確かめ (部材をたどる道と、弾性のつり合いでの反力) を足した版。前の版のコードは読めないので、portal_pushover の Frame・push・follow で書き直した。"
+}

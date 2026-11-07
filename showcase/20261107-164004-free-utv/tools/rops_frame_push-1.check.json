@@ -1,0 +1,48 @@
+{
+ "name": "rops_frame_push",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "rops_frame_push",
+  "title": "横転したときの乗員の空間: 骨組の全体 (ロールバー・前の柱・後ろの支え・レール) を車輪の所で固定し、ロールバーを横・後ろから押してエネルギーを吸わせ、上から押しつぶして (塑性ヒンジを順に入れる)、乗員の空間との距離を測る",
+  "domain": "crash",
+  "base": "K1",
+  "tests": [
+   "C3"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "fixed-base portal h = w = 1000 mm, round tube 42.7 x 2.3, fy 235 MPa, pushed sideways at a corner: sway mechanism",
+    "quantity": "collapse_load",
+    "expected": 3532.5422466666687,
+    "got": 3532.542246669826,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form H_c = 4 M_p / h of the sway mechanism of a fixed-base portal, M_p = Z_p f_y, Z_p = (d^3 - (d - 2t)^3) / 6 (B. G. Neal, The Plastic Methods of Structural Analysis; J. Heyman, Plastic Design of Frames)"
+   },
+   {
+    "case": "the same portal, a force down at mid-span of the top beam: beam mechanism",
+    "quantity": "collapse_load",
+    "expected": 7065.084493333337,
+    "got": 7065.08449333334,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form P_c = 8 M_p / L of the beam mechanism (hinges at both beam ends and mid-span) (Neal; Heyman)"
+   }
+  ],
+  "formulas": [
+   "frame_static.rops_occupant_clearance",
+   "frame_static.portal_frame_side",
+   "frame_static.portal_frame_rear",
+   "frame_static.portal_frame_top"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-07T07:47:24+00:00",
+ "reason": "C3 (横転したときの乗員の空間: 横・後ろ・上から押す) の荷重条件 C3-side875J を解けるツールが棚に無い。R4 の rollover_beam は床に落とす動的な解析で試験 R4 だけ。このツールは骨組の全体を車輪の所で固定し、ロールバーを OECD Code 4 の形 (借用) で静かに押して、乗員の空間との距離 rops_occupant_clearance を出す。"
+}
