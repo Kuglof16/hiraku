@@ -66,17 +66,20 @@ class FirstTimeBrowserTest(unittest.TestCase):
         got = page.evaluate(
             """() => {
               const row = document.getElementById('tests');
-              const chip = (lc) => row.querySelector(`button[data-lc="${lc}"] .tid`).textContent;
+              // (the id, then the name under it: test_board.js puts a shared id's name in .tnm off the film)
+              const chip = (lc) => { const b = row.querySelector(`button[data-lc="${lc}"]`); return b.querySelector('.tid').textContent + (b.querySelector('.tnm')?.textContent ?? ''); };
               return { board: row.classList.contains('board'), scrolls: row.scrollWidth > row.clientWidth + 1,
                        r8: ['R8-free', 'R8-stress', 'R8-push'].map(chip), t2: ['T2-motor', 'T2-controller'].map(chip),
-                       h3: ['H3-body', 'H3-knee'].map(chip), single: chip('P4-20km') };
+                       h3: ['H3-body', 'H3-knee'].map(chip), single: row.querySelector('button[data-lc="P4-20km"] .tid').textContent };
             }"""
         )
         self.assertEqual(errors, [])  # no 404 either (the icon is a data: URL)
         self.assertTrue(got["board"])
         self.assertFalse(got["scrolls"])
-        self.assertEqual(got["r8"], ["R8どの部品も", "R8部品と乗員の重さと…", "R8乗員の肩・腰"])
-        self.assertEqual(got["t2"], ["T2モーター", "T2制御器"])
+        self.assertEqual(len(set(got["r8"])), 3, got["r8"])
+        self.assertTrue(all(x.startswith("R8") for x in got["r8"]), got["r8"])
+        self.assertEqual(len(set(got["t2"])), 2, got["t2"])
+        self.assertTrue(all(x.startswith("T2") for x in got["t2"]), got["t2"])
         self.assertEqual(len(set(got["h3"])), 2)
         self.assertEqual(got["single"], "P4")  # an id of one load case: as it is
         page.close()

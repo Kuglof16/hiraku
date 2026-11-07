@@ -75,7 +75,8 @@ export function boardHtml(s, cases, { lcId = null, auto = true, pets = null, wit
           const st = caseState(s, c.load_case_id);
           const word = CASE_STATE[st.key];
           const dup = shorts.get(c.load_case_id);
-          const name = film ? dup ?? shortCaseName(c) : shortCaseName(c, NAME_LONG);
+          // (a shared id, e.g. T2 of the motor and of the controller: the words that tell it apart, on the film and off it)
+          const name = dup ?? (film ? shortCaseName(c) : shortCaseName(c, NAME_LONG));
           const safe = st.key === "ok" && st.cmp === "mismatch" ? " safe" : "";
           const title = `${c.load_case_id}: ${c.title ?? ""}\n${word.ja} (${word.title})${safe ? "・予想とは不一致 (安全側で判定)" : ""}`;
           return (

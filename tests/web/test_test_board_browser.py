@@ -164,7 +164,8 @@ class TestBoardBrowserTest(unittest.TestCase):
             self.assertTrue(c["name"], c)
         by = {c["lc"]: c for c in got["cells"]}
         self.assertEqual(by["P4-20km"]["tid"], "P4")
-        self.assertEqual(len({by[x]["tid"] for x in ("R8-free", "R8-stress", "R8-push-725N")}), 3)  # the shared id told apart
+        # the shared id told apart by the name under it (off the film the name is not in .tid)
+        self.assertEqual(len({(by[x]["tid"], by[x]["name"]) for x in ("R8-free", "R8-stress", "R8-push-725N")}), 3)
         self.assertTrue(by["R8-free"]["tid"].startswith("R8"))
         # the last verdict of each load case in the current version decides OK / NG (the record's own pass)
         self.assertTrue({c["state"] for c in got["cells"]} <= {"ok", "ng", "match", "mismatch", "busy", "wait"})
@@ -198,7 +199,7 @@ class TestBoardBrowserTest(unittest.TestCase):
                 self.assertNotIn(red, colours, k)
 
     def test_pressing_a_box_picks_its_test(self):
-        page, errors = self.open("tab=bench&t=1e6")
+        page, errors = self.open("tab=bench&t=1e6&dev=1")  # (the card says the load case's id under ?dev=1)
         page.click('#tests button.test[data-lc="T2-40C-motor"]')
         page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
         got = page.evaluate(BOARD)
