@@ -16,7 +16,7 @@ from viewer.src import common, water
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = ROOT / "tests" / "verification" / "fixtures" / "n15-v005-design.json"
 PATHS = re.compile(r"[A-Za-z]:[\\/]|/" + "Users" + r"/|/home/|@[a-z0-9.-]+\.[a-z]{2,}", re.I)  # the home folder's name is joined so the repository's scan does not read this line
-STATEMENT = "この判定は電池、モーター、制御器に水が届くかだけを見る。実験と比べていない計算による"
+STATEMENT = "この判定は電池、モーター、制御器が水に浸かるかだけを見る (しぶきは数えない)。実験と比べていない計算による"
 
 
 def write_case(folder: Path, design_version: int = 5, spray_per_frame: int = 50) -> Path:

@@ -248,6 +248,7 @@ def main(argv: list[str] | None = None) -> Path:
     ap.add_argument("--orbit-deg", type=float, help="turn the camera this far about the vertical through --target over the clip: every frame is rendered, and no text is drawn")
     ap.add_argument("--only", type=int, nargs="+", help="with --orbit-deg: only these frames (1 is the first), to try the camera")
     ap.add_argument("--batch", type=int, default=4, help="with --orbit-deg: pictures in one Blender")
+    ap.add_argument("--no-text", action="store_true", help="no words and no colour scale on the frames (the film adds its own)")
     ap.add_argument("--also", type=Path, help="a second case: the two side by side, the same camera and colour scale")
     ap.add_argument("--seconds", type=float, default=5.0)
     ap.add_argument("--fps", type=int, default=30)
@@ -291,7 +292,7 @@ def main(argv: list[str] | None = None) -> Path:
         words = ([f"横風 {rb.yaw_words(float(s['yaw_deg']))}", f"v{s['design_version']} {s['speed_ms'] * 3.6:.0f} km/h 格子 {s['dx'] * 1000:.0f} mm"] if len(cases) > 1
                  else [*p["text"], f"光の動きは計算した速さの {a.rate:g} 倍"])
         blocks.append((words, a.status))
-    overlay = np.asarray(rb.caption_overlay((W, H), vmax, tick, blocks), np.float32) / 255.0
+    overlay = None if a.no_text else np.asarray(rb.caption_overlay((W, H), vmax, tick, blocks), np.float32) / 255.0
     frames = int(round(a.seconds * a.fps))
     flow_time = frames / a.fps * a.rate
     spacing = loop_spacing(flow_time, a.every)
@@ -299,7 +300,7 @@ def main(argv: list[str] | None = None) -> Path:
     for f in range(frames):
         clock = f / frames * flow_time
         parts = [lit(base, camera, lines, seen, vmax, clock, spacing, a.tail, 40, air) for base, (camera, lines, seen, air) in zip(bases, drawn)]
-        im = covered(np.hstack(parts), overlay)
+        im = np.hstack(parts) if overlay is None else covered(np.hstack(parts), overlay)
         Image.fromarray((im * 255.0 + 0.5).astype(np.uint8)).save(out / "frames" / f"f{f + 1:04d}.png", compress_level=1)
         if f % 30 == 0:
             print(f"frame {f + 1} / {frames}, {time.perf_counter() - t0:.0f} s", flush=True)

@@ -120,6 +120,47 @@ class Water(Base):
             cfd_tools.cfd_water(self.ctx, {"judge": True}, "cae.nvh")
 
 
+class CrossableDepth(Base):
+    def passes(self, reached_from: float):
+        seen: list[float] = []
+
+        def one(ctx, args):
+            seen.append(args["depth_mm"])
+            out = passed({"battery": 40.0, "motor": -10.0 if args["depth_mm"] >= reached_from else 30.0, "controller": 60.0})
+            out["road"], out["path"] = {"water_level_mm": args["depth_mm"] - 5.0}, f"cfd/v1/water_{args['depth_mm']:g}/water_record.json"
+            return out
+        return seen, one
+
+    def test_the_deepest_depth_with_no_part_reached(self) -> None:
+        seen, one = self.passes(125.0)
+        with self.gpu(), mock.patch.object(cfd_tools, "_water_pass", side_effect=one):
+            out = cfd_tools.cfd_water(self.ctx, {"depths_mm": [150.0, 50.0, 100.0, 125.0, 175.0]})
+        self.assertEqual(seen, [50.0, 100.0, 125.0])  # shallow first, no deeper pass after the first reach
+        self.assertEqual(out["crossable_depth_mm"], 100.0)
+        self.assertEqual(out["label"], "渡れる水深 (計算)")
+        self.assertIn("モーター", out["said"])
+        self.assertFalse(out["physically_validated"])
+        self.assertEqual(self.records("verdict"), [])  # no requirement gives a depth: no OK / NG
+        saved = json.loads((Path(self.ctx.store.path) / out["path"]).read_text(encoding="utf-8"))
+        self.assertEqual(saved["crossable_depth_mm"], 100.0)
+        from viewer.src import water as page
+        line = page.crossable_inputs(saved)[0]
+        self.assertEqual((line["label"], line["value"]), ("渡れる水深 (計算)", "100 mm"))
+        self.assertIn("125 mm: モーター が浸かる", line["source"])
+
+    def test_reached_at_the_shallowest_and_never_reached(self) -> None:
+        seen, one = self.passes(0.0)
+        with self.gpu(), mock.patch.object(cfd_tools, "_water_pass", side_effect=one):
+            out = cfd_tools.cfd_water(self.ctx, {"depths_mm": [50.0, 100.0]})
+        self.assertIsNone(out["crossable_depth_mm"])
+        self.assertIn("いちばん浅い 50 mm でも浸かる", out["said"])
+        seen, one = self.passes(1000.0)
+        with self.gpu(), mock.patch.object(cfd_tools, "_water_pass", side_effect=one):
+            out = cfd_tools.cfd_water(self.ctx, {"depths_mm": [50.0, 100.0]})
+        self.assertEqual(out["crossable_depth_mm"], 100.0)
+        self.assertIn("それより深くは回していない", out["said"])
+
+
 class Air(Base):
     def test_the_way_to_a_verdict(self) -> None:
         with self.gpu() as calls:
