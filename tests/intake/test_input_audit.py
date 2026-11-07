@@ -15,6 +15,9 @@ REQ = re.compile(r'requirement\(req,\s*"(Q[0-9]+)"(?:,\s*"([^"]+)")?')
 LOOP = re.compile(r'_loop\(spec,\s*req,\s*"(Q[0-9]+)"\)')  # the forest loop reads its distance key in km
 
 
+LIMIT_KEYS = ("Q60", "Q61", "Q62")  # safe tilt, safety factor, force on a person: read by a limit's expression
+
+
 def builder_numbers() -> dict[str, set[str]]:
     """The keys the catalog's builders read as numbers, with the units they ask for (read off the builders' source)."""
     out: dict[str, set[str]] = {}
@@ -22,6 +25,8 @@ def builder_numbers() -> dict[str, set[str]]:
         s = f.read_text(encoding="utf-8")
         for k, u in [*NUM.findall(s), *REQ.findall(s)]:
             out.setdefault(k, set()).add(u or "")
+    for k in LIMIT_KEYS:  # the limits Claude writes into a load case (limit_from refs) are numbers too
+        out.setdefault(k, set()).add("")
     return out
 
 
