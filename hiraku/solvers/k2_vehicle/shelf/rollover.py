@@ -27,8 +27,8 @@ import math
 import numpy as np
 
 from ..checks import _check
-from ..contact import (C_CONTACT, K_CONTACT, POINT_SPACING, V_EPS, BodyContact, ContactPoint, design_points,
-                       wheel_rim_points)
+from ..contact import (C_CONTACT, K_CONTACT, POINT_SPACING, V_EPS, BodyContact, ContactPoint, contact_dt,
+                       design_points, wheel_rim_points)
 from ..drive import PathDriver, SpeedController, controls, start_rolling
 from ..model import DesignError, box_design, build_vehicle
 from ..record import Recorder, _round
@@ -216,11 +216,12 @@ def lane_change_run(veh, design: dict, speed: float, y_ref, x_end: float, *, mu:
     (REST_SPEED, REST_RATE for REST_HOLD), or after_tip_s after the tip. motor (drive.Motor): the speed
     control's drive torque is capped at what the motor gives at the driven wheels' mean spin (shared
     equally) and its integral stops growing while capped; without it the drive has no cap (as in the
-    lane change tool). on_step(sim, con): called after every step."""
-    sim = new_sim(veh, dt=dt, settle_s=1.0)
+    lane change tool). on_step(sim, con): called after every step. The run steps at min(dt, contact_dt(k))."""
+    sim = new_sim(veh, dt=min(dt, contact_dt(k)), settle_s=1.0)
     pts = design_points(design) if points is None else points
     con = BodyContact(sim, pts, mu, k=k, c=c)
     con.live = True
+    con.start()
     rec = ContactRecorder(sim, rec_hz, con, design) if rec_hz > 0 else None
     start_rolling(sim, speed)
     drv = PathDriver(sim, y_ref)
@@ -242,7 +243,7 @@ def lane_change_run(veh, design: dict, speed: float, y_ref, x_end: float, *, mu:
         else:
             drive, brake = [0.0] * sim.n, [0.0] * sim.n
         ext = con.ext()
-        sim.step(controls(sim, delta, drive, brake), ext)
+        sim.step(controls(sim, delta, drive, brake), ext, con.travel)
         w.step()
         if on_step is not None:
             on_step(sim, con)
@@ -270,7 +271,8 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
     body rests (REST_SPEED, REST_RATE for REST_HOLD) or after_tip_s after it has tipped (or after
     after_tip_s if it does not tip). Gravity is turned, the table is K2's road (z its normal). From the
     tip on, the ground is the table and the level floor it is hinged on at its low edge, TABLE_MARGIN
-    outside the wheels (road.table_with_floor), so the vehicle falls off the table onto the floor."""
+    outside the wheels (road.table_with_floor), so the vehicle falls off the table onto the floor. The turn to the
+    tip steps at dt (as the tilt tool's), the rest at min(dt, contact_dt(k))."""
     pts = design_points(design) if points is None else points
     made = {}
 
@@ -286,6 +288,8 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
     sim, rec, con = sw["sim"], made["rec"], made["con"]
     touched_in_turn = rec.touch_unforced
     con.live = True
+    held = con.start()  # the points already under the table (the turn ran without the body's contact)
+    sim.dt = dt = min(dt, contact_dt(k))  # the fall with the body's contact (the turn to the tip at the tool's dt)
     rec.set_hz(hz)
     sign = 1.0 if left_up else -1.0
     theta = sw["tip_angle"]
@@ -301,7 +305,7 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
             sim.set_gravity(side_gravity(sign * theta))
             sim.road = table_with_floor(sign * theta, y_hinge)
         ext = con.ext()
-        sim.step(ctl, ext)
+        sim.step(ctl, ext, con.travel)
         w.step()
         if on_step is not None:
             on_step(sim, con)
@@ -314,7 +318,7 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
     rec.tick({"table_angle": ("deg", math.degrees(sign * theta))}, force=True)
     st = w.finish()
     st.update(recorder=rec, sim=sim, points=pts, tip_angle=sw["tip_angle"], t_wheels_off=sw["t_tip"],
-              hold_angle=target, touched_in_turn=touched_in_turn, t_fall=t_start, y_hinge=y_hinge)
+              hold_angle=target, touched_in_turn=touched_in_turn, t_fall=t_start, y_hinge=y_hinge, held=held)
     return st
 
 
@@ -382,7 +386,9 @@ def _contact_note(pts, k, mu) -> str:
             f"body); each a penalty spring {k / 1000:g} N/mm and damper {C_CONTACT:g} N s/m along the road normal, "
             f"Coulomb friction mu {mu:g} regularised below {V_EPS:g} m/s (HIRAKU's choices, no source); the road is "
             "flat under each point; the peak forces and accelerations depend on the stiffness (max_contact_depth: "
-            "the deepest sink; the _k2x results: the same run at twice the stiffness)")
+            "the deepest sink; the _k2x results: the same run at twice the stiffness); the run with the body's "
+            f"contact steps at most {contact_dt(k) * 1000:g} ms (contact.contact_dt: the step at which the R4 "
+            "rollover converged at this stiffness; HIRAKU's choice)")
 
 
 class _RolloverBase(K2Tool):
@@ -489,6 +495,10 @@ class RolloverTiltTool(_RolloverBase):
         if st["touched_in_turn"]:
             notes.append(f"a body contact point was below the table at {st['touched_in_turn']} samples of the turn "
                          "to the tip (the turn runs without the body's contact)")
+        if st["held"]:
+            notes.append("under the table when the body's contact started (at the tip): " + ", ".join(st["held"])
+                         + "; each takes the table at that depth and is pushed only for what it goes deeper "
+                         "(contact.BodyContact.start: no energy from starting the contact)")
         # the body's roll to the floor at the end (the record's roll is to the table)
         sgn = 1.0 if left_up else -1.0
         th = sgn * st["hold_angle"]

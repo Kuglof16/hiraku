@@ -227,7 +227,7 @@ class DemoDesign(unittest.TestCase):
 
         design = json.loads(DEMO.read_text(encoding="utf-8"))
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
-        lc = BUILDERS["R4"](load_catalog().test("R4"), req, design)
+        lc = BUILDERS["R4"](load_catalog().test("R4"), req, design)[0]  # R4-rollover (the soil)
         rec = TOOLS["rollover_beam"].run(design, lc, [{"prediction_id": "pred-0001"}], {})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         plan = PLANS[lc["load_case_id"]]

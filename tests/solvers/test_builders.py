@@ -325,12 +325,31 @@ class RopsBuilderTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.rb = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))  # has the roll bar
-        cls.lc = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
+        cls.lcs = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
+        cls.lc = cls.lcs[0]
 
     def test_load_case_fits_the_contract(self):
-        contract.validate("load_case", self.lc)
+        for lc in self.lcs:
+            contract.validate("load_case", lc)
         self.assertEqual(self.lc["load_case_id"], "R4-rollover")
         self.assertEqual(self.lc["domain"], CATALOG.test("R4")["domain"])
+
+    def test_two_grounds_soil_and_pavement(self):
+        """The user's decision: R4 on a soil (R4-rollover, contact.K_CONTACT) and a pavement (R4-rollover-pavement,
+        contact.K_PAVEMENT), the same otherwise; both grounds are HIRAKU's assumption and say so; both use the plan."""
+        from hiraku.solvers.k2_vehicle.contact import K_CONTACT, K_PAVEMENT
+
+        soil, pave = self.lcs
+        self.assertEqual([lc["load_case_id"] for lc in self.lcs], ["R4-rollover", "R4-rollover-pavement"])
+        self.assertEqual(soil["params"]["contact_stiffness"], {"value": K_CONTACT / 1000.0, "unit": "N/mm"})
+        self.assertEqual(pave["params"]["contact_stiffness"], {"value": K_PAVEMENT / 1000.0, "unit": "N/mm"})
+        self.assertEqual({k: v for k, v in soil["params"].items() if k != "contact_stiffness"},
+                         {k: v for k, v in pave["params"].items() if k != "contact_stiffness"})
+        self.assertEqual(soil["criterion"]["quantity"], pave["criterion"]["quantity"])
+        for lc, ground in ((soil, "土"), (pave, "舗装")):
+            self.assertTrue(lc["title"].startswith(ground + "の地面で"))
+            self.assertIn("地面の硬さは HIRAKU の仮定。土と舗装の 2 通り", lc["criterion"]["basis"])
+            self.assertIs(plan_for(lc), PLANS["R4-rollover"])
 
     def test_values_are_code_4_at_the_reference_mass(self):
         from hiraku.catalog.builders.analysis import R4_CODE4, R4_REFERENCE_MASS_KG
@@ -342,7 +361,7 @@ class RopsBuilderTest(unittest.TestCase):
         self.assertAlmostEqual(p["rear_fraction"]["value"], 1 / 6)
         self.assertEqual(p["loading"], "two_cargo")
         given = dict(CATALOG.test("R4"), params={"crush_force": {"value": 12, "unit": "kN"}})
-        self.assertEqual(BUILDERS["R4"](given, REQ, self.rb)["params"]["crush_force"], {"value": 12000.0, "unit": "N"})
+        self.assertEqual(BUILDERS["R4"](given, REQ, self.rb)[0]["params"]["crush_force"], {"value": 12000.0, "unit": "N"})
 
     def test_criterion_is_the_occupant_space(self):
         c = self.lc["criterion"]
@@ -361,7 +380,7 @@ class RopsBuilderTest(unittest.TestCase):
         req = copy.deepcopy(REQ)
         req["requirements"].append({"key": "Q64", "name": "ROPS", "value": "あり", "source": "default", "trust": 1,
                                     "basis": "assumption (test)"})
-        lc = BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
+        lc = BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)[0]
         self.assertEqual(lc["requirement_keys"][:2], ["Q64", "Q31"])
         self.assertEqual(lc["criterion"]["requirement_keys"], ["Q64", "Q31"])
         req["requirements"][-1]["value"] = "なし"

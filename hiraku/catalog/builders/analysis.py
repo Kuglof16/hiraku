@@ -991,7 +991,7 @@ R4_TOL = 0.25
 
 # R4 is judged by K2's rollover_beam (stage 3): the vehicle tipped over on the tilt table to the roll bar's first
 # touch (the rigid body with its ground contact), then the frame as yielding beams landing on the ground in that state.
-# The one load case is R4-rollover (R4_ROLLOVER_ID). The static push of Code 4 (the former R4-rops) is not built: no
+# The load cases are R4-rollover (R4_ROLLOVER_ID, on a soil) and R4-rollover-pavement (R4_PAVEMENT_ID). The static push of Code 4 (the former R4-rops) is not built: no
 # tool on the shelf loads the roll bar that way, and a tool for it made in a run (tests R4, giving
 # rops_occupant_clearance at a lighter stage) would set R4's stage below rollover_beam's (shelf.load_case_stage takes the
 # lowest stage of the tools covering the test family and the quantity). Its formulas stay as the hand calculation.
@@ -1067,11 +1067,15 @@ R4_PREDICTIONS = [
 
 
 R4_ROLLOVER_ID = "R4-rollover"
+# the user's decision (11/6): R4 is judged on two grounds, a soil and a pavement, and is OK only when both are; the
+# ground's stiffness per contact point is 「HIRAKU の仮定」 (contact.K_CONTACT, contact.K_PAVEMENT: no measured value)
+R4_PAVEMENT_ID = "R4-rollover-pavement"
+R4_GROUND_NOTE = "地面の硬さは HIRAKU の仮定。土と舗装の 2 通り"
 # R4-rollover's title and basis say what it is (the tool's record says the same, rollover_beam.NOT_A_STANDARD)
 R4_NOT_A_STANDARD = "HIRAKU 独自の計算の確かめ。規格の試験ではない"
 
 
-def r4_rops(spec: Record, req: Record, design: Record) -> Record:
+def r4_rops(spec: Record, req: Record, design: Record) -> list[Record]:
     """R4: the vehicle tipped over on the tilt table past its limit lands on its roll bar (rollover_beam); the frame
     must stay out of the occupants' space. The params carry OECD Code 4's side, rear and crushing loads (borrowed)
     for the hand calculation (R4_PREDICTIONS, the static push; the landing does not read them). A catalog param
@@ -1103,6 +1107,24 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
     if not 0.0 <= frac <= 0.5 or min(side, rear, crush) <= 0:
         raise BuildError(f"{spec['id']}: the energies and the force must be positive and rear_fraction within 0..0.5")
     req_keys = (["Q64"] if q64 is not None else []) + (["Q31"] if entry(req, "Q31") else [])
+    from hiraku.solvers.k2_vehicle.contact import K_CONTACT, K_PAVEMENT  # N/m per point: the soil, the pavement
+
+    soil = _r4_case(spec, load, keys, req_keys, side, rear, crush, frac)
+    soil["params"]["contact_stiffness"] = q(K_CONTACT / 1000.0, "N/mm")
+    soil["title"] = "土の地面で" + soil["title"]
+    soil["criterion"]["basis"] += (f". The ground is a soil: {K_CONTACT / 1000.0:g} N/mm per contact point "
+                                   f"({R4_GROUND_NOTE}; R4-rollover-pavement is the same on a pavement)")
+    pave = _r4_case(spec, load, keys, req_keys, side, rear, crush, frac)
+    pave["load_case_id"] = R4_PAVEMENT_ID
+    pave["params"]["contact_stiffness"] = q(K_PAVEMENT / 1000.0, "N/mm")
+    pave["title"] = "舗装の地面で" + pave["title"]
+    pave["criterion"]["basis"] += (f". The ground is a pavement: {K_PAVEMENT / 1000.0:g} N/mm per contact point, near "
+                                   f"rigid ({R4_GROUND_NOTE}; R4-rollover is the same on a soil)")
+    return [soil, pave]
+
+
+def _r4_case(spec, load, keys, req_keys, side, rear, crush, frac) -> Record:
+    """One R4 rollover load case (r4_rops sets its ground)."""
     return {
         "load_case_id": R4_ROLLOVER_ID,
         "test_id": "R4",
@@ -1193,7 +1215,7 @@ BUILDERS = {
     "H5": h5_assembly,
 }
 # H1 and H5 by load case (a test's own key would serve its other cases too)
-PLANS = {"C1": C1_PLAN, C1_SPLIT_ID: C1_SPLIT_PLAN, R4_ROLLOVER_ID: R4_ROLLOVER_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
+PLANS = {"C1": C1_PLAN, C1_SPLIT_ID: C1_SPLIT_PLAN, R4_ROLLOVER_ID: R4_ROLLOVER_PLAN, R4_PAVEMENT_ID: R4_ROLLOVER_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
          "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
          "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
          "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS,
