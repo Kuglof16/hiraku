@@ -33,6 +33,7 @@ const FIXED = {
   "/api/assets": "data/assets.json",
   "/api/modules": "data/modules.json",
   "/api/formulas": "data/formulas.json",
+  "/api/materials": "data/materials.json",
   "/layout.json": "layout.json",
   "/pets/pet3d.js": "pets/pet3d.js",
 };
