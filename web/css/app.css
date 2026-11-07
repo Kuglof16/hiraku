@@ -1469,3 +1469,5 @@ body.grid-fixed .grid-view .replay-tag { display: none; }
 @media (max-width: 899.98px) {
   .narrow-note { display: block; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 12px 16px; font-size: 18px; font-weight: 600; text-align: center; background: var(--ink, #1c1c1c); color: #fff; }
 }
+/* ④'s viewer open: the hooks' line is not laid over it (its header and back button) */
+body:has(#grid-viewer:not([hidden])) .hookline { display: none !important; }
