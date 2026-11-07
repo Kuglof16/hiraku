@@ -240,6 +240,29 @@ class AddTestsToolTest(ToolsTestCase):
                 self.assertIn("write_load_case", got["next"])
 
 
+class NoIdsInSentencesTest(ToolsTestCase):
+    """What Claude writes for a person (a rule question's text, the reason of an added test) carries no ids."""
+
+    def test_a_rule_question_text_with_a_rule_id_a_part_id_or_a_q_number_is_refused_and_says_what_to_write(self):
+        ctx = make_ctx(self.root, product="care-bed")
+        for text in ("規則 SM-01 に当たりました。直しますか", "床 floor が当たりました。直しますか", "航続 Q54 に効きます。直しますか"):
+            with self.subTest(text=text):
+                with self.assertRaises(ToolError) as e:
+                    call("ask_user", ctx, rule_hits=[{"rule_id": "SM-01", "parts": ["floor"], "text": text}])
+                self.assertIn("人の言葉", str(e.exception))
+        ok = call("ask_user", ctx, rule_hits=[{"rule_id": "SM-01", "parts": ["floor"], "text": "床の板が薄すぎます。直しますか、この規則を外しますか"}])
+        self.assertEqual([q["rule_id"] for q in ok["rule_questions"]], ["SM-01"])
+
+    def test_an_added_tests_reason_with_a_test_number_is_refused(self):
+        ctx = make_ctx(self.root)
+        call("pick_domains", ctx, want="机", flags={"standing": True, "cargo": True}, speed_class="static")
+        with self.assertRaises(ToolError) as e:
+            call("add_tests", ctx, tests=[{"test_id": "N1", "reason": "N1 が要る"}])
+        self.assertIn("番号", str(e.exception))
+        ok = call("add_tests", ctx, tests=[{"test_id": "N1", "reason": "機械の上に置くので共振を見る"}])
+        self.assertEqual(ok["added_tests"][0]["test_id"], "N1")
+
+
 class AskUserToolTest(ToolsTestCase):
     def test_a_product_the_run_knows_gets_its_own_values_as_defaults(self):
         ctx = make_ctx(self.root, product="care-bed")

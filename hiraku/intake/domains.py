@@ -8,6 +8,7 @@ is called for this product (aero is "spilling" for a serving robot).
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -258,6 +259,19 @@ def reasons_missing(record: Record, reasons: dict[str, str] | None) -> list[str]
     return [p["domain"] for p in record["picks"] if p["domain"] not in given]
 
 
+_ID_IN_SENTENCE = re.compile(r"(?<![A-Za-z0-9])(?:Q[0-9]{2}|[A-Z]{1,3}-[0-9]{2}|[A-Z][0-9]{1,2}[a-z]?)(?![A-Za-z0-9])")
+
+
+def ids_in(text: str, extra: list[str] | None = None) -> list[str]:
+    """The ids a sentence for a person must not carry (a requirement's Q.., a rule's AS-01, a test's S2) and any of `extra`
+    (a part's id such as "battery"): the ones found, in the order they appear."""
+    found = [m.group(0) for m in _ID_IN_SENTENCE.finditer(text)]
+    for x in extra or []:
+        if x and re.search(rf"(?<![A-Za-z0-9_]){re.escape(x)}(?![A-Za-z0-9_])", text):
+            found.append(x)
+    return list(dict.fromkeys(found))
+
+
 _UNBUILT_TAIL = "は荷重条件の作り方がまだ無いので、この実行では見ない"
 
 
@@ -305,6 +319,8 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
         if not isinstance(item, dict) or not str(item.get("test_id", "")).strip() or not str(item.get("reason", "")).strip():
             raise IntakeError("tests の 1 件は {test_id, reason} です (reason は、この製品にこの試験が要る理由。空にはできません)")
         tid, why = item["test_id"].strip(), item["reason"].strip()
+        if (bad := ids_in(why)):
+            raise IntakeError(f"理由に番号 ({'・'.join(bad)}) が入っています。理由は、この製品にその試験が要る訳を人の言葉で書いてください (番号は書かない)")
         try:
             test = catalog.test(tid)
         except KeyError:
