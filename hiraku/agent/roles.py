@@ -25,6 +25,14 @@ Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
              "get_tool_template", "check_tool", "make_tool", "write_load_case")  # write_load_case: tests without a builder
+AERO_TOOLS = (*CAE_TOOLS, "cfd_aero")  # the aero CAE role also has the wind tunnel on the GPU (prompts.AERO_RULES)
+
+
+def cae_tools(domain: str) -> tuple[str, ...]:
+    """The tools of a domain's CAE role."""
+    return AERO_TOOLS if domain == "aero" else CAE_TOOLS
+
+
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 # designs with modules: the packager also builds each round's version
 MODULE_PACKAGER_TOOLS = (*PACKAGER_TOOLS, *contract.MCP_TOOLS_PACKAGER)
@@ -351,7 +359,7 @@ def subagents(ctx: RunContext, mix: Mix | None = None) -> dict:
         if a["role"] in ("cae", "packager"):
             domain = a.get("domain", "assembly")
             builds = a["role"] == "packager" and modules
-            tools = CAE_TOOLS if a["role"] == "cae" else MODULE_PACKAGER_TOOLS if builds else PACKAGER_TOOLS
+            tools = cae_tools(domain) if a["role"] == "cae" else MODULE_PACKAGER_TOOLS if builds else PACKAGER_TOOLS
             out[sdk_name(a["agent_id"])] = AgentDefinition(
                 description=prompts.cae_description(domain, modules=builds),
                 prompt=prompts.cae_prompt(domain, modules=builds),

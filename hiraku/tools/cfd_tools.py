@@ -1,7 +1,8 @@
 """The flow tool (cfd_aero): a thin adapter between the MCP tools and hiraku.cfd.
 
 The only module outside hiraku/cfd that imports it. hiraku/tools/mcp.py imports this module in one line, and on
-import it adds its tool to mcp's tables. Removing that line, this file and hiraku/cfd leaves the rest working.
+import it adds its tool to mcp's tables. The name is in RUN_TOOLS and in the aero CAE role's tools (roles.AERO_TOOLS);
+removing those, that line, this file and hiraku/cfd leaves the rest working.
 
 A sweep runs on the GPU only: with no GPU the tool says so and does not run; it never falls back to the CPU.
 Its record goes to <run folder>/cfd/v<N>/<speed>_<grid>/ (each case in its own folder). A replay reads a stored
@@ -181,6 +182,12 @@ def _hand_inputs(store: Any, design: Record, version: int) -> tuple[Record, str,
     except ValueError as e:
         hand["f2"] = {}
         notes.append(f"F2 の手計算の既定値を出せませんでした: {e}")
+    f2 = _case_of(store, version, "F2")
+    if f2:
+        if f2.get("criterion"):
+            hand["f2"]["criterion"] = criterion(f2, "N")
+        if "speed" in f2.get("params", {}):
+            hand["f2"]["speed_ms"] = to_unit(f2["params"]["speed"], "m/s", "speed")
     if p4:
         try:
             p, calc = p4["params"], p4_calc(design, p4)
@@ -264,6 +271,16 @@ def cfd_aero(ctx: Any, args: Record | None = None, agent: str | None = None) -> 
     return _replay(ctx, args) if args.get("replay") else _sweep(ctx, args)
 
 
+def k2_parts() -> Any:
+    """What hiraku.cfd.water_coupled uses from K2. It comes through here because hiraku.cfd itself does not import K2."""
+    from types import SimpleNamespace
+
+    from hiraku.solvers.k2_vehicle import drive, model, scenario, sim
+
+    return SimpleNamespace(Motor=drive.Motor, PathDriver=drive.PathDriver, SpeedController=drive.SpeedController, controls=drive.controls, on_board=drive.on_board, start_rolling=drive.start_rolling,
+                           build_vehicle=model.build_vehicle, settle=scenario.settle, hold=scenario.hold, Sim=sim.Sim, quat_from_euler=sim.quat_from_euler)
+
+
 def _input_schema() -> Record:
     """The contract's tool_input once it has it; until then the same shape from here (the lead adds it to the contract)."""
     schema = dict(contract.schema()["$defs"].get(f"tool_input.{NAME}") or INPUT_SCHEMA)
@@ -271,7 +288,6 @@ def _input_schema() -> Record:
     return schema
 
 
-# No assert that the name is in contract.MCP_TOOLS_LATER yet: the contract is the lead's and gets it with the merge.
 TOOLS: dict[str, Record] = {NAME: {"description": DESCRIPTION, "input_schema": _input_schema(), "function": cfd_aero}}
 
 

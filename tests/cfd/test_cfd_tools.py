@@ -231,6 +231,19 @@ class CfdToolTest(unittest.TestCase):
         self.assertTrue(any("P4" in n for n in out["uncertainty"]["hand_notes"]))
         self.assertEqual(len(out["table"]), 13)
 
+    def test_the_f2_load_case_gives_the_criterion_and_the_speed(self):
+        case = {"load_case_id": "F2-drag40kmh", "test_id": "F2", "domain": "aero", "title": "空気抵抗", "params": {"speed": {"value": 40.0, "unit": "km/h"}, "loading": "two_cargo"},
+                "criterion": {"quantity": "drag_force", "op": "<=", "limit": {"value": 665.0, "unit": "N"}, "basis": "Q50"}}
+        with mock.patch.object(self.store, "version_load_cases", return_value=[case]):
+            hand, _, _, _ = cfd_tools._hand_inputs(self.store, self.design, self.store.design_version)
+        self.assertEqual(hand["f2"]["criterion"], {"quantity": "drag_force", "op": "<=", "limit": 665.0, "unit": "N", "load_case_id": "F2-drag40kmh"})
+        self.assertAlmostEqual(hand["f2"]["speed_ms"], 40.0 / 3.6)
+
+    def test_without_an_f2_load_case_there_is_no_f2_criterion(self):
+        with mock.patch.object(self.store, "version_load_cases", return_value=[]):
+            hand, _, _, _ = cfd_tools._hand_inputs(self.store, self.design, self.store.design_version)
+        self.assertNotIn("criterion", hand["f2"])
+
     def test_a_second_sweep_does_not_write_over_the_first(self):
         with self.gpu_available():
             a = call(self.ctx, yaws_deg=[0.0])
@@ -368,7 +381,7 @@ class RegistrationTest(unittest.TestCase):
             self.assertEqual(sorted(cfd_tools._input_schema()["properties"]), ["design_version", "dx_mm", "replay", "speed_kmh", "wind_ms", "yaws_deg"])
 
     @unittest.skipUnless(HAS_SDK, "this Python has no Agent SDK, so no MCP tables")
-    def test_it_is_registered_but_not_in_the_production_run(self):
+    def test_it_is_registered_and_in_the_production_run(self):
         from hiraku.tools import mcp
         from hiraku.tools.functions import RUN_TOOLS
 
@@ -376,7 +389,33 @@ class RegistrationTest(unittest.TestCase):
         self.assertIs(mcp.HANDLERS["cfd_aero"], t["function"])
         self.assertEqual(mcp.INPUT_SCHEMAS["cfd_aero"], t["input_schema"])
         self.assertEqual(mcp.DESCRIPTIONS["cfd_aero"], t["description"])
-        self.assertNotIn("cfd_aero", RUN_TOOLS)
+        self.assertIn("cfd_aero", RUN_TOOLS)
+
+
+class RoleTest(unittest.TestCase):
+    def test_only_the_aero_cae_role_has_the_wind_tunnel(self):
+        from hiraku.agent import roles
+
+        self.assertIn("cfd_aero", roles.cae_tools("aero"))
+        for domain in contract.DOMAINS:
+            if domain != "aero":
+                self.assertNotIn("cfd_aero", roles.cae_tools(domain), domain)
+        self.assertNotIn("cfd_aero", roles.PACKAGER_TOOLS)
+        self.assertNotIn("cfd_aero", roles.DESIGNER_TOOLS)
+
+    def test_the_aero_role_is_told_how_to_read_it(self):
+        from hiraku.agent import prompts
+
+        text = prompts.cae_prompt("aero")
+        for word in ("cfd_aero", "確かめていない", "GPU が無い", "判定 (verdict) の根拠にしない", "1 つの版で 1 回まで"):
+            self.assertIn(word, text)
+        self.assertNotIn("cfd_aero", prompts.cae_prompt("nvh"))
+
+    def test_the_plugins_aero_agent_has_the_tool(self):
+        agent = (Path(__file__).resolve().parents[2] / "plugins" / "hiraku" / "agents" / "cae-aero.md").read_text(encoding="utf-8")
+        self.assertIn("cfd_aero", agent.split("---")[1])
+        other = (Path(__file__).resolve().parents[2] / "plugins" / "hiraku" / "agents" / "cae-nvh.md").read_text(encoding="utf-8")
+        self.assertNotIn("cfd_aero", other)
 
 
 if __name__ == "__main__":

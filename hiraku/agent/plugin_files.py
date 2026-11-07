@@ -20,7 +20,7 @@ from pathlib import Path
 
 from hiraku import contract
 from hiraku.agent import prompts
-from hiraku.agent.roles import (CAE_EFFORT, CAE_TOOLS, DESIGNER_EFFORT, DESIGNER_TOOLS, MODULE_DESIGNER_TOOLS,
+from hiraku.agent.roles import (CAE_EFFORT, DESIGNER_EFFORT, DESIGNER_TOOLS, MODULE_DESIGNER_TOOLS, cae_tools,
                                 MODULE_PACKAGER_TOOLS, PLUGIN_DIR, PLUGIN_NAME, designer_skills, module_designer_skills,
                                 plugin_skills, sdk_name)
 
@@ -73,7 +73,7 @@ def agent_files() -> dict[str, str]:
             continue
         name = sdk_name(f"cae.{domain}")
         out[f"agents/{name}.md"] = _agent(name, prompts.cae_description(domain), prompts.cae_prompt(domain),
-                                          CAE_TOOLS, CAE_EFFORT, skills=True)
+                                          cae_tools(domain), CAE_EFFORT, skills=True)
     return out
 
 

@@ -390,6 +390,33 @@ class UncertaintyTest(unittest.TestCase):
         self.assertLess(r["cfd"], r["cfd_high"])
         self.assertEqual(r["from_yaw_deg"], 20.0)
 
+    def f2_row(self, **f2):
+        hand = {"f2": {"rho": 1.225, "C_d": 0.8, "A_m2": 1.6, **f2}}
+        return self.row(uncertainty.table(make_map(rows(cda=1.4), [aero_map.case_row(fake_run(y, dx=0.12, grid_gain=1.1, cda=1.4)) for y in (0.0, 20.0)]), hand, None), "F2", "drag_force")
+
+    def test_f2_without_a_criterion_has_no_verdict(self):
+        r = self.f2_row()
+        self.assertIsNone(r["verdict_cfd"])
+        self.assertIn("基準はまだ無い", r["note"])
+
+    def test_f2_reads_the_load_cases_criterion_at_each_value(self):
+        drag = uncertainty.drag_force(1.225, 1.4, 40.0 / 3.6)
+        crit = {"quantity": "drag_force", "op": "<=", "unit": "N", "load_case_id": "F2-drag40kmh"}
+        far = self.f2_row(criterion={**crit, "limit": 665.0})
+        self.assertEqual((far["verdict_hand"], far["verdict_cfd"], far["verdict_low"], far["verdict_high"], far["verdict_changes"]), ("OK", "OK", "OK", "OK", False))
+        self.assertIn("確かめていない", far["note"])
+        near = self.f2_row(criterion={**crit, "limit": drag * 1.05})  # inside the 10 % band of the grid change: the band's top goes over
+        self.assertEqual(near["verdict_cfd"], "OK")
+        self.assertTrue(near["verdict_changes"])
+        over = self.f2_row(criterion={**crit, "limit": drag * 0.5})
+        self.assertEqual(over["verdict_cfd"], "NG")
+
+    def test_f2_goes_as_speed_squared_at_the_load_cases_speed(self):
+        same = self.f2_row()
+        twice = self.f2_row(speed_ms=2.0 * 40.0 / 3.6)
+        self.assertAlmostEqual(twice["cfd"], 4.0 * same["cfd"])
+        self.assertAlmostEqual(twice["at_speed_kmh"], 80.0)
+
     def test_the_verdict_is_read_at_each_value_and_says_when_it_moves(self):
         base = self.table(limit=1.0)
         r = self.row(base, "F1", "critical_wind_speed")

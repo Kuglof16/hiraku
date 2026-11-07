@@ -45,8 +45,9 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__get_tool_template", o.allowed_tools)
         self.assertIn("mcp__hiraku__build_version", o.allowed_tools)  # the run tools (the tool refuses designs without modules)
         self.assertIn("mcp__hiraku__write_load_case", o.allowed_tools)  # the lead may write a load case
-        # with find_tradeoffs and add_tests (intake), write_design, edit_design, check_design and write_load_case
-        self.assertEqual(len(o.allowed_tools), 26)
+        self.assertIn("mcp__hiraku__cfd_aero", o.allowed_tools)  # the wind tunnel; with no GPU it says so and does not run
+        # with find_tradeoffs and add_tests (intake), write_design, edit_design, check_design, write_load_case and cfd_aero
+        self.assertEqual(len(o.allowed_tools), 27)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])

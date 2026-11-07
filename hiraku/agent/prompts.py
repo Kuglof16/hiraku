@@ -233,12 +233,20 @@ PACKAGER_RULES = """
 """
 
 
+AERO_RULES = """
+風洞のツール cfd_aero (GPU の流体計算):
+- 手計算の予測と analyze で担当の荷重条件を進めたあとに、形から求めた抵抗と横風の力を見るために呼ぶ。ヨーごとの 6 分力と Cd・CdA・Cy の表と、F1・F2・電費の判定がその値でどう動くかの表が返る。既定の点で数分かかるので、1 つの版で 1 回まで。
+- 返った値は実験と比べて確かめていない。physically_validated が false で、丸い面を持つ体では実験の値から大きく外れた例がある。報告には「確かめていない」と書き、設計の Cd や Cy を置き換えず、荷重条件の判定 (verdict) の根拠にしない。手計算との差は参考として、まとめ役に 1 行で返す。
+- GPU が無い機械では「GPU が無いので流れの計算は回しません」と返る。失敗ではない。回さなかったことを報告に書いて、ほかの手順を続ける。GPU のメモリが足りないと返ったら、少し待って 1 回だけ呼び直し、それでも足りなければ同じように続ける。
+"""
+
+
 def cae_prompt(domain: str, modules: bool = False) -> str:
     """A CAE role's prompt; the packager's (assembly) has PACKAGER_RULES, and for a design with
     modules (modules=True) also PACKAGER_MODULE_RULES (build_version)."""
     ja = contract.DOMAIN_NAMES_JA[domain]
     who = "パッケージ役 (組み立て: 干渉・人・組み立ての順)" if domain == "assembly" else f"{ja}の CAE 役"
-    extra = (PACKAGER_RULES + PACKAGER_MODULE_RULES * modules) if domain == "assembly" else ""
+    extra = (PACKAGER_RULES + PACKAGER_MODULE_RULES * modules) if domain == "assembly" else AERO_RULES if domain == "aero" else ""
     return f"""\
 あなたは HIRAKU の{who}です。まとめ役から渡された荷重条件を、1 つずつ次の順で進めます。
 
