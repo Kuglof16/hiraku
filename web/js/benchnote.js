@@ -11,74 +11,15 @@
 // Which one shows: the card of the newest event applied (s.seq), else the いま line. The next event
 // takes the card away (two cards never stay side by side).
 //
-// The words shown are plain words: an aside in brackets or a sentence that holds a record's id
-// (chg-0006, rule_check, side_post_LS2_1, battery.battery2) or English record words (goes 21.4 mm
-// into floor ...) is wrapped in span.rec, which the strip hides (shown under ?dev=1 and in くわしく).
+// The words shown are plain words (plain.js): a record's id (chg-0006, rule_check, side_post_LS2_1,
+// battery.battery2), an aside or a sentence of English record words (goes 21.4 mm into floor ...) is
+// wrapped in span.rec, which the strip hides (shown under ?dev=1 and in くわしく).
 
-import { esc } from "./labels.js";
+// (the rule is plain.js's, the same as the footer's line and the log's; kept here under the names
+// the card's callers import)
+export { hasRecordWords, markRecordWords, plainWords } from "./plain.js";
 
 export const NOTE_IDS = ["now", "roundcard", "causenote", "bubble", "hooknote"];
-
-// Lower-case words of the screen's own, not a record's English: units and names said as they are.
-const OWN_WORDS = new Set(["von", "hooks", "deg", "rpm", "rad"]);
-// an id: letters joined by _ or . (rule_check, battery.battery2, side_post_LS2_1), or a record's
-// number (chg-0006, cmp-0027, pred-0017)
-const ID = /[A-Za-z][A-Za-z0-9]*(?:[_.][A-Za-z0-9]+)+|\b[a-z]{2,8}-\d{2,}\b/;
-const WORD = /\b[a-z]{3,}\b/g;
-
-// The text holds a record's id or an English word (three or more lower-case letters, not the screen's own).
-export function hasRecordWords(text) {
-  const t = String(text ?? "");
-  if (ID.test(t)) return true;
-  return (t.match(WORD) ?? []).some((w) => !OWN_WORDS.has(w));
-}
-
-// Escaped HTML of a text with its record words in span.rec: first each innermost aside in
-// brackets that holds them (with the space before it), then each sentence (up to 。) that still does.
-export function markRecordWords(text) {
-  const s = String(text ?? "");
-  const pieces = []; // [text, rec]
-  // (with the spaces round it: 「値 (ana-0076 の …) は」 reads 「値は」 without it)
-  const ASIDE = /\s*[(（][^()（）]*[)）]\s?/g;
-  let at = 0;
-  for (const m of s.matchAll(ASIDE)) {
-    if (!hasRecordWords(m[0])) continue;
-    pieces.push([s.slice(at, m.index), false], [m[0], true]);
-    at = m.index + m[0].length;
-  }
-  pieces.push([s.slice(at), false]);
-  // a sentence: the plain pieces' text between 。 (and the asides kept or wrapped in it)
-  const out = [];
-  let sentence = [];
-  const flush = () => {
-    if (!sentence.length) return;
-    const plain = sentence.filter(([, r]) => !r).map(([x]) => x).join("");
-    const rec = hasRecordWords(plain);
-    for (const [x, r] of sentence) out.push(r || rec ? `<span class="rec">${esc(x)}</span>` : esc(x));
-    sentence = [];
-  };
-  for (const [x, r] of pieces) {
-    if (r) {
-      sentence.push([x, true]);
-      continue;
-    }
-    for (const part of x.split(/(?<=[。．！？])/)) {
-      if (!part) continue;
-      sentence.push([part, false]);
-      if (/[。．！？]$/.test(part)) flush();
-    }
-  }
-  flush();
-  return out.join("");
-}
-
-// The text as the strip shows it (record words taken out); for tests and titles.
-export function plainWords(text) {
-  const d = document.createElement("div");
-  d.innerHTML = markRecordWords(text);
-  for (const r of d.querySelectorAll(".rec")) r.remove();
-  return d.textContent.replace(/\s{2,}/g, " ").trim();
-}
 
 // Which card: the one whose event is the newest applied (s.seq); else the いま line.
 // cause: present.js openCause (with its seq); round: the seq of the round card's newest record (proposals.js roundSeq).

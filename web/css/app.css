@@ -1246,8 +1246,14 @@ body.video .mode .stop-btn { display: none; }
 .bn-pick .pr { display: none !important; }
 .bn-pick .who .pet { display: inline-block; vertical-align: -4px; margin-right: 4px; }
 .bn-pick .hn-head { color: var(--orange); font-weight: 700; margin-right: 0.5em; }
-.bn-card .rec { display: none; }
-body.dev .bn-card .rec { display: inline; }
+/* plain words (js/plain.js): the record's ids and English words (.rec) hidden on ③'s card, the
+   footer's line and the log, the Japanese name put in for one (.rn) shown there; ?dev=1 the
+   record's words as recorded (.rec shown, .rn hidden), as in くわしく and elsewhere */
+.rn { display: none; }
+.bn-card .rec, #activity .rec, #log .rec { display: none; }
+.bn-card .rn, #activity .rn, #log .rn { display: inline; }
+body.dev .bn-card .rec, body.dev #activity .rec, body.dev #log .rec { display: inline; }
+body.dev .bn-card .rn, body.dev #activity .rn, body.dev #log .rn { display: none; }
 .bn-more { flex: none; font-size: 14px; padding: 3px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); cursor: pointer; }
 .bn-more[hidden] { visibility: hidden; display: inline-block; }
 .bn-full { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rule); max-height: 260px; overflow: auto; font-size: 15px; line-height: 1.5; color: var(--ink); }

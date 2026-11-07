@@ -75,7 +75,8 @@ import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one an
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 import { domainIconSvg } from "./domain_icons.js";
 import { footerActivity, hookLineText, mountHookLine, withoutRuleIds } from "./hookline.js";
-import { markRecordWords, mountBenchNote, noteKind } from "./benchnote.js"; // ③'s sentence card under the 3D
+import { mountBenchNote, noteKind } from "./benchnote.js"; // ③'s sentence card under the 3D
+import { filmWords, isFilmWords, markRecordWords, plainLineHtml } from "./plain.js"; // plain words: the card's, the footer's and the log's
 import { roundSeq } from "./proposals.js";
 import { boardHtml } from "./test_board.js"; // ③'s tests at a glance
 import { askAll, heavyPending, heavyReady, heavyWaiting, onHeavy, prefetch, quietly, tracked } from "./heavy.js"; // a static export's heavy parts, read when drawn
@@ -153,6 +154,7 @@ if (STATIC) {
 const hookLine = mountHookLine($("stage"), { dev: DEV, showS: 5, avoid: () => [$("tests")] }); // the hooks' stop in one line (kept clear of ③'s board); the footer's list folded
 $("back-link").href = DEV ? "?list=1&dev=1" : "?list=1";
 document.body.classList.toggle("dev", DEV); // (③'s strip shows the record's ids and English words)
+filmWords(params.get("video") === "1"); // (?video=1: the film's words as filmed, plain.js)
 const benchNote = mountBenchNote($("benchnote"), $("viewport"));
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
@@ -1483,22 +1485,46 @@ function hookLogItem(e, hook, resolved) {
   );
 }
 
-// Escaped text with each short aside in brackets kept in one piece (labels.js keepAsides).
+// The log's and the footer's words in plain words (plain.js: the record's ids and English words in
+// span.rec, hidden but under ?dev=1 and ?video=1; a tool's id by its short name), with each short
+// aside in brackets kept in one piece (as labels.js keepAsides).
+// (kept per text: the log is drawn again whole when a line is rewritten; the tools' names come
+// with tool.checked, so a new tool starts the cache again)
+const plainCache = { tools: -1, html: new Map() };
+function plainLine(s, text) {
+  if (isFilmWords()) return keepAsides(text);
+  const tools = Object.keys(s.tools ?? {}).length;
+  if (plainCache.tools !== tools || plainCache.html.size > 20000) {
+    plainCache.tools = tools;
+    plainCache.html.clear();
+  }
+  let html = plainCache.html.get(text);
+  if (html === undefined) {
+    html = plainLineHtml(s, text);
+    plainCache.html.set(text, html);
+  }
+  return html;
+}
+const plainHid = (s, text) => !!text && plainLine(s, text).includes('class="rec"');
 
 function logItem(e, ctx = null) {
   if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
+  const s = ctx?.s ?? {};
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
-  // more: words too long for a note (an agent.stopped's stop_reason), folded under くわしく
+  // more: words too long for a note (an agent.stopped's stop_reason), folded under くわしく (as recorded)
   const note =
-    (e.note ? `<span class="note">${keepAsides(e.note)}</span>` : "") +
+    (e.note ? `<span class="note">${plainLine(s, e.note)}</span>` : "") +
     (e.more ? `<details class="more"><summary>くわしく</summary><span class="note">${keepAsides(e.more)}</span></details>` : "");
+  // the whole line as recorded under the pointer when plain words took something out
+  const hid = e.level !== "said" && !isFilmWords() && (plainHid(s, e.text) || plainHid(s, e.note));
+  const tip = hid ? ` title="${esc(e.text + (e.note ? `\n${e.note}` : ""))}"` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
   // What an agent said can run long: the line shows its first lines, the record keeps all of it.
   // A short aside in brackets stays on one line: not "(形の見 / 本)".
   // (an agent's own words, of any length, in the narrow log: an aside longer than the line has to
   // break somewhere, so the lint's one-letter and bracket checks are let off there: data-lint)
-  const text = e.level === "said" ? `<span class="tx" data-lint="lonely" title="${esc(e.text)}">${keepAsides(e.text)}</span>` : keepAsides(e.text);
-  return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
+  const text = e.level === "said" ? `<span class="tx" data-lint="lonely" title="${esc(e.text)}">${plainLine(s, e.text)}</span>` : plainLine(s, e.text);
+  return `<li class="${e.level}"${tip}>${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
 function renderLog(s, resolved) {
@@ -1510,7 +1536,7 @@ function renderLog(s, resolved) {
     drawn.logLen = 0;
   }
   if (s.log.length > drawn.logLen) {
-    const ctx = { resolved, hooks: new Map([...s.hooks.denied, ...s.hooks.blockedStops].map((h) => [h.seq, h])) };
+    const ctx = { s, resolved, hooks: new Map([...s.hooks.denied, ...s.hooks.blockedStops].map((h) => [h.seq, h])) };
     ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map((e) => logItem(e, ctx)).join(""));
     ol.scrollTop = ol.scrollHeight;
   }
@@ -2509,7 +2535,16 @@ function renderGrid(s) {
 const atMoment = () => ui.moment !== null && !player.playing && Math.abs(player.playhead - ui.moment) < 1e-6;
 function renderStatus(s) {
   const act = atMoment() ? null : s.activity;
-  $("activity").innerHTML = act ? `<span class="dot"></span>${esc(footerActivity(s, { dev: DEV }))}` : ""; // short (hookline.js)
+  // short (hookline.js), in plain words (plain.js); the line as recorded under the pointer
+  const line = act ? footerActivity(s, { dev: DEV }) : "";
+  const el = $("activity");
+  const html = act ? `<span class="dot"></span>${plainLine(s, line)}` : "";
+  if (el.dataset.html !== html) {
+    el.dataset.html = html;
+    el.innerHTML = html;
+  }
+  if (act && !isFilmWords() && plainHid(s, line)) el.title = line;
+  else el.removeAttribute("title");
 }
 
 // A rule whose stops were all done later says 解決済み (resolvedHooks), apart from one still open.
