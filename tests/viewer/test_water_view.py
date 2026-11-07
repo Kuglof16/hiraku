@@ -105,6 +105,8 @@ class Stored(unittest.TestCase):
         data = json.loads(text.split('window.VIEW_DATA["water"] = ', 1)[1].rstrip().rstrip(";"))
         self.assertEqual(data["statement"], STATEMENT)
         self.assertEqual(data["source"]["design_version"], 5)
+        self.assertEqual(data["source"]["run"], "")  # no folder name either: this stored file is opened by people
+        self.assertIsNone(PATHS.search(text))  # the whole file: hex cannot hold a path
         self.assertIsNone(PATHS.search(json.dumps({k: v for k, v in data.items() if k not in ("surface", "spray", "spray_start")}, ensure_ascii=False)))
         self.assertLess(len(text), 4_000_000)
 
