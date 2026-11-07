@@ -326,6 +326,31 @@ export class TileBoard {
         return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" data-ver="${esc(String(ver))}" title="${esc(tip)}">${verLabel(ver)} NG ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
       })
       .join(`<span class="varrow">→</span>`);
+    // What the versions fixed: each test that was NG in a version and is OK in the last version it
+    // was judged in, one line (its value then and now, from the verdicts as recorded)
+    const firstNg = new Map();
+    const lastSeen = new Map();
+    for (const ver of s.versions) {
+      for (const d of DOMAINS) {
+        for (const x of domainVerdicts(s, d, ver)) {
+          const key = x.load_case_id ?? x.test_id;
+          if (!key) continue;
+          if (x.pass === false && !firstNg.has(key)) firstNg.set(key, { ver, x });
+          lastSeen.set(key, { ver, x });
+        }
+      }
+    }
+    const valueOf = (x) => (x.value && typeof x.value === "object" ? fmtVU(x.value.value, x.value.unit) : x.value != null ? fmt(x.value) : "");
+    const titleOf = (key, x) => {
+      const lc = (s.project?.load_cases ?? []).find((c) => c.load_case_id === key);
+      const short = lc?.title ? String(lc.title).split(/[:：(（]/)[0].trim() : quantityName(x.quantity);
+      return `${x.test_id ?? key} ${short}`;
+    };
+    const story = [...firstNg]
+      .map(([key, f]) => [key, f, lastSeen.get(key)])
+      .filter(([, f, l]) => l && l.x.pass === true && l.ver !== f.ver)
+      .map(([key, f, l]) => `<li><b>${esc(titleOf(key, f.x))}</b>: ${verLabel(f.ver)} ${esc(valueOf(f.x))} <span class="sng">NG</span> → ${verLabel(l.ver)} ${esc(valueOf(l.x))} <span class="sok">OK</span></li>`);
+    const storyHtml = story.length ? `<ul class="vstory" aria-label="直して OK になった試験">${story.join("")}</ul>` : "";
     const design = v != null ? s.designs[v] : null;
     // modules: a version built from module designers' proposals names each module's change (proposals.js)
     const built = design ? builtLine(s, v) : "";
@@ -339,7 +364,7 @@ export class TileBoard {
     const headN = headIds.length;
     this.head.innerHTML =
       `<h2>${verLabel(v)} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・NG ${reds.length}</span>` +
-      `<span class="flow">${flow}</span>${change}` +
+      `<span class="flow">${flow}</span>${change}${storyHtml}` +
       (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div", why: s.agents[id]?.stopWhy })).join("")}</div>` : "");
     this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
 

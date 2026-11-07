@@ -1471,3 +1471,18 @@ body.grid-fixed .grid-view .replay-tag { display: none; }
 }
 /* ④'s viewer open: the hooks' line is not laid over it (its header and back button) */
 body:has(#grid-viewer:not([hidden])) .hookline { display: none !important; }
+
+/* ④: what the versions fixed, one line per test that went from NG to OK (tiles.js storyHtml) */
+.vstory { flex-basis: 100%; list-style: none; margin: 6px 0 2px; padding: 8px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 2px 18px; font-size: 16px; background: var(--card, #fffdf8); border: 1.5px solid var(--line, #ccc); border-radius: 10px; }
+.vstory .sng { color: var(--red, #c0392b); font-weight: 700; }
+.vstory .sok { color: var(--green, #2e7d32); font-weight: 700; }
+body.video .vstory { display: none; } /* (the film's ④ as before) */
+
+/* the static page's hero (app.js): one sentence and 「▶ 再生して見る」 under the tabs, its own row */
+.stage.has-hero { grid-template-rows: 64px 56px auto minmax(0, 1fr) 44px var(--band); }
+.hero { display: flex; align-items: center; gap: 20px; padding: 10px 28px; background: var(--card, #fffdf8); border-bottom: 1.5px solid var(--rule); }
+.hero[hidden] { display: none; }
+.hero-what { margin: 0; font-size: 18px; line-height: 1.45; flex: 1; }
+.hero-go { flex: none; font-size: 24px; font-weight: 700; padding: 10px 28px; border-radius: 999px; border: none; background: var(--ink, #1c1c1c); color: #fff; cursor: pointer; }
+.hero-go:hover { filter: brightness(1.25); }
+.hero-note { flex: none; max-width: 300px; font-size: 14px; color: var(--muted); line-height: 1.4; }

@@ -141,7 +141,10 @@ async function staticFirst() {
   }
 }
 const FIRST = STATIC && !location.search ? await staticFirst() : null;
-const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}&tab=A1` : location.search);
+// (the first screen: the run as it ended, on ④ — what was judged and what the versions fixed —, every
+// tab at that moment; 「▶ 再生して見る」 plays it from its first design. ①'s request's moment stays for
+// ?tab=A1)
+const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}` : location.search);
 // ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
@@ -196,7 +199,7 @@ const ui = {
   gridVersion: null,
   gridViewer: null,
   gridNote: null,
-  pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
+  pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : FIRST ? "grid" : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true, grip: false }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis; grip: タイヤ (grip_panel.js)
   frozen: params.has("t"),
@@ -1145,6 +1148,30 @@ function staticReplay() {
 $("view-intake").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-static-replay]")) staticReplay();
 });
+
+// A static export (not the film): under the tabs, what HIRAKU is in one sentence and a large
+// 「▶ 再生して見る」 (the run from its first design on ③), while the replay is not playing. A judge
+// who opens the page sees the run as it ended (④) and how to watch it happen.
+if (STATIC && params.get("video") !== "1") {
+  const hero = document.createElement("div");
+  hero.className = "hero";
+  hero.id = "hero";
+  hero.innerHTML =
+    `<p class="hero-what"><b>HIRAKU</b> は、作りたいものを書くと、Claude が確かめる解析を選び、手計算で予想し、ツールで計算して比べ、NG の所の設計を直します。このページは、その 1 回の実行を記録から見せます。</p>` +
+    `<button class="hero-go" type="button" data-static-replay="1">▶ 再生して見る</button>` +
+    `<span class="hero-note">いま見ているのは、実行が終わった時点です。再生は約 2 分で、最初の設計から順に見せます。</span>`;
+  document.querySelector(".tabsrow")?.after(hero);
+  hero.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-static-replay]")) staticReplay();
+  });
+  // (the stage's rows: the hero takes a row of its own under the tabs while shown, css .stage.has-hero)
+  const showHero = () => {
+    hero.hidden = player.playing;
+    $("stage").classList.toggle("has-hero", !hero.hidden);
+  };
+  showHero();
+  setInterval(showHero, 300);
+}
 
 // The picked domains are the final ones (the intake's picksFinal: its cards say 調べる, not
 // 候補 / 考えています, at any time of the replay) when the record is over and no later choice of
