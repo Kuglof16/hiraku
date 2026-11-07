@@ -20,7 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -320,8 +320,9 @@ def free_ram_gb() -> float | None:
 
 
 @contextmanager
-def render_turn(min_free_gb: float = MIN_FREE_RAM_GB, wait_s: float = 86400.0, poll_s: float = 15.0) -> Iterator[None]:
-    """One meshing or rendering job at a time across processes, started only when enough memory is free."""
+def render_turn(min_free_gb: float = MIN_FREE_RAM_GB, wait_s: float = 86400.0, poll_s: float = 15.0, lock_poll_s: float = 0.5, gap_s: float = 1.0) -> Iterator[None]:
+    """One meshing or rendering job at a time across processes, started only when enough memory is free. After its turn a job
+    waits gap_s, longer than others poll the lock, so a long render that takes turn after turn leaves room for them."""
     path = Path(tempfile.gettempdir()) / "hiraku-render.lock"
     f = open(path, "a+b")
     t0 = time.monotonic()
@@ -341,7 +342,7 @@ def render_turn(min_free_gb: float = MIN_FREE_RAM_GB, wait_s: float = 86400.0, p
             except OSError:
                 if time.monotonic() - t0 > wait_s:
                     raise TimeoutError("絵を作る順番が回ってきませんでした") from None
-                time.sleep(poll_s)
+                time.sleep(lock_poll_s)
         while True:
             free = free_ram_gb()
             if free is None or free >= min_free_gb:
@@ -361,6 +362,7 @@ def render_turn(min_free_gb: float = MIN_FREE_RAM_GB, wait_s: float = 86400.0, p
         except OSError:
             pass
         f.close()
+        time.sleep(gap_s)
 
 
 def find_blender(given: str | None = None) -> str:
@@ -413,9 +415,12 @@ def wheel_offsets(record: dict[str, Any], wheel_centres: dict[str, list[float]])
 
 
 def render(case_folder: Path, design_path: Path, out_folder: Path, frames: list[int], camera: str = "follow", samples: int = 48, size: tuple[int, int] = (1920, 1080),
-           blender: str | None = None, threads: int = WATER_THREADS, fine: float = 0.5, mesh_only: bool = False, prefix: str = "", batch: int = 4) -> list[Path]:
+           blender: str | None = None, threads: int = WATER_THREADS, fine: float = 0.5, mesh_only: bool = False, prefix: str = "", batch: int = 4, gpu: bool = False) -> list[Path]:
     """Meshes and pictures of the frames, saved to disk one frame at a time. Each batch takes its own render turn and checks the
-    free memory again, so a long render leaves room for other jobs. A picture that already exists is not made again."""
+    free memory again, so a long render leaves room for other jobs. A picture that already exists is not made again. gpu: Cycles on
+    the NVIDIA GPU when Blender finds one, in the GPU's turn too."""
+    from hiraku.cfd.cuda import gpu_turn
+
     out_folder.mkdir(parents=True, exist_ok=True)
     work = case_folder / "meshes"
     info = build_scene(case_folder, design_path, work)
@@ -426,7 +431,7 @@ def render(case_folder: Path, design_path: Path, out_folder: Path, frames: list[
     for start in range(0, len(todo), batch):
         part = todo[start:start + batch]
         job = {"scene": str(work / "scene.npz"), "frames": [{"frame": f, "mesh": str(work / f"w{f:04d}.npz"), "pose": records[f]["pose"], "wheels": wheel_offsets(records[f], info["wheel_centres"]), "png": str(out_folder / f"{prefix}{f:04d}.png")} for f in part],
-               "camera": CAMERAS[camera], "samples": samples, "size": size, "threads": min(threads, WATER_THREADS), "dx": info["dx"]}
+               "camera": CAMERAS[camera], "samples": samples, "size": size, "threads": min(threads, WATER_THREADS), "dx": info["dx"], "gpu": gpu}
         job_file = work / f"job_{camera}_{prefix}{part[0]}.json"
         job_file.write_text(json.dumps(job), encoding="utf-8")
         with render_turn():
@@ -434,7 +439,7 @@ def render(case_folder: Path, design_path: Path, out_folder: Path, frames: list[
             if mesh_only:
                 continue
             cmd = [exe, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(Path(__file__).resolve()), "--", str(job_file)]
-            with open(work / "blender.log", "a", encoding="utf-8", errors="replace") as log:
+            with open(work / "blender.log", "a", encoding="utf-8", errors="replace") as log, (gpu_turn() if gpu else nullcontext()):
                 code = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
         if code != 0:
             raise RuntimeError(f"Blender failed ({code}): see {work / 'blender.log'}")
@@ -760,6 +765,17 @@ def _light(name: str, loc: tuple[float, float, float], size: float, energy: floa
     con.up_axis = "UP_Y"
 
 
+def _use_optix() -> bool:
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    prefs.compute_device_type = "OPTIX"
+    prefs.get_devices()
+    found = False
+    for device in prefs.devices:
+        device.use = device.type == "OPTIX"
+        found = found or device.use
+    return found
+
+
 def run_in_blender(job_file: str) -> None:
     job = json.loads(Path(job_file).read_text(encoding="utf-8"))
     for ob in list(bpy.data.objects):
@@ -767,7 +783,7 @@ def run_in_blender(job_file: str) -> None:
     s = np.load(job["scene"])
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    scene.cycles.device = "GPU" if job.get("gpu") and _use_optix() else "CPU"
     scene.cycles.samples = int(job["samples"])
     scene.cycles.use_adaptive_sampling = True
     scene.cycles.adaptive_threshold = 0.03

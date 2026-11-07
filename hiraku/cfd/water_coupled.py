@@ -37,8 +37,11 @@ from hiraku.cfd.water import CFL, E_MAX, E_MIN, FRAME_DT, GRAVITY, RHO_WATER, ST
 
 WHEELS = ("FL", "FR", "RL", "RR")
 TRAVEL_SLACK_M = 0.2  # a wheel's cells in the shape table reach this far, so its row can follow the suspension
-INTERVALS_PER_FRAME = 3
+COUPLE_INTERVAL_S = 1.0 / 270.0  # how often the water and K2 exchange, about
 K2_STEPS_PER_INTERVAL = 4
+# The wheels' upward impulse not turning over turning (lift_ratio_from): v5, 30 mm, sound 200 m/s, -3425.7 / -13406.6 N s, two passes
+# of 2026-11-07. Other designs and grids: 確かめていない
+LIFT_RATIO = 0.2555
 FORCE_MEAN_INTERVALS = 3  # the force K2 gets is the mean of the last few intervals
 LEAD_S = 0.6  # K2 runs this long on the ramp before the water starts, so the start is not a jolt
 SETTLE_S = 2.0
@@ -207,6 +210,28 @@ class CoupledVehicle:
                 "wheel_water_lift_n": [float(v) for v in self.road.lift]}
 
 
+def vehicle_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """How the vehicle moved, from the records of a coupled pass: against the road under it, so the ramps do not count."""
+    t = np.array([r["t"] for r in records])
+    pose = np.array([r["pose"] for r in records])
+    state = [r["vehicle"] for r in records]
+    speed = np.array([s["speed_ms"] for s in state])
+    ground = np.array([s["ground_m"] for s in state])  # FL FR RL RR
+    centres = np.array([s["wheel_centres"] for s in state])
+    wheelbase = float(np.mean(centres[:, 2:, 0]) - np.mean(centres[:, :2, 0]))
+    pitch = np.degrees(pose[:, 2] - np.arctan2(ground[:, :2].mean(axis=1) - ground[:, 2:].mean(axis=1), wheelbase))
+    height = (pose[:, 1] - ground.mean(axis=1)) * 1000.0
+    tyres = np.array([s["tyre_n"] for s in state])
+    front_off = np.flatnonzero((tyres[:, 0] <= 0.0) & (tyres[:, 1] <= 0.0))
+    travel = np.array([s["travel_m"] for s in state]) * 1000.0
+    return {"speed_kmh": {"start": float(speed[0] * 3.6), "lowest": float(speed.min() * 3.6), "lowest_at_s": float(t[speed.argmin()]), "end": float(speed[-1] * 3.6)},
+            "time_s": float(t[-1]), "pitch_deg_nose_up_against_road": {"min": float(pitch.min()), "max": float(pitch.max()), "max_at_s": float(t[pitch.argmax()])},
+            "height_mm_against_road": {"min": float(height.min() - height[0]), "max": float(height.max() - height[0])},
+            "roll_deg_largest": float(max(abs(s["roll_deg"]) for s in state)), "yaw_deg_largest": float(max(abs(s["yaw_deg"]) for s in state)),
+            "front_wheels_off_road_s": [float(t[front_off[0]]), float(t[front_off[-1]])] if len(front_off) else None,
+            "suspension_travel_mm": {"front": [float(travel[:, :2].min()), float(travel[:, :2].max())], "rear": [float(travel[:, 2:].min()), float(travel[:, 2:].max())]}}
+
+
 def lift_ratio_from(locked_case: str | Path, turning_case: str | Path) -> float:
     def wheels_z(path: str | Path) -> float:
         c = json.loads((Path(path) / "case.json").read_text(encoding="utf-8"))
@@ -223,7 +248,8 @@ def run_coupled(gpu: Gpu, k2: Any, design: dict[str, Any], lift_ratio: float, de
     plan = plan_case(design, depth_m, speed_ms, dx, True, loading, frame_dt=frame_dt)
     grid, road, dt, per_frame = plan["grid"], plan["road"], plan["dt"], plan["per_frame"]
     table = coupled_table(plan["shapes"], dx, grid.height_m)
-    interval_steps = [per_frame // INTERVALS_PER_FRAME] * INTERVALS_PER_FRAME
+    intervals = max(1, int(round(per_frame * dt / COUPLE_INTERVAL_S)))
+    interval_steps = [per_frame // intervals] * intervals
     interval_steps[-1] += per_frame - sum(interval_steps)
     interval_s = interval_steps[0] * dt
     car = CoupledVehicle(k2, design, road, speed_ms, plan["x_start"], interval_s, shape_centres(table), table.groups, lift_ratio, loading)

@@ -6007,6 +6007,63 @@
         }
       }
     },
+    "tool_input.cfd_water": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cfd_tools.py). 設計の版が冠水路を通るときの水を GPU で解き、実行のフォルダに記録を書く。見せるための計算で、走破の判定ではない。GPU が無ければ回さない。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Missing: the latest version."
+        },
+        "depth_mm": {
+          "type": "number",
+          "minimum": 50.0,
+          "maximum": 350.0,
+          "description": "The depth asked of the dip; the settled water line is a little lower (the record has it). Missing: 200."
+        },
+        "speed_kmh": {
+          "type": "number",
+          "minimum": 5.0,
+          "maximum": 36.0,
+          "description": "The vehicle's speed; with vehicle_moves the speed the driver aims for. Missing: 18."
+        },
+        "dx_mm": {
+          "type": "number",
+          "minimum": 25.0,
+          "maximum": 60.0,
+          "description": "Grid size. Missing: 30."
+        },
+        "vehicle_moves": {
+          "type": "boolean",
+          "description": "true: the vehicle answers the water through K2 (slows, pitches, rises). false: it keeps a fixed path at the speed. Missing: true."
+        },
+        "frame_hz": {
+          "type": "number",
+          "minimum": 10.0,
+          "maximum": 90.0,
+          "description": "Saved frames per second. Missing: 30."
+        },
+        "keep_particles": {
+          "type": "boolean",
+          "description": "Keep every frame's particles in the run's folder, for pictures made afterwards (about 8 MB a frame at 30 mm). Missing: false."
+        },
+        "replay": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\.json$"
+            }
+          ],
+          "description": "Read a stored record instead of running: its path relative to the run's folder, or true for the newest of the version. Needs no GPU."
+        }
+      }
+    },
     "tool_input.export_step": {
       "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 設計の版を STEP (ISO 10303-21) のファイルにして実行のフォルダに書く。部材と部品が 1 つずつ名前つきの立体になる。",
       "type": "object",
