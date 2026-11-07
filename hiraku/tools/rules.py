@@ -281,6 +281,12 @@ def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | Non
         if agent == "packager":
             return Denial(HK6, ("パッケージ役は revise_design を使いません。この設計はモジュールに分かれているので、"
                                 "その回の提案とレイアウトの変更は build_version で 1 つの版にまとめてください"))
+        if agent == "designer":  # the one designer of a design without modules (the vehicle run 20261107-153915)
+            owners = sorted({module_owner(mods, m) for m in mods if m != "package"})
+            return Denial(HK6, ("この設計はモジュールに分かれているので、1 人の設計役 (designer) は直せません。ここで止めて、"
+                                f"まとめ役に「モジュールの設計役 ({', '.join(owners)}) に、NG の荷重条件を渡して "
+                                "revise_design に module を付けて直してもらい、"
+                                "パッケージ役の build_version で次の版を作る」と返してください"))
         module = args.get("module")
         if not module:
             return Denial(HK6, ("この設計はモジュールに分かれているので、revise_design には module (どのモジュールの提案か) が要ります。"

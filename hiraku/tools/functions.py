@@ -1350,13 +1350,23 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     if errs:
         raise ToolError("組んだ設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     load_cases = first_version(ctx, design, req, agent)
-    return {
+    out = {
         "design_version": 1,
         "archetype": args["archetype"],
         "change_reason": reason,
         "load_cases": [{"load_case_id": lc["load_case_id"], "owner": ctx.owner(lc["load_case_id"])} for lc in load_cases],
         "domain_picks": [p["domain"] for p in ctx.project["domain_picks"]],
     }
+    if design.get("modules"):  # the lead learns it here (the vehicle run 20261107-153915 sent the one designer)
+        from hiraku.tools.rules import module_owner
+
+        mods = design["modules"]
+        owners = sorted({module_owner(mods, m["module_id"]) for m in mods if m["module_id"] != "package"})
+        out["modules"] = {m["module_id"]: module_owner(mods, m["module_id"]) for m in mods}
+        out["next"] = ("この設計はモジュールに分かれています。直しは、HIRAKU の振り分けにあるモジュールの設計役 "
+                       f"({', '.join(owners)}) が revise_design に module を付けて出し、次の版はパッケージ役 (packager) が "
+                       "build_version で作ります。1 人の設計役 (designer) には直しを頼みません")
+    return out
 
 
 def first_version(ctx: RunContext, design: Record, req: Record, agent: str) -> list[Record]:
