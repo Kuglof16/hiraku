@@ -288,7 +288,8 @@ class BuildersTest(unittest.TestCase):
 
 
 class DragBuilderTest(unittest.TestCase):
-    """F2: the drag force at Q50, the loading of Q30, no criterion; the plan's prediction waits for a tool."""
+    """F2: the drag force at Q50, the loading of Q30, within the drive force left at Q50; the plan's prediction
+    waits for a tool."""
 
     @classmethod
     def setUpClass(cls):
@@ -304,7 +305,23 @@ class DragBuilderTest(unittest.TestCase):
         self.assertEqual(self.lc["params"]["loading"], q30)
         self.assertIn("Q50", self.lc["requirement_keys"])
         self.assertIn("Q30", self.lc["requirement_keys"])
-        self.assertNotIn("criterion", self.lc)
+
+    def test_f2_criterion_is_the_drive_force_left_at_q50(self):
+        from hiraku.contract.loading import on_board
+        from hiraku.solvers.k0_handcalc.scene_inputs import launch_inputs
+        from hiraku.solvers.k0_handcalc.vehicle import mass_summary
+
+        c = self.lc["criterion"]
+        self.assertEqual((c["quantity"], c["op"], c["limit"]["unit"]), ("drag_force", "<=", "N"))
+        load = self.lc["params"]["loading"]
+        li = {k: v["value"] for k, v in launch_inputs(DESIGN, load)["inputs"].items()}
+        v = self.lc["params"]["speed"]["value"] / 3.6
+        drive = min(li["T"] * li["i"] * li["eta"] / (li["rolling_radius"] / 1000.0), li["eta"] * li["P"] * 1000.0 / v)
+        roll = mass_summary(on_board(DESIGN, load))["mass_kg"] * 9.80665 * li["C_rr"]
+        self.assertAlmostEqual(c["limit"]["value"], drive - roll, places=6)
+        self.assertGreater(c["limit"]["value"], 0.0)
+        for words in ("駆動力", "転がり抵抗", "2026-11-07"):
+            self.assertIn(words, c["basis"])
 
     def test_f2_plan_predicts_drag_force_on_the_demo(self):
         from hiraku.catalog.builders.drag import F2_PLAN
