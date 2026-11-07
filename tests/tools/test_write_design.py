@@ -377,13 +377,17 @@ class CheckDesignTest(WrittenCase, unittest.TestCase):
         tool = SimpleNamespace(params=(param("motor_torque", ("motor_peak_torque", "motor_torque")),
                                        param("gear_ratio", ("gear_ratio",)),
                                        param("efficiency", ("drivetrain_efficiency",), 0.9)))
+        # a tool that reads its variables itself says what it needs in applies (drive_energy, thermal: shelf/applies.py)
+        energy = SimpleNamespace(applies=lambda d: "電力の計算に設計の変数 battery_resistance が要ります")
         given = dict(self.design, variables={"gear_ratio": {"value": 10, "unit": "1"}})
-        with mock.patch.dict(self.ctx.tools, {"launch_stub": tool}), \
-                mock.patch.dict(self.ctx.specs, {"launch_stub": {"usable": True, "tests": ["R1"]}}):
+        with mock.patch.dict(self.ctx.tools, {"launch_stub": tool, "energy_stub": energy}), \
+                mock.patch.dict(self.ctx.specs, {"launch_stub": {"usable": True, "tests": ["R1"]},
+                                                 "energy_stub": {"usable": True, "tests": ["R1"]}}):
             notes = " | ".join(check_design(self.ctx, {"design": given})["notes"])
         self.assertIn("motor_torque (変数 motor_peak_torque か motor_torque; launch_stub)", notes)
         self.assertNotIn("gear_ratio (", notes)  # given
         self.assertNotIn("efficiency (", notes)  # has a default
+        self.assertIn("energy_stub: 電力の計算に設計の変数 battery_resistance が要ります", notes)
 
     def test_cargo_against_q40(self):
         light = copy.deepcopy(self.design)

@@ -1843,9 +1843,18 @@ def _tool_variables(ctx: RunContext, design: Record, notes: list[str]) -> None:
     fams = {test_family(t) for t in tests}
     have = set((design.get("variables") or {}).keys())
     missing: dict[str, tuple[tuple[str, ...], set[str]]] = {}
+    refused: list[str] = []  # the tools whose applies(design) refuses this design, with their own reason
     for name, spec in (ctx.specs or {}).items():
         if not spec.get("usable") or not any(test_family(t) in fams for t in spec.get("tests") or []):
             continue
+        applies = getattr((ctx.tools or {}).get(name), "applies", None)
+        if callable(applies):  # e.g. drive_energy and thermal: the powertrain variables (shelf/applies.py)
+            try:
+                got = applies(design)
+            except Exception as e:  # noqa: BLE001 - a tool that checks itself badly is said, not trusted
+                got = f"当てはまるかを確かめられませんでした ({type(e).__name__}: {e})"
+            if isinstance(got, str) and got:
+                refused.append(f"{name}: {got}")
         for p in getattr((ctx.tools or {}).get(name), "params", None) or ():
             var = tuple(getattr(p, "var", ()) or ())
             if not var or getattr(p, "default", None) is not None or have & {*var, p.name}:
@@ -1855,6 +1864,9 @@ def _tool_variables(ctx: RunContext, design: Record, notes: list[str]) -> None:
         notes.append("ツールが設計の変数から読む値で、この設計に無いもの (無いとツールや式が断ることがあります): "
                      + "、".join(f"{n} (変数 {' か '.join(var)}; {', '.join(sorted(tools))})"
                                  for n, (var, tools) in sorted(missing.items())))
+    if refused:
+        notes.append("この実行の試験を見るツールのうち、この設計では使えないもの (ツール自身の答え。足りない物を書けば使えます): "
+                     + " / ".join(sorted(refused)))
 
 
 def _requirement_value(req: Record, key: str) -> Any:
