@@ -512,6 +512,16 @@ def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[st
         hours = None
     d = hours * v if hours is not None else number(req, distance_key, "km")
     given = spec.get("params", {}) if hours is None else {}
+    # the catalog's loop is a forest road for a vehicle (its slow part 20 km/h): a slower product (the serving robot,
+    # Q50 4.32 km/h, its Q54 given as 43.2 km) drives its own Q13 and Q50 instead, as with a time
+    own = hours is not None
+    if not own and "speed_low" in given:
+        try:
+            own = units.to_unit(given["speed_low"], "km/h", "speed_low") > v
+        except ValueError as e:
+            raise BuildError(f"catalog params of {spec['id']}: {e}") from None
+        if own:
+            given = {}
 
     def from_spec(name: str, unit: str) -> float | None:
         if name not in given:
@@ -536,6 +546,9 @@ def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[st
         params["distance_from"] = (f"{distance_key} {hours:g} h x Q50 {v:g} km/h (no stops at the top speed: "
                                    f"an assumption of this load case); grades and speeds from Q13 and Q50, not the "
                                    f"catalog's forest loop")
+    elif own:
+        params["loop_from"] = (f"Q13 and Q50 {v:g} km/h: the catalog's forest loop (slow part faster than Q50) "
+                               f"does not fit this product")
     return params, keys
 
 
