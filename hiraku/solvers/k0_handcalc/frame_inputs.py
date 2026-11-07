@@ -100,6 +100,29 @@ def _end_behind(design: dict, nodes: dict, props: dict, n: str):
             return a_len, end
 
 
+def _rail_to_station(nodes: dict, props: dict, n: str, first: dict) -> float:
+    """The rail's length from node n forwards (the member `first` and on along the same line) to the first node where
+    a cross member joins the mirrored node of the other rail; the first member's length if there is none."""
+    y, z = nodes[n][1], nodes[n][2]
+    cur, length, mp = n, 0.0, first
+    for _ in range(len(props)):
+        m = mp["member"]
+        nxt = m["node_b"] if m["node_a"] == cur else m["node_a"]
+        length += mp["length"]
+        q = nodes[nxt]
+        mirror = next((k for k, r in nodes.items() if abs(r[0] - q[0]) < 1e-6 and abs(r[1] + y) < 1e-6
+                       and abs(r[2] - z) < 1e-6), None)
+        if mirror is not None and _member_between(props, nxt, mirror) is not None:
+            return length
+        cur = nxt
+        mp = next((p for p in props.values() if cur in (p["member"]["node_a"], p["member"]["node_b"])
+                   and p is not mp and all(abs(e[1] - y) < 1e-6 and abs(e[2] - z) < 1e-6 for e in (p["a"], p["b"]))
+                   and max(p["a"][0], p["b"][0]) > q[0] + 1e-6), None)
+        if mp is None:
+            break
+    return first["length"]
+
+
 def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None = None) -> dict:
     """Quantities for frame_static.rail_joint_stress at the rear axle joint (all but F and W).
 
@@ -141,6 +164,13 @@ def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None
     if best is None:
         raise DesignError("no rear axle joint with a rail ahead and a cross member was found")
     M, s, n, ahead, cross = best
+    # the rail ahead held at the next station where a cross member joins the other rail, not at the next node (v5's
+    # roll bar foot H, 142.5 mm ahead of B, split the rail; L1 142.5 put R1-step250's prediction 19 % over frame_static,
+    # 620 mm 0.3 %), and the cross member as the whole run between the rails (cross_B split at the tower braces' feet)
+    L1 = _rail_to_station(nodes, props, n, ahead)
+    mirror = next((k for k, q in nodes.items() if abs(q[0] - nodes[n][0]) < 1e-6 and abs(q[1] + nodes[n][1]) < 1e-6
+                   and abs(q[2] - nodes[n][2]) < 1e-6), None)
+    cross = (_member_between(props, n, mirror) if mirror else None) or cross
     b, h, t = _rect_dims(design["sections"][ahead["member"]["section"]])
     bc, hc, tc = _rect_dims(design["sections"][cross["member"]["section"]])
     mat = ahead["material"]
@@ -157,7 +187,7 @@ def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None
             "M_oh": quantity(M, "N*mm"),
             "z": quantity(float(nodes[n][2]) - contact_z, "mm"),
             "e": quantity(abs(float(s["position_mm"][1]) - float(nodes[n][1])), "mm"),
-            "L1": quantity(ahead["length"], "mm"),
+            "L1": quantity(L1, "mm"),
             "L_c": quantity(cross["length"], "mm"),
             "E": quantity(float(mat["E_MPa"]), "MPa"),
             "nu": quantity(float(mat["nu"]), "1"),

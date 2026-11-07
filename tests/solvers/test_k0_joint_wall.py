@@ -160,6 +160,22 @@ class SplitCrossMemberTest(unittest.TestCase):
         r = frame_inputs.joint_wall_inputs(self.d, "two_cargo", 100.0, front_supports(self.d))
         self.assertIn("LB", [j["node"] for j in r["joints"]])
 
+    def test_r1_rail_joint_inputs(self):
+        # R1's rail joint: the cross member is the whole run (700 mm, not cross_B_L's piece), and the rail ahead is
+        # held at the next station with a cross member, not at the roll bar's foot node on the rail
+        r = frame_inputs.rail_joint_inputs(self.d, loading="two_cargo")
+        ins = {k: v["value"] for k, v in r["inputs"].items()}
+        props = frame_inputs.member_props(self.d)
+        self.assertAlmostEqual(ins["L_c"], frame_inputs._member_between(props, r["node"], "R" + r["node"][1:])["length"])
+        self.assertGreater(ins["L1"], props[r["rail_member"]]["length"] - 1e-9)
+        xs = {n["id"]: n["xyz_mm"][0] for n in self.d["nodes"]}
+        station = xs[r["node"]] + ins["L1"]
+        mirror_of = {n["id"]: n for n in self.d["nodes"]}
+        ahead = [k for k, x in xs.items() if abs(x - station) < 1e-6 and abs(mirror_of[k]["xyz_mm"][1]
+                 - mirror_of[r["node"]]["xyz_mm"][1]) < 1e-6 and abs(mirror_of[k]["xyz_mm"][2] - mirror_of[r["node"]]["xyz_mm"][2]) < 1e-6]
+        self.assertEqual(len(ahead), 1)
+        self.assertIsNotNone(frame_inputs._member_between(props, ahead[0], "R" + ahead[0][1:]))
+
 
 if __name__ == "__main__":
     unittest.main()
