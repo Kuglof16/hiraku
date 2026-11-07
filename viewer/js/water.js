@@ -1,6 +1,7 @@
 // The flooded road (viewer/src/water.py, data key water): a replay of the stored water record, no calculation on the page.
-// The vehicle stays where it is on the page and the road and the water move past it (the camera follows the vehicle). The vehicle is
-// opaque. What a judgement on it covers (D.statement) stays in the data and the README, not on the page (the owner's decision, 11/7).
+// The road and the water stay where they are (the camera stands on the road, the whole stretch in view) and the vehicle goes along
+// it with the stored pose: the x, height and pitch the calculation gave it (K2's, in a coupled record), each wheel where its
+// suspension was (wheel_offsets_mm). The vehicle is opaque. What a judgement on it covers (D.statement) stays in the data and the README, not on the page (the owner's decision, 11/7).
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 (function (HV) {
@@ -36,12 +37,18 @@ HV.fields = HV.fields || {};
       paintParts(); boxes.update();
       const extras = new T.Group(); ctx.root.add(extras);
       const tyre = view.material(new T.MeshLambertMaterial({ color: LOOK.tyre }));
-      for (const w of D.wheels) { const m = new T.Mesh(new T.CylinderGeometry(w.r, w.r, w.width, 48), tyre); m.position.set(...w.c); m.userData.kind = 'tyre'; extras.add(m); }
+      const tyres = D.wheels.map(w => { const m = new T.Mesh(new T.CylinderGeometry(w.r, w.r, w.width, 48), tyre); m.position.set(...w.c); m.userData.kind = 'tyre'; extras.add(m); return m; });
+      // the road, the water and the sky stand still: they go in the field's fixed group, the vehicle (ctx.root) moves over them
+      ctx.fixed = ctx.fixed || new T.Group(); view.scene.add(ctx.fixed);
       const backdrop = new T.Mesh(new T.SphereGeometry(120000, 24, 12), new T.MeshBasicMaterial({ color: LOOK.back, side: T.BackSide, depthWrite: false }));
-      backdrop.renderOrder = -10; backdrop.frustumCulled = false; backdrop.userData.kind = 'ground'; extras.add(backdrop);
+      backdrop.renderOrder = -10; backdrop.frustumCulled = false; backdrop.userData.kind = 'ground'; ctx.fixed.add(backdrop);
 
-      // everything of the road's frame goes in one group: its matrix per frame is the vehicle's pose
-      const road = new T.Group(); road.matrixAutoUpdate = false; extras.add(road);
+      // the road's frame on the page: its x runs backwards along the travel (the page has x forward), its origin under the
+      // vehicle's moment centre when the vehicle is at road x 0
+      const m0 = D.centre_mm;
+      const toPage = new T.Matrix4().set(-1, 0, 0, m0[0], 0, -1, 0, m0[1], 0, 0, 1, m0[2], 0, 0, 0, 1);
+      const road = new T.Group(); road.matrixAutoUpdate = false; road.matrix.copy(toPage); ctx.fixed.add(road);
+      ctx.root.matrixAutoUpdate = false;
       const { nx, ny, x0_mm, y0_mm, step_mm } = D.columns;
       const xAt = i => x0_mm + (i + 0.5) * step_mm, yAt = j => y0_mm + (j + 0.5) * step_mm;
       const surface = await unpackHex(D.surface), spray = await unpackHex(D.spray), sprayStart = await unpackHex(D.spray_start);
@@ -66,16 +73,26 @@ HV.fields = HV.fields || {};
       const sp = new Float32Array(most * 3), sg = new T.BufferGeometry(); sg.setAttribute('position', new T.BufferAttribute(sp, 3).setUsage(T.DynamicDrawUsage));
       const points = new T.Points(sg, new T.PointsMaterial({ color: LOOK.spray, size: 22, sizeAttenuation: true })); points.frustumCulled = false; points.userData.kind = 'water'; road.add(points);
 
+      const poseMatrix = (x0, z0, pitch) => {   // the vehicle's axes (the page's, at rest) -> the road's frame on the page
+        const c = Math.cos(pitch), s = Math.sin(pitch), m = D.centre_mm;
+        const roadFromVehicle = new T.Matrix4().set(-c, 0, s, m[0] + c * x0 * 1000 - s * z0 * 1000, 0, -1, 0, m[1], s, 0, c, m[2] - s * x0 * 1000 - c * z0 * 1000, 0, 0, 0, 1).invert();
+        return toPage.clone().multiply(roadFromVehicle);
+      };
+      // the camera stands on the road and looks at the stretch with water (where the vehicle goes in to where it comes out),
+      // close enough that the vehicle is about a third of the picture's width (ctl.viewDir's length sets the distance)
+      const wet = D.road_mm.map((h, i) => i).filter(i => D.road_mm[i] <= (D.level_mm ?? 195));
+      const ends = wet.length ? [xAt(wet[0]), xAt(wet[wet.length - 1])] : [xAt(0), xAt(nx - 1)];
+      const half = (ctx.hi[0] - ctx.lo[0]) / 2;   // half the vehicle's length: it stays in view while it goes in and comes out
+      ctx.lo[0] = Math.min(...ends.map(x => m0[0] - x)) - half; ctx.hi[0] = Math.max(...ends.map(x => m0[0] - x)) + half;
+      ctx.lo[1] = Math.min(ctx.lo[1], m0[1] + y0_mm); ctx.hi[1] = Math.max(ctx.hi[1], m0[1] - y0_mm);   // the road's width
+
       const S = { f: 0 };
       function show(f) {
         S.f = f;
-        // road frame -> page: the vehicle's local x points backwards along the travel (-x of the road frame is forward), and the page has x forward
-        const [x0, z0, pitch] = D.poses[f], c = Math.cos(pitch), s = Math.sin(pitch), m = D.centre_mm;
-        road.matrix.set(-c, 0, s, m[0] + c * x0 * 1000 - s * z0 * 1000,
-                        0, -1, 0, m[1],
-                        s, 0, c, m[2] - s * x0 * 1000 - c * z0 * 1000,
-                        0, 0, 0, 1);
-        road.matrixWorldNeedsUpdate = true;
+        const [x0, z0, pitch] = D.poses[f];
+        ctx.root.matrix.copy(poseMatrix(x0, z0, pitch)); ctx.root.matrixWorldNeedsUpdate = true;
+        const off = D.wheel_offsets_mm ? D.wheel_offsets_mm[f] : null;
+        tyres.forEach((m, k) => { const w = D.wheels[k], o = off ? off[k] : [0, 0, 0]; m.position.set(w.c[0] + o[0], w.c[1] + o[1], w.c[2] + o[2]); });
         const base = f * nx * ny;
         for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
           const h = surface[base + i * ny + j], g = D.road_mm[i];
@@ -90,12 +107,12 @@ HV.fields = HV.fields || {};
       show(f0);
       const rec = () => D.records[S.f];
       const ctl = {
-        nT: D.frames, t0: f0, times, speed: 0.25, partMode: 'field', ground: null, viewDir: [1.25, 2.1, 0.55],
-        timeNote: '保存した記録の再生。車を止めて見せ、道路と水が流れる',
+        nT: D.frames, t0: f0, times, speed: 0.25, partMode: 'field', ground: null, viewDir: [0.06, 0.7, 0.22],
+        timeNote: D.coupled ? '保存した記録の再生。道路と水は止まり、車が計算した速さと揺れ (K2 と水の双方向) で進む' : '保存した記録の再生。道路と水は止まり、車が一定の速さで進む',
         scale: { min: 5, max: 60, step: 1, value: 22, label: '飛ぶ水の点の大きさ (mm)', note: '見せるための大きさで、粒子の大きさではない' },
         setScale(v) { points.material.size = +v; },
         setTime(i) { show(i); if (ctx.partMode === 'field') paintParts(); },
-        timeText(i) { const r = D.records[i]; return `時刻 ${r.t.toFixed(2)} 秒   床下の水の深さ 平均 ${r.depth_mean_mm.toFixed(0)} mm   水が届いた床下の列 ${r.reached_pct.toFixed(0)} %`; },
+        timeText(i) { const r = D.records[i]; return `時刻 ${r.t.toFixed(2)} 秒   車速 ${(r.speed_kmh ?? 0).toFixed(1)} km/h   床下の水の深さ 平均 ${r.depth_mean_mm.toFixed(0)} mm   水が届いた床下の列 ${r.reached_pct.toFixed(0)} %`; },
         hud() { return ['水面は粒子の体積から求めた高さ、点は飛ぶ水の粒子の一部']; },
         contour: () => null,
         plot() {
