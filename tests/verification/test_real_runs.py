@@ -54,8 +54,9 @@ ENDED: dict[str, set[str]] = {}
 # design fix left for v5's C1-40kmh (crash NG), so it stops not_judged; the submission v5 puts this back
 # (統括部's decision, 11/7: main goes first with the runs' actual endings)
 BEHIND_RED: set[str] = {"offroad-4w-n15.yaml"}
-# what the stop reason says then (docs/contract.md, HK5); the second: the wording before contract 98669325
-LOWER_RED = ("低い段の NG が残るので判定していない", "低い段の赤が残るので判定していない")
+# what the stop reason says then (docs/contract.md, HK5: 低い段の NG が残るので判定していない; the product writes
+# 「NGが」 without the space), matched by its start as qa/check_run.py does; the second: the wording before 98669325
+LOWER_RED = ("低い段の NG", "低い段の赤")
 # Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
 # has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
 # qa.run_tests' 3600 s per-class timeout.
