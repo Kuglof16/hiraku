@@ -497,12 +497,21 @@ def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[st
     """The forest loop: the flat parts are driven at Q50. The steep grades are the test's
     param grade_high in the catalog (the grade driven up for a long way), else Q13; the gentle
     grades and the speed on the steep ones are the params grade_low and speed_low, else half
-    of the steep grade and of Q50 (an assumption of this load case)."""
+    of the steep grade and of Q50 (an assumption of this load case). The distance requirement may be a time (a
+    product that runs for hours, not a range: the serving robot's Q54 10 h): the loop is then driven for that long
+    at Q50 without stops, distance = time x Q50 (no stops and the top speed: the most energy and heat that time
+    can take; params.distance_from says so), and the catalog's loop params (a forest road: 12 % and 20 km/h) are
+    not used: the product's own Q13 and Q50 give the grades and speeds as above."""
     from hiraku.solvers.k0_handcalc import units
 
-    d = number(req, distance_key, "km")
     v = number(req, "Q50", "km/h")
-    given = spec.get("params", {})
+    r = entry(req, distance_key) or {}
+    try:
+        hours = units.convert(float(r.get("value")), r.get("unit", "1"), "h", distance_key)
+    except (TypeError, ValueError):
+        hours = None
+    d = hours * v if hours is not None else number(req, distance_key, "km")
+    given = spec.get("params", {}) if hours is None else {}
 
     def from_spec(name: str, unit: str) -> float | None:
         if name not in given:
@@ -523,6 +532,10 @@ def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[st
               "speed_low": q(v / 2.0 if slow is None else slow, "km/h"), "speed_high": q(v, "km/h")}
     if not (0 <= params["grade_low"]["value"] <= grade and 0 < params["speed_low"]["value"] <= v):
         raise BuildError(f"{spec['id']}: grade_low must lie within 0..grade_high and speed_low within 0..Q50")
+    if hours is not None:
+        params["distance_from"] = (f"{distance_key} {hours:g} h x Q50 {v:g} km/h (no stops at the top speed: "
+                                   f"an assumption of this load case); grades and speeds from Q13 and Q50, not the "
+                                   f"catalog's forest loop")
     return params, keys
 
 
@@ -538,7 +551,9 @@ def p4_drive_energy(spec: Record, req: Record, design: Record) -> Record:
         "params": {**params, "soc_start": q(100.0, "%"), "loading": load},  # a full battery: an assumption
         "requirement_keys": [*loop_keys, *keys],
         "criterion": {"quantity": "soc_end", "op": ">", "limit": q(0.0, "%"),
-                      "basis": f"P4: charge is left at the end of Q54 {d:g} km", "requirement_keys": ["Q54"]},
+                      "basis": f"P4: charge is left at the end of Q54 {d:g} km"
+                               + (f" ({params['distance_from']})" if "distance_from" in params else ""),
+                      "requirement_keys": ["Q54"]},
         "tolerance_rel": tolerance(spec, P4_TOL),
     }
 

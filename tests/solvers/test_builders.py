@@ -447,5 +447,38 @@ class RopsBuilderTest(unittest.TestCase):
             self.assertTrue(all(v["value"] == v["value"] for v in r["outputs"].values()))
 
 
+class OperatingTimeLoopTest(unittest.TestCase):
+    """Q54 as a time (a product that runs for hours: the serving robot's 10 h at 1.2 m/s, 8.33 % ramps): P4, T1 and
+    T2 drive the loop that long at Q50 with the product's own Q13 and Q50, not the catalog's forest loop."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.req = copy.deepcopy(REQ)
+        for r in cls.req["requirements"]:
+            if r["key"] == "Q54":
+                r.update(value=10, unit="h")
+            if r["key"] == "Q50":
+                r.update(value=1.2, unit="m/s")
+            if r["key"] == "Q13":
+                r.update(value=8.33, unit="%")
+
+    def test_distance_is_time_times_q50(self):
+        for tid in ("P4", "T1", "T2"):
+            lcs = BUILDERS[tid](CATALOG.test(tid), self.req, DESIGN)
+            for lc in (lcs if isinstance(lcs, list) else [lcs]):
+                contract.validate("load_case", lc)
+                p = lc["params"]
+                self.assertAlmostEqual(p["distance"]["value"], 10 * 1.2 * 3.6, places=9, msg=tid)
+                self.assertAlmostEqual(p["grade_high"]["value"], 8.33, places=9)
+                self.assertAlmostEqual(p["speed_low"]["value"], 1.2 * 3.6 / 2, places=9)
+                self.assertIn("Q54 10 h", p["distance_from"])
+        self.assertIn("10 h", BUILDERS["P4"](CATALOG.test("P4"), self.req, DESIGN)["criterion"]["basis"])
+
+    def test_a_range_keeps_the_forest_loop(self):
+        lc = BUILDERS["P4"](CATALOG.test("P4"), REQ, DESIGN)
+        self.assertNotIn("distance_from", lc["params"])
+        self.assertEqual(lc["params"]["grade_high"]["value"], 12.0)  # the catalog's forest loop
+
+
 if __name__ == "__main__":
     unittest.main()

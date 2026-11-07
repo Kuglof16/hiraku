@@ -125,8 +125,11 @@ def r7_controls(spec: Record, req: Record, design: Record) -> list[Record]:
 # ---------------------------------------------------------------- R8 the load path
 
 
-def r8_params(req: Record, load: str) -> tuple[Record, list[str]]:
-    """The inertia params (accelerations in g, the occupants' forces in N worked out here) and their keys."""
+def r8_params(req: Record, load: str, design: Record | None = None) -> tuple[Record, list[str]]:
+    """The inertia params (accelerations in g, the occupants' forces in N worked out here) and their keys. The
+    occupants' only when the loading has occupants and the design carries people (hiraku.catalog.build
+    carries_people, as common.loading reads Q33): a product nobody rides (a serving robot) needs no Q33."""
+    from hiraku.catalog.build import carries_people
     from hiraku.catalog.builders.common import body_mass_in_kg
     from hiraku.catalog.loading import OCCUPANTS
     from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
@@ -134,7 +137,7 @@ def r8_params(req: Record, load: str) -> tuple[Record, list[str]]:
     lat, lon = number(req, "Q75", "g"), number(req, "Q76", "g")
     params = {"accel_vertical": q(VERTICAL_G, "g"), "accel_lateral": q(lat, "g"), "accel_longitudinal": q(lon, "g")}
     keys = ["Q75", "Q76"]
-    if OCCUPANTS[load]:
+    if OCCUPANTS[load] and (design is None or carries_people(design)):
         m = number(body_mass_in_kg(req), "Q33", "kg")
         params.update(occupant_mass=q(m, "kg"), occupant_force_lateral=q(m * lat * STANDARD_GRAVITY, "N"),
                       occupant_force_longitudinal=q(m * lon * STANDARD_GRAVITY, "N"))
@@ -165,7 +168,7 @@ def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
     if miss:
         raise BuildError("評価できない: " + _absent(miss, NOT_BORROWED))
     load, keys = loading(req, design)
-    params, pkeys = r8_params(req, load)
+    params, pkeys = r8_params(req, load, design)
     tol = tolerance(spec, R8_TOL)
     a = f"横 {params['accel_lateral']['value']:g} g・前後 {params['accel_longitudinal']['value']:g} g・下 {VERTICAL_G:g} g"
     base = {"test_id": "R8", "domain": spec["domain"], "tolerance_rel": tol}
