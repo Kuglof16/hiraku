@@ -57,7 +57,7 @@ class MaterialCardTest(unittest.TestCase):
                 self.assertIsNone(PRIVATE_PLACES.search(text))  # any folder on a drive, home folder or mail address, by its shape
 
     def test_the_place_check_sees_paths_and_mail_but_not_links(self):
-        for seen in ("D:/runs/a", "E:\\runs\\a", "/home/a/b", "x\\" + "Users" + "\\a", "a.b@example.org"):
+        for seen in ("D:/runs/a", "E:\\runs\\a", "/" + "home" + "/a/b", "x\\" + "Users" + "\\a", "a.b@example.org"):
             self.assertIsNotNone(PRIVATE_PLACES.search(seen), seen)
         for unseen in ("https://example.org/a", "Re 1e5: 0.47", "ratio 1:2", "read 2026-11-06"):
             self.assertIsNone(PRIVATE_PLACES.search(unseen), unseen)
