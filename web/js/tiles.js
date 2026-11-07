@@ -17,6 +17,7 @@ import { judgedContour } from "./judged.js";
 import { analysisEdge, edgeFlips, edgeLineHtml, edgeRaw } from "./edge_note.js";
 import { MATERIAL_JA, pictureOf } from "./tile_pictures.js";
 import { domainIconSvg } from "./domain_icons.js";
+import { pathCheckedWhy } from "./why_line.js";
 
 const W = 300;
 const H = 150;
@@ -417,6 +418,10 @@ export class TileBoard {
           })()}><span class="nq">${esc(`${big.test_id ?? big.load_case_id ?? ""} ${quantityName(s.comparisons[big.comparison_id]?.quantity ?? big.quantity)}`.trim())}</span>` +
           `<b class="nv${big.pass === false ? " ng" : ""}">${esc(fmtQ(big.value, 3))}</b><span class="nl">${esc(`${opLabel(big.op)} ${fmtQ(big.limit, 3)}`)}</span></div>`
         : `<div class="num none" data-role="number"><span class="nq">${esc(why)}</span></div>`;
+      // the tile's verdict made on the tool's value after the load path was checked by hand: why it
+      // is OK / NG in one line (why_line.js), cut to two lines here, whole in its tooltip
+      const pathWhy = big ? pathCheckedWhy(s, big, this.formulaTitle ?? undefined) : null;
+      const pathWhyHtml = pathWhy ? `<div class="pathwhy clamp2" data-role="why" title="${esc(pathWhy.text)}">${esc(pathWhy.text)}</div>` : "";
       // 境目 under the number when the crash tool's note on the break angle names a verdict's
       // quantity as changing inside the band (edge_note.js; the record's note and the verdict as the tooltip)
       const edgeOf = (x) => {
@@ -430,7 +435,7 @@ export class TileBoard {
         `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}">` +
         `<div class="th"><h3>${domainIconSvg(d)}${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
         `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"${picAttrs}></canvas></div>` +
-        `<div class="side">${number}${edgeHtml}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
+        `<div class="side">${number}${pathWhyHtml}${edgeHtml}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
         // the words and the small drawings: only when the tile is opened
         `<details class="more"><summary>くわしく</summary>` +
         `<div class="state"${wordTitle}>${esc(word)}</div>` +

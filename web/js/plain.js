@@ -34,7 +34,10 @@ const WORD = /\b[a-z]{3,}\b/g;
 const TOKEN = new RegExp(String.raw`(?:\b[a-z]+:)?(?:${ID_SRC})|\b[a-z]{3,}\b`, "g");
 // three English words in a row: lower-case words (two letters or more) with only ASCII between them
 const ENGLISH_RUN = /\b[a-z]{2,}\b(?:[ -~]*?\b[a-z]{2,}\b){2,}/;
-const SEP_AFTER = /^\s*(?:[=＝]\s*|[、・,，/]\s*)?/;
+// a record's number (chg-0006, ver-0048, pred-0119)
+const RECORD_NO = /\b[a-z]{2,8}-\d{3,}\b/;
+const RECORD_NOS = /\b[a-z]{2,8}-\d{3,}\b/g;
+const SEP_AFTER =/^\s*(?:[=＝]\s*|[、・,，/]\s*)?/;
 
 // The text holds a record's id or an English word (three or more lower-case letters, not the screen's own).
 export function hasRecordWords(text) {
@@ -58,9 +61,23 @@ function quantityWord(w) {
   return plain && !hasRecordWords(plain) ? plain : null;
 }
 
+// The words of a page's own list (a design's part and member ids: battery2, rail_L) as a pattern
+// that takes them as record words too, the longest first, each whole (not inside a longer id).
+const termsCache = new WeakMap();
+function termsToken(terms) {
+  if (!terms?.length) return TOKEN;
+  if (termsCache.has(terms)) return termsCache.get(terms);
+  const alt = [...new Set(terms)].filter((t) => /^[A-Za-z][\w.]*$/.test(t)).sort((a, b) => b.length - a.length).map((t) => t.replace(/\./g, "\\.")).join("|");
+  const re = alt ? new RegExp(String.raw`(?<![\w.])(?:${alt})(?![\w])|${TOKEN.source}`, "g") : TOKEN;
+  termsCache.set(terms, re);
+  return re;
+}
+
 // What is taken out: one flag per letter of s (true where it is out), and the names put in at a
 // record word's start (index -> name). name: opts.name, or false for no step 3 (a name's own asides).
-function maskOf(text, name = null) {
+// terms: more words to take as record words (termsToken). A name the same as the words right
+// before it (「解析 ana-0091」) is not said twice: the word is taken out without it.
+function maskOf(text, name = null, terms = null) {
   const s = String(text ?? "");
   const out = new Array(s.length).fill(false);
   const names = new Map();
@@ -74,13 +91,21 @@ function maskOf(text, name = null) {
   const hide = (a, b) => {
     for (let i = a; i < b; i++) out[i] = true;
   };
-  // 1. the asides, the innermost first (in the order they close)
+  // 1. the asides, the innermost first (in the order they close); with a page's names (name a
+  //    function), an aside whose record words all have a name stays (they are said by it in 3)
+  const tokenRe = termsToken(terms);
+  const named1 = typeof name === "function"
+    ? (t) => t.replace(tokenRe, (w) => name(w) || quantityWord(w) || w)
+    : (t) => t;
   const open = [];
   for (let i = 0; i < s.length; i++) {
     if (s[i] === "(" || s[i] === "（") open.push(i);
     else if ((s[i] === ")" || s[i] === "）") && open.length) {
       const a = open.pop();
-      if (!hasRecordWords(visible(a, i + 1))) continue;
+      const inside = visible(a, i + 1);
+      // (an aside of nothing but records' numbers, 「(ver-0002)」「(判定、比べ、原因)」, goes as before)
+      const onlyNumbers = RECORD_NO.test(inside) && !inside.replace(RECORD_NOS, "").replace(/[\s()（）、・,，/]/g, "");
+      if (!onlyNumbers && !hasRecordWords(named1(inside))) continue;
       let from = a;
       while (from > 0 && /\s/.test(s[from - 1]) && !out[from - 1]) from--;
       let to = i + 1;
@@ -98,12 +123,22 @@ function maskOf(text, name = null) {
   }
   // 3. the record words left one by one: by their name, else out (with the separator after them)
   if (name !== false) {
-    for (const m of s.matchAll(TOKEN)) {
+    const own = new Set(terms ?? []);
+    for (const m of s.matchAll(termsToken(terms))) {
       const [from, to] = [m.index, m.index + m[0].length];
       if (visible(from, to) !== m[0]) continue; // (part of it already out)
-      if (!ID.test(m[0]) && OWN_WORDS.has(m[0])) continue;
+      if (!ID.test(m[0]) && !own.has(m[0]) && OWN_WORDS.has(m[0])) continue;
       hide(from, to);
-      const said = (name && name(m[0])) || quantityWord(m[0]);
+      let said = (name && name(m[0])) || quantityWord(m[0]);
+      // (the same words just before it, as shown with the names put in so far: not twice)
+      if (said) {
+        let before = "";
+        for (let i = 0; i < from; i++) {
+          if (names.has(i)) before += names.get(i);
+          if (!out[i]) before += s[i];
+        }
+        if (before.trimEnd().endsWith(said)) said = null;
+      }
       if (said) {
         names.set(from, said);
         for (let i = from; i < to; i++) named.add(i);
@@ -133,7 +168,10 @@ function maskOf(text, name = null) {
         if (!out[k]) v += s[k];
       }
       v = v.replace(/[。．！？\n]$/, "");
-      if (lost && (/^[\s・「『(（\-–—]*[でがはをにとのへも](?![a-zA-Z0-9])/.test(v) || /[→=<>≤≥]\s*$/.test(v))) hide(a, end);
+      if (lost && (/^[\s・「『(（\-–—]*[でがはをにとのへも](?![a-zA-Z0-9])/.test(v) || /[→=<>≤≥]\s*$/.test(v))) {
+        hide(a, end);
+        for (let k = a; k < end; k++) names.delete(k), named.delete(k); // (the names put in inside it go with it)
+      }
       a = end;
     }
   }
@@ -240,7 +278,7 @@ function filmRecordWords(text) {
 }
 
 // One flag per letter of the text: true where it is taken out.
-export const recordMask = (text, opts = {}) => maskOf(text, opts.name).out;
+export const recordMask = (text, opts = {}) => maskOf(text, opts.name, opts.terms).out;
 
 // The text holds record words that plain words take out.
 export const hasHidden = (text, opts = {}) => recordMask(text, opts).some(Boolean);
@@ -252,7 +290,7 @@ export const hasHidden = (text, opts = {}) => recordMask(text, opts).some(Boolea
 // opts.empty: words put in (span.rn) when nothing but the "who:" before the first colon is left
 export function markRecordWords(text, opts = {}) {
   if (FILM) return filmMarks(text);
-  const { s, out, names, text: plain } = maskOf(text, opts.name);
+  const { s, out, names, text: plain } = maskOf(text, opts.name, opts.terms);
   const opens = new Set();
   const closes = new Set();
   if (opts.asides) {
@@ -286,18 +324,61 @@ export function markRecordWords(text, opts = {}) {
   return html;
 }
 
+// A record's number by the kind of record it is (pred-0119 -> 予測), so the words around it still
+// read (「力の道は pred-0119 と ana-0075 の …」 -> 「力の道は 予測 と 解析 の …」). The others
+// (chg-, rchk-, if-, mesh-) have no such name and are taken out.
+const RECORD_KIND_JA = { pred: "予測", ana: "解析", cmp: "比べ", ver: "判定", cause: "原因" };
+export function recordKindName(w) {
+  const m = /^([a-z]+)-\d{3,}$/.exec(w);
+  return m ? RECORD_KIND_JA[m[1]] ?? null : null;
+}
+
+// A design's part or member by its name (the design's parts[].name / members[].name, before its
+// bracket: 「左のレール (前の端から…)」 -> 「左のレール」), from the version shown, else the
+// newest version that has the id; null when no design names it.
+function designs(s) {
+  const vs = Object.keys(s?.designs ?? {}).map(Number).sort((a, b) => b - a);
+  const cur = s?.currentVersion;
+  return (cur != null && s.designs[cur] ? [cur, ...vs.filter((v) => v !== cur)] : vs).map((v) => s.designs[v]);
+}
+export function designThingName(s, id) {
+  for (const d of designs(s)) {
+    const x = (d?.parts ?? []).find((p) => p.id === id) ?? (d?.members ?? []).find((m) => m.id === id);
+    if (!x) continue;
+    const n = x.name ? String(x.name).replace(/\s*[（(].*$/, "").trim() : "";
+    return n && n !== id && !hasRecordWords(n) ? n : null;
+  }
+  return null;
+}
+// The ids a run's designs give their parts and members (all versions), for markRecordWords' terms.
+const idsCache = new WeakMap();
+function designIds(s) {
+  const ds = designs(s).filter(Boolean);
+  const key = s?.designs;
+  if (!key || !ds.length) return null;
+  const hit = idsCache.get(key);
+  if (hit && hit.n === ds.length) return hit.ids;
+  const ids = [...new Set(ds.flatMap((d) => [...(d.parts ?? []), ...(d.members ?? [])].map((x) => x.id).filter((x) => typeof x === "string")))];
+  idsCache.set(key, { n: ds.length, ids });
+  return ids;
+}
+
 // A line of the log or the footer (app.js): a tool's id by its short name (labels.js's name, else
-// the title in tool.checked up to its bracket, as state.js toolWord), short asides in one piece, and
-// ENGLISH_ONLY when nothing but who said it is left.
+// the title in tool.checked up to its bracket, as state.js toolWord), a design's part or member by
+// its name (designThingName), a record's number by its kind (recordKindName), short asides in one
+// piece, and ENGLISH_ONLY when nothing but who said it is left. An id with no name is taken out.
 export const ENGLISH_ONLY = "英語で書かれた記録";
 export function plainLineHtml(s, text) {
   const name = (w) => {
     const own = plainToolName(w);
     const title = s?.tools?.[w]?.title;
     const t = own ?? (title ? String(title).replace(/\s*[（(].*$/, "") : null);
-    return t && t !== w && !hasRecordWords(t) ? t : null;
+    if (t && t !== w && !hasRecordWords(t)) return t;
+    // (「part:wheel_FL x member:rail_L_…」: the id after its kind)
+    const bare = w.replace(/^[a-z]+:/, "");
+    return designThingName(s, bare) ?? recordKindName(bare);
   };
-  return markRecordWords(text, { name, asides: 40, empty: ENGLISH_ONLY });
+  return markRecordWords(text, { name, asides: 40, empty: ENGLISH_ONLY, terms: designIds(s) });
 }
 
 // The words a page shows of such HTML where span.rec is hidden and span.rn shown (for tests).
@@ -310,4 +391,4 @@ export function shownText(html) {
 
 // The text as shown without its record words (the names put in; spaces left over made one); for
 // titles and tests.
-export const plainWords = (text, opts = {}) => maskOf(text, opts.name).text;
+export const plainWords = (text, opts = {}) => maskOf(text, opts.name, opts.terms).text;

@@ -15,6 +15,7 @@ import { judgedResult, referenceResults } from "./judged.js";
 import { assemblyRecord } from "./assembly.js";
 import { versionChangeLine } from "./proposals.js";
 import { markRecordWords } from "./benchnote.js";
+import { pathCheckedWhy } from "./why_line.js";
 
 // ---- hooks: what happened, what comes next, resolved or not ---------------------------
 
@@ -211,7 +212,9 @@ function verdictCard(c, numTool = null) {
   if (!verdict) return { crit: criterionLine(loadCase), verdict: null };
   const tool = c.s.analyses[c.s.comparisons[verdict.comparison_id]?.analysis_id]?.tool;
   const from = tool && numTool && tool !== numTool ? `判定 (${c.toolTitle(tool)}): ` : "";
-  return { crit: from + verdictLine(verdict), verdict: verdictSentence(verdict) };
+  // basis path_checked: why the tool's value decides, in one line (why_line.js)
+  const why = pathCheckedWhy(c.s, verdict, c.formulaTitle)?.text ?? null;
+  return { crit: from + verdictLine(verdict), verdict: verdictSentence(verdict), why };
 }
 
 // The quantity a verdict judged: its comparison's (frame_shell: the hot-spot stress for a
@@ -403,6 +406,7 @@ export function presentCardHtml(scene, now, opts = {}) {
     (c.crit ? `<div class="pc-crit">${esc(c.crit)}</div>` : "") +
     // ok null: a statement that is not a verdict (no colour)
     (c.verdict ? `<div class="pc-verdict ${c.verdict.ok == null ? "plain" : c.verdict.ok ? "ok" : "bad"}">${esc(c.verdict.text)}</div>` : "") +
+    (c.why ? `<div class="pc-why" data-role="why">${esc(c.why)}</div>` : "") +
     // values shown beside the judged one that the verdict does not use, small and under their heading
     (c.ref?.length ? `<div class="pc-ref" data-role="reference"><div class="pc-ref-h">${esc(JUDGED_JA.ref)}</div><ul>${c.ref.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "") +
     (c.note ? `<div class="pc-note" data-role="not-judged">${esc(c.note)}</div>` : "") +
