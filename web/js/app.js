@@ -32,7 +32,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, stopWhyJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { applyEvent, chainFor, domainVerdicts, initialState, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -1895,12 +1895,23 @@ const TAB_HEADS = {
     const host = $("asm-host");
     const cap = host.querySelector(".asm-caption")?.textContent.trim() ?? "";
     const sum = host.querySelector(".asm-sum")?.textContent.trim() ?? "";
-    const ng = host.querySelectorAll(".asm-steps li.has-ng").length;
-    return [
-      cap || "組み立ての記録を待っている",
-      ["組み立て", sum || "—", ng ? "warn" : sum ? "ok" : ""],
-      ng ? `✕ のある手順 ${ng} つ: 工具・手が届くように設計を直す` : sum ? "④ 解析結果で、ほかの分野と並べて見る" : "組み立ての解析が終わるのを待つ",
-    ];
+    // the steps whose part does not fit (干渉 ✕), and the steps with only a tool's or a hand's ✕: those
+    // two are cautions that go into a verdict only when the record judges their quantity
+    // (steps_without_tool_clearance / steps_out_of_reach; the showcase runs judge neither)
+    const rows = [...host.querySelectorAll(".asm-steps li.has-ng")];
+    const hard = rows.filter((li) => li.querySelector(".ck-no_interference.is-ng")).length;
+    const reach = rows.length - hard;
+    const judgedReach = Object.values(s.verdicts ?? {}).some((v) => /^steps_(without_tool_clearance|out_of_reach)$/.test(v.quantity ?? ""));
+    const next = hard
+      ? `部品が入らない手順 ${hard}: 干渉しないように設計を直す${reach ? `・工具や手が届きにくい手順 ${reach}` : ""}`
+      : reach
+        ? judgedReach
+          ? `工具や手が届きにくい手順 ${reach}: 工具・手が届くように設計を直す`
+          : `工具や手が届きにくい手順 ${reach} (判定には入らない注意)`
+        : sum
+          ? "④ 解析結果で、ほかの分野と並べて見る"
+          : "組み立ての解析が終わるのを待つ";
+    return [cap || "組み立ての記録を待っている", ["組み立て", sum || "—", hard || (reach && judgedReach) ? "warn" : reach ? "" : sum ? "ok" : ""], next];
   },
 };
 const TAB_HEAD_EL = { A1: "tab-head-intake", A2: "tab-head-intake", A5: "tab-head-intake", A4: "tab-head-A4", A7: "tab-head-A7" };
@@ -2249,6 +2260,16 @@ function fitOverlays() {
     for (const e of [tg, ex]) if (e.offsetParent === viewport && e.offsetWidth) top = Math.max(top, e.offsetTop + e.offsetHeight + 8);
     const bottom = parseFloat(getComputedStyle(lg).bottom) || 0;
     setStyle(lg, "maxHeight", `${Math.max(120, viewport.clientHeight - bottom - top)}px`);
+    // the line of where the colours come from is the first to give way when the legend does not fit
+    // (its words then the legend's tooltip), so no line is cut by the legend's frame (the film as before)
+    const src = lg.querySelector(":scope > .src");
+    if (src && !VIDEO_LAYOUT) {
+      if (src.hidden) src.hidden = false;
+      const tight = lg.scrollHeight > lg.clientHeight + 1;
+      src.hidden = tight;
+      const tip = tight ? src.textContent : "";
+      if (lg.title !== tip) lg.title = tip;
+    }
     const f = lg.querySelector(".fields");
     const on = f?.querySelector("button.on");
     if (f && on && f.dataset.shown !== on.dataset.variant) {
@@ -2517,7 +2538,12 @@ function renderGrid(s) {
     const code = s.stopCode ?? (/^cost limit\b/.test(s.stopReason ?? "") ? "cost_limit" : /^turn limit\b/.test(s.stopReason ?? "") ? "turn_limit" : s.stopReason);
     const words = code === "round_limit" ? `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した` : STOP_CODE_JA[code];
     const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
-    banner.innerHTML = `<b>${why}。NG が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
+    banner.innerHTML = `<b>${why}。NG が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>${
+      // 「▶ その場で走らせる」 is at the top right only under ?dev=1 with a server (renderTopbar)
+      DEV && !STATIC
+        ? "新しく走らせるときは、右上の「その場で走らせる」から"
+        : `分野を押すと、その解析をビューアで見られます${STATIC ? "。「▶ 再生して見る」で、最初の設計から追えます" : ""}`
+    }</span>`;
   }
   // the newest report's next changes (none written yet, or no next: no block)
   const nx = $("report-next");
@@ -2529,6 +2555,29 @@ function renderGrid(s) {
     keepOpen(nx);
   }
   nx.hidden = !html;
+}
+
+// A record that stopped before its first design: over the 3D (which has no vehicle to show), why it
+// stopped (labels.js stopWhyJa, from the record's run.finished). Not on the film.
+function renderStoppedNote(s) {
+  let el = document.getElementById("stopped-note");
+  const why =
+    !VIDEO_LAYOUT && s.currentVersion == null && (s.status === "stopped" || s.status === "failed")
+      ? stopWhyJa({ finished: true, end_status: s.status, stop_code: s.stopCode, stop_reason: s.stopReason, stop_after: s.project?.stop_after, last_version: null })
+      : "";
+  if (!why) {
+    if (el) el.hidden = true;
+    return;
+  }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "stopped-note";
+    el.className = "stopped-note";
+    el.setAttribute("role", "status");
+    viewport.append(el);
+  }
+  el.hidden = false;
+  if (el.textContent !== why) el.textContent = why;
 }
 
 // ① opened at the request's moment and still there (ui.moment): no footer line (what an agent did
@@ -2578,7 +2627,9 @@ function renderTransient(s, playhead, chain, resolved) {
     hn.innerHTML = `<span class="hn-head">hooks が止めた</span> ${esc(hookLineText(den.rule, { dev: DEV }))}`;
   }
   // the hooks' stop: one line near the middle of the screen on every tab (hookline.js; the recorded words are in the log)
-  hookLine.render(s, playhead);
+  // (not over ④ and ⑤: their words fill the stage where the line goes; the film as before)
+  hookLine.render(s, playhead, { off: !VIDEO_LAYOUT && ["grid", "A7"].includes(currentTab(s)) });
+  renderStoppedNote(s);
   // the cause of a mismatch Claude wrote, until a verdict of its load case is OK (present.js openCause)
   // (?off=cause: not shown, e.g. a shot where the card would cover the vehicle)
   const cause = CAUSE_OFF ? null : openCause(s);
@@ -3513,8 +3564,11 @@ async function showRunList(message = "", runs = null) {
         r.when ? `<span class="nw when">${esc(r.when)}</span>` : "",
         r.want ? `<span class="rwant" title="${esc(r.want)}">依頼: ${esc(wantShort(r.want))}</span>` : "",
       ].filter(Boolean);
+      // a run that stopped: why, in one line (labels.js stopWhyJa; the whole as the tooltip)
+      const why = stopWhyJa(r);
       return (
-        `<tr data-run="${esc(r.run_id)}"><td><div class="rsum">${esc(runSummaryJa(r) || "記録")}</div><div class="rmeta">${meta.join('<span class="sep"> · </span>')}</div></td>` +
+        `<tr data-run="${esc(r.run_id)}"><td><div class="rsum">${esc(runSummaryJa(r) || "記録")}</div><div class="rmeta">${meta.join('<span class="sep"> · </span>')}</div>` +
+        `${why ? `<div class="rwhy" data-role="stop-why" title="${esc(why)}">${esc(why)}</div>` : ""}</td>` +
         `<td class="state" data-state="${state}">${RUN_STATE_JA[state]}</td><td><a href="${href}">見る</a></td></tr>`
       );
     };

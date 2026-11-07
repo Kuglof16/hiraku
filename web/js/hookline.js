@@ -69,8 +69,9 @@ export function mountHookLine(stage, { dev = false, showS = 5, avoid = () => [] 
     more.addEventListener("click", () => set(hooks.hidden));
   }
 
-  function render(s, playhead) {
-    const den = s?.denied ?? null;
+  // off: not shown at all (a tab whose words the line would cover)
+  function render(s, playhead, { off = false } = {}) {
+    const den = off ? null : s?.denied ?? null;
     const a = den ? hookLineOpacity(playhead - den.t, showS) : 0;
     line.hidden = a <= 0;
     line.style.opacity = a > 0 ? a.toFixed(3) : "0";

@@ -547,7 +547,13 @@ export function chainFor(s, loadCaseId, version) {
   const preds = list(s, "predictions").filter(sameCase);
   const predIds = new Set(preds.map((p) => p.prediction_id));
   const lastCmp = list(s, "comparisons").filter((c) => predIds.has(c.prediction_id)).at(-1) ?? null;
-  const waiting = lastCmp ? preds.filter((p) => s.firstSeqOf[p.prediction_id] > s.firstSeqOf[lastCmp.comparison_id]) : preds;
+  // A record that is over (run.finished) with a prediction written after the last comparison and no
+  // analysis of it running: that prediction never got its analysis, so the chain is the last compared
+  // one (the verdict ④ shows), not a wait that will not end.
+  const over = s.status === "done" || s.status === "stopped" || s.status === "failed";
+  const later = lastCmp ? preds.filter((p) => s.firstSeqOf[p.prediction_id] > s.firstSeqOf[lastCmp.comparison_id]) : preds;
+  const stillRuns = Object.values(s.running).some((r) => r.load_case_id === loadCaseId);
+  const waiting = over && lastCmp && !stillRuns ? [] : later;
   const pred = waiting[0] ?? (lastCmp ? s.predictions[lastCmp.prediction_id] : null) ?? null;
   const anas = list(s, "analyses").filter(sameCase);
   const usedPred = (a) => pred && (a.prediction_ids ?? []).includes(pred.prediction_id);

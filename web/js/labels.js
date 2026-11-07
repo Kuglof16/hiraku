@@ -894,6 +894,19 @@ export function runSummaryJa(r) {
   return [how, far].filter(Boolean).join("・");
 }
 
+// Why a run stopped, in one line for people (a stopped or failed run that is over; else ""): the
+// first sentence of the record's own stop_reason when it is in Japanese (its numbers as recorded),
+// else the stop_code's words. Before its first design (no version): 「v1 を作る前に止まりました」 first.
+export function stopWhyJa(r) {
+  if (!r?.finished || !["stopped", "failed"].includes(runState(r))) return "";
+  const raw = String(r.stop_reason ?? "").trim();
+  const first = /[ぁ-んァ-ン一-龥]/.test(raw) ? raw.split("。")[0].trim() : "";
+  const why = first || STOP_CODE_JA[r.stop_code] || (raw ? `止まった理由: ${raw}` : "");
+  const v = Number.isInteger(r.last_version) ? r.last_version : null;
+  const head = v ? `${verLabel(v)} で止まりました` : `この記録は ${verLabel(1)} を作る前に止まりました`;
+  return why ? `${head} (${why})` : head;
+}
+
 // A record the list for people keeps under the closed 「この PC の記録」: one this PC ran that has no
 // project.driver (made before the field, while HIRAKU was being built), no design version, or that
 // ended at the domain picks. Saved records always stay on the list.

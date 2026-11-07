@@ -40,7 +40,9 @@ export function caseState(s, lcId, version = s.currentVersion) {
   const cmp = ch.cmp ? (ch.cmp.status === "match" ? "match" : "mismatch") : null;
   if (ch.verdict) return { key: ch.verdict.pass ? "ok" : "ng", cmp };
   if (cmp) return { key: cmp, cmp };
-  if (ch.running || ch.pred) return { key: "busy", cmp: null };
+  // (a record that is over computes nothing more: a prediction left without its analysis is まだ)
+  const over = s.status === "done" || s.status === "stopped" || s.status === "failed";
+  if (ch.running || (ch.pred && !over)) return { key: "busy", cmp: null };
   return { key: "wait", cmp: null };
 }
 
