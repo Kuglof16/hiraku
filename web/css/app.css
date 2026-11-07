@@ -972,6 +972,30 @@ body.video #card-ana [data-role="viewer-link"], body.video #card-ana details[dat
 .tile .replay-tag { margin: 0 auto 0 10px; font-size: 13px; font-weight: 600; color: var(--ink); border: 1.5px solid var(--line); border-radius: 999px; padding: 0 9px; white-space: nowrap; }
 .tile.can-replay:hover .replay-tag { border-color: var(--ink); }
 body.video .tile .replay-tag { display: none; }
+/* ④ as the run ended (app.js GRID_FIXED): a tile, a test's row, a chip opens the analysis in the
+   viewer inside the tab; the version's boxes in the head pick the version */
+.grid-view { position: relative; }
+body.grid-fixed .playbar { display: none; }
+.tile.can-open, .offline .offchip.can-open { cursor: pointer; }
+.tile.can-open:hover { box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.12); }
+.tile .num[data-ana] { cursor: pointer; }
+.grid-head .vbox.pick { cursor: pointer; }
+.grid-head .vbox.pick:hover { box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.12); }
+.testrows { list-style: none; margin: 4px 0 0; padding: 0; font-size: 14px; }
+.testrows li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 3px 4px; border-top: 1px solid var(--rule); cursor: pointer; border-radius: 6px; }
+.testrows li:hover { background: var(--orange-pale); }
+.testrows .tool { color: var(--muted); }
+.testrows .tv.ng { color: var(--red); font-weight: 700; }
+.tile .vnone { position: absolute; left: 8px; right: 8px; bottom: 6px; z-index: 5; display: flex; flex-wrap: wrap; gap: 0 10px; font-size: 13px; line-height: 1.35; border: 1.5px solid var(--ink); border-radius: 8px; padding: 3px 10px; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); }
+.tile .vnone span { color: var(--muted); }
+.offline .vnone { font-size: 13px; }
+.grid-viewer { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+.grid-viewer[hidden] { display: none; }
+.grid-viewer .gv-head { display: flex; align-items: baseline; gap: 14px; padding: 6px 10px; border-bottom: 1px solid var(--rule); font-size: 16px; }
+.grid-viewer .gv-back { font-size: 16px; font-weight: 600; border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 14px; background: var(--panel); cursor: pointer; }
+.grid-viewer .gv-sample, .grid-viewer .gv-esc { color: var(--muted); font-size: 13px; }
+.grid-viewer .gv-esc { margin-left: auto; }
+.grid-viewer .gv-frame { flex: 1; min-height: 0; width: 100%; border: 0; }
 /* ④ with a domain replaying: the head over the 3D (what replays, and 格子に戻る) */
 .domain-head { display: flex; align-items: baseline; gap: 8px; font-size: 18px; padding: 2px 4px 6px; }
 .domain-head[hidden] { display: none; }

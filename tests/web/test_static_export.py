@@ -281,10 +281,14 @@ class StaticBrowserTest(unittest.TestCase):
         # the way back to the list: 「☰ 一覧へ」 at the top left (no 「▶ その場で走らせる」 without a server)
         self.assertEqual(page.get_attribute("#back-link", "href"), "?list=1")
         self.assertIsNone(page.query_selector("#mode a.launch-link"))
-        # ④: the strength tile replays its analyses in the tab; the prediction names its formula
+        # ④: the strength tile opens its analysis in the viewer inside the tab (test_grid_viewer_browser)
         page.click('.tab[data-tab="grid"]')
-        page.click('.tile[data-domain="strength"]')
-        page.wait_for_function("!document.getElementById('domain-head').hidden")
+        page.click('.tile[data-domain="strength"] .th')
+        page.wait_for_function("!document.getElementById('grid-viewer').hidden")
+        page.click("#grid-viewer .gv-back")
+        # ③: the prediction names its formula
+        page.click('.tab[data-tab="bench"]')
+        page.click('#tests button[data-lc]:not([data-lc=""])')
         page.evaluate("window.hiraku.seek(1e6)")
         title = self.formulas["frame_static.rail_bending"]
         # (textContent: the card is folded under ③'s くわしく)

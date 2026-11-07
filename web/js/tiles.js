@@ -15,7 +15,6 @@ import { heldBandHtml, heldCases, referenceCases, referenceRowsHtml } from "./he
 import { builtLine } from "./proposals.js"; // modules:
 import { judgedContour } from "./judged.js";
 import { analysisEdge, edgeFlips, edgeLineHtml, edgeRaw } from "./edge_note.js";
-import { viewerButtonHtml, viewerRunId } from "./viewer_link.js"; // 「ビューアで見る」 in くわしく
 import { MATERIAL_JA, pictureOf } from "./tile_pictures.js";
 import { domainIconSvg } from "./domain_icons.js";
 
@@ -56,17 +55,25 @@ export function domainAnalysis(s, domain, version) {
   return ana ? { ana, loadCase: cases.find((c) => c.load_case_id === ana.load_case_id) ?? null } : { ana: null, loadCase: cases[0] ?? null };
 }
 
-// The tile's analyses of the version (in the record's order), one row each with 「ビューアで見る」
-// (viewer_link.js): the test, the tool, the button or why it cannot be pressed.
-export function viewerListHtml(s, domain, version) {
-  const cases = new Map((s.project?.load_cases ?? []).filter((c) => c.domain === domain).map((c) => [c.load_case_id, c]));
-  const list = s.order.analyses.map((id) => s.analyses[id]).filter((a) => a && a.design_version === version && cases.has(a.load_case_id));
-  if (!list.length) return "";
-  const run = viewerRunId(s);
-  const rows = list.map((a) =>
-    `<li data-ana="${esc(a.analysis_id)}"><span class="vwhat" title="${esc(a.analysis_id)}">${esc(cases.get(a.load_case_id)?.test_id ?? a.load_case_id)}・${esc(a.tool)}</span>${viewerButtonHtml(run, a, { compact: true })}</li>`
-  );
-  return `<div class="vlist" data-role="viewer-list"><div class="vhead">解析 (${list.length})</div><ul>${rows.join("")}</ul></div>`;
+// The tile's tests of the version, one row each (pressed: that test's last analysis in the viewer,
+// app.js openGridAnalysis): the test, the tool, its verdict as recorded (or none yet).
+export function testRowsHtml(s, domain, version) {
+  const cases = (s.project?.load_cases ?? []).filter((c) => c.domain === domain);
+  const verdicts = domainVerdicts(s, domain, version);
+  const rows = [];
+  for (const c of cases) {
+    const ana = s.order.analyses.map((id) => s.analyses[id]).filter((a) => a && a.design_version === version && a.load_case_id === c.load_case_id).at(-1);
+    if (!ana) continue;
+    const x = headline(verdicts.filter((v) => v.load_case_id === c.load_case_id || (v.test_id && v.test_id === c.test_id)));
+    const verdict = x
+      ? `${quantityName(s.comparisons[x.comparison_id]?.quantity ?? x.quantity)} ${fmtQ(x.value, 3)} ${opLabel(x.op)} ${fmtQ(x.limit, 3)} ${x.pass === false ? "NG" : "OK"}`
+      : "判定はまだ記録に無い";
+    rows.push(
+      `<li data-role="test-row" data-ana="${esc(ana.analysis_id)}" data-lc="${esc(c.load_case_id)}" title="押すとビューアで見る (${esc(ana.analysis_id)})">` +
+        `<b>${esc(c.test_id ?? c.load_case_id)}</b><span class="tool">${esc(ana.tool)}</span><span class="tv${x?.pass === false ? " ng" : ""}">${esc(verdict)}</span></li>`
+    );
+  }
+  return rows.length ? `<ul class="testrows" data-role="test-rows">${rows.join("")}</ul>` : "";
 }
 
 function sideView(design) {
@@ -316,7 +323,7 @@ export class TileBoard {
         const kept = before ? [...now].filter((x) => before.has(x)) : [];
         const tip = [now.size ? `NG の試験: ${[...now].join("・")}` : "NG の試験なし", fixed.length ? `1 つ前の設計から直った: ${fixed.join("・")}` : "", kept.length ? `1 つ前の設計から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
         before = now;
-        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">${verLabel(ver)} NG ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
+        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" data-ver="${esc(String(ver))}" title="${esc(tip)}">${verLabel(ver)} NG ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
       })
       .join(`<span class="varrow">→</span>`);
     const design = v != null ? s.designs[v] : null;
@@ -404,7 +411,10 @@ export class TileBoard {
       const mark = j.state === "green" ? "OK" : j.state === "red" ? "NG" : "まだ";
       const big = headline(verdicts);
       const number = big
-        ? `<div class="num" data-role="number"><span class="nq">${esc(`${big.test_id ?? big.load_case_id ?? ""} ${quantityName(s.comparisons[big.comparison_id]?.quantity ?? big.quantity)}`.trim())}</span>` +
+        ? `<div class="num" data-role="number"${(() => {
+            const a = s.analyses[big.analysis_id ?? s.comparisons[big.comparison_id]?.analysis_id];
+            return a ? ` data-ana="${esc(a.analysis_id)}"` : "";
+          })()}><span class="nq">${esc(`${big.test_id ?? big.load_case_id ?? ""} ${quantityName(s.comparisons[big.comparison_id]?.quantity ?? big.quantity)}`.trim())}</span>` +
           `<b class="nv${big.pass === false ? " ng" : ""}">${esc(fmtQ(big.value, 3))}</b><span class="nl">${esc(`${opLabel(big.op)} ${fmtQ(big.limit, 3)}`)}</span></div>`
         : `<div class="num none" data-role="number"><span class="nq">${esc(why)}</span></div>`;
       // 境目 under the number when the crash tool's note on the break angle names a verdict's
@@ -432,7 +442,7 @@ export class TileBoard {
         // the strength tile: the mounts are not judged (labels.js JUDGED_JA.mountsNotJudged)
         (d === "strength" && (s.project?.load_cases ?? []).some((c) => c.domain === "strength") ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
         `<div class="draw">${drawing}</div>${spark}` +
-        (v != null ? viewerListHtml(s, d, v) : "") +
+        (v != null ? testRowsHtml(s, d, v) : "") +
         `</details></div>`
       );
     }).join("");

@@ -2,10 +2,10 @@
 
 - ④ is not tied to ③: on ④ only ④'s tab is marked and no domain chip is ringed by ③'s load case;
   what is pressed in ④ leaves ③'s own pick of a test as it was;
-- a tile whose domain has analyses replays them in the tab (the 3D, the 予測 → 解析 → 照合 cards and
-  the domain's tests, the play bar from its first prediction to its last comparison, stopping there);
-  ④ stays marked; 「× 格子に戻る」 goes back to the grid and to where the replay was; ?domain= opens
-  it, and ?t= draws the same frame as a seek; ?video=1 hides the buttons;
+- a tile pressed opens the viewer over ④ (test_grid_viewer_browser), not a replay: the replay and
+  ③ stay as they were, ?domain= alone opens nothing;
+- the video (?video=1) keeps ④'s domain replay: ?domain= opens it, ?t= draws the same frame as a
+  tile pressed and a seek, and the buttons are hidden;
 - a run whose tests the requirements file chose: the tiles not picked say which tests it checks;
 - a run followed from the screen: when it is over (run.finished read, or the child gone without it)
   the top no longer says 記録の途中 and the stop button goes, though the replay is still behind.
@@ -36,7 +36,6 @@ except ImportError:  # pragma: no cover - depends on the machine
 
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 
-T0, T1 = 5.0, 6.5  # the sample's strength: its prediction, its comparison (pace=0: the recorded t)
 
 STATE = """() => ({
   on: [...document.querySelectorAll('.tab.on')].map((b) => b.dataset.tab),
@@ -98,60 +97,46 @@ class GridReplayBrowserTest(unittest.TestCase):
         page.click('#tests button[data-lc="R1-step100"]')
         got = self.state(page)
         self.assertEqual((got["on"], got["focus"], got["testOn"]), (["bench"], ["強度信頼性"], "R1-step100"))
-        # ④ again: nothing of ③ marked; a domain replayed and its 自動 pressed, then closed
+        # ④ again: nothing of ③ marked; a tile opens the viewer, then back
         page.click('.tab[data-tab="grid"]')
         self.assertEqual(self.state(page)["focus"], [])
-        page.click('.tile[data-domain="strength"]')
-        page.click('#tests button[data-lc=""]')
+        page.click('.tile[data-domain="strength"] .th')
+        self.assertTrue(page.is_visible("#grid-viewer"))
         self.assertEqual(self.state(page)["on"], ["grid"])
-        page.click("#domain-head .dh-close")
+        page.click("#grid-viewer .gv-back")
         page.click('.tab[data-tab="bench"]')
         got = self.state(page)
-        # ③'s pick is as it was (④'s 自動 was ④'s own)
+        # ③'s pick is as it was
         self.assertEqual((got["on"], got["testOn"]), (["bench"], "R1-step100"))
         self.assertEqual(errors, [])
 
-    def test_a_tile_replays_its_domain_in_the_tab(self):
+    def test_a_tile_opens_the_viewer_not_a_replay(self):
         page, errors = self.open("tab=grid&t=1e6")
-        tiles = page.evaluate("() => [...document.querySelectorAll('.tile')].map((t) => [t.dataset.domain, t.classList.contains('can-replay'), !!t.querySelector('.replay-tag')])")
-        self.assertIn(["strength", True, True], tiles)
-        self.assertTrue(all(not can for d, can, _ in tiles if d != "strength"), tiles)  # (the others have nothing to replay)
-        page.click('.tile[data-domain="strength"]')
-        got = self.state(page)
-        self.assertEqual(got["on"], ["grid"])  # ④ stays marked
-        self.assertEqual((got["bench"], got["grid"], got["dom"]), (True, False, "強度信頼性"))
-        self.assertIn("domain=strength", got["url"])
-        self.assertEqual(got["focus"], ["強度信頼性"])
-        self.assertEqual(got["tests"], ["R1-step100"])
-        self.assertGreaterEqual(got["playhead"], T0 - 1e-6)
-        self.assertLess(got["playhead"], T1)
-        self.assertIn("予測", got["cards"][0])
-        # it plays to the domain's last comparison and stops there
-        page.wait_for_function("!window.hiraku.player.playing", timeout=20000)
-        got = self.state(page)
-        self.assertAlmostEqual(got["playhead"], T1, places=6)
-        self.assertEqual(got["time"], f"{T1 - T0:.1f} / {T1 - T0:.1f} 秒")
-        self.assertTrue(got["cards"][2].strip(), got["cards"])  # the comparison card
-        # ▶ at the end plays it again from its first prediction
-        page.click("#pb-play")
-        self.assertLess(page.evaluate("window.hiraku.player.playhead"), T1)
-        # 格子に戻る: the grid, and the replay where it was (the end)
-        page.click("#domain-head .dh-close")
+        before = self.state(page)
+        tiles = page.evaluate("() => [...document.querySelectorAll('.tile')].map((t) => [t.dataset.domain, t.classList.contains('can-open'), !!t.querySelector('.replay-tag')])")
+        self.assertIn(["strength", True, False], tiles)
+        page.click('.tile[data-domain="strength"] .th')
         got = self.state(page)
         self.assertEqual((got["on"], got["bench"], got["grid"], got["head"]), (["grid"], False, True, None))
         self.assertNotIn("domain=", got["url"])
-        self.assertAlmostEqual(got["playhead"], page.evaluate("window.hiraku.player.duration"), places=3)
-        self.assertEqual(errors, [])
+        self.assertEqual((got["playhead"], got["playing"]), (before["playhead"], before["playing"]))
+        self.assertTrue(page.is_visible("#grid-viewer iframe"))
+        # ?domain= alone (not the video): the grid, no replay
+        page2, errors2 = self.open("tab=grid&domain=strength&t=6.0")
+        got = self.state(page2)
+        self.assertEqual((got["bench"], got["grid"], got["head"]), (False, True, None))
+        self.assertEqual(errors + errors2, [])
 
-    def test_the_url_draws_the_same_frame(self):
-        a, errors_a = self.open("tab=grid&domain=strength&t=6.0")
-        b, errors_b = self.open("tab=grid&t=1e6")
+    def test_the_url_draws_the_same_frame_in_the_video(self):
+        a, errors_a = self.open("tab=grid&domain=strength&t=6.0&video=1")
+        b, errors_b = self.open("tab=grid&t=1e6&video=1")
         b.click('.tile[data-domain="strength"]')
         b.evaluate("async () => { await window.hiraku.seek(6.0); }")
         ga, gb = self.state(a), self.state(b)
         for k in ("on", "focus", "bench", "grid", "head", "tests", "cards", "time", "playhead"):
             self.assertEqual(ga[k], gb[k], k)
         self.assertEqual(ga["time"], "1.0 / 1.5 秒")
+        self.assertEqual(ga["tests"], ["R1-step100"])
         self.assertEqual(errors_a + errors_b, [])
 
     def test_video_hides_the_buttons(self):
