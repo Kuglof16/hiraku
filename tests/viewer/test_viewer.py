@@ -819,8 +819,15 @@ class PageTest(unittest.TestCase):
         self.assertIn("乗員の空間の余裕 (occupant_space_margin)", out["inputs"])
         self.assertIn("(frame_split_fraction)", out["codes"])
         # the field buttons: the contract's domain names, in the page's order, and the flooded road's place (js/water.js)
+        # (opened from disk the page cannot ask the server which data is there, so every field is kept)
         self.assertEqual(out["switch"], [{**names.field_labels(), "water": "冠水路"}[f] for f in ["strength", "fatigue", "rops", "nvh", "crash", "handling",
                                                                             "powertrain", "aero", "water", "thermal", "assembly"]])
+        self.assertTrue(out["switch_shown"])
+        # a crash over time plays as it opens: the large play button on the 3D view says 止める, dark; pressed, it
+        # stops like the panel's button and turns red
+        self.assertGreater(out["nT"], 1)
+        self.assertEqual(out["bigplay"], {"shown": True, "text": "❚❚ 止める", "playing": True, "bg": "rgb(28, 31, 36)",
+                                          "stopped": "▶ 動きを再生", "stopped_bg": "rgb(211, 53, 43)", "panel": "▶ 再生"})
 
     def test_nvh_parts_move_with_the_frame(self):
         out = self._check(self.dir, "nvh")
@@ -858,6 +865,11 @@ class PageTest(unittest.TestCase):
         out = self._check(self.dir, "nvh")
         self.assertIn("部材のひずみ", out["hud"])
         self.assertIn("実寸ではない", out["hud"])
+        # it opens on the highest mode in the list (the lowest are the body on its springs)
+        modes = make("nvh")["modes"]
+        top = max(range(len(modes)), key=lambda i: modes[i]["f_Hz"])
+        self.assertGreater(top, 0)
+        self.assertTrue(out["tline"].startswith(f"モード {top + 1}: {modes[top]['f_Hz']:.2f} Hz"), out["tline"])
 
     def test_part_click_returns_category(self):
         for d, f in ((self.dir, "nvh"), (self.dir, "crash"), (self.dir_b, "crash"), (self.dir, "assembly")):
@@ -877,6 +889,9 @@ class PageTest(unittest.TestCase):
                 self.assertEqual(out["errors"], [])
                 self.assertEqual(out["shown_field"], f)
                 self.assertGreater(out["nT"], 1)
+                # the large play button: there for a field with more than one moment, which plays as it opens
+                self.assertEqual(out["bigplay"]["shown"], out["nT"] > 1)
+                self.assertEqual((out["bigplay"]["playing"], out["bigplay"].get("stopped")), (True, "▶ 動きを再生"))
                 self.assertGreater(out["drawn_px"], 1000)
                 self.assertNotIn("NOT COMPUTED", out["page_text"])
                 self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)   # no file paths on screen

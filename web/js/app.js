@@ -697,7 +697,11 @@ function showGridExtras(s) {
     tile.classList.toggle("has-extras", list.length > 0);
     if (!list.length) continue;
     const rows = list.map((e) => `<li data-extra="${esc(e.id)}" title="押すと、ビューアで見ます"><b>${esc(e.label)}</b>${e.note ? ` <span>— ${esc(e.note)}</span>` : ""}</li>`).join("");
-    tile.insertAdjacentHTML("beforeend", `<ul class="vextras" data-role="viewer-extras">${rows}</ul>`);
+    // in the tile's head, after the domain's name: off the 3D picture, and no height taken from it
+    const name = tile.querySelector(".th h3");
+    const html = `<ul class="vextras" data-role="viewer-extras">${rows}</ul>`;
+    if (name) name.insertAdjacentHTML("afterend", html);
+    else tile.insertAdjacentHTML("beforeend", html);
   }
 }
 
@@ -1408,8 +1412,8 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 // The agents: with pets (js/agent_pets.js), each its 3D pet, name, status and bubble; without
 // (no /pets/pet3d.js), or for an agent whose role has no pet, a circle and the name.
 // The agents of one role kind, bundled into one row in the list when there are two or more:
-// the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
-const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
+// the module designers (and the designer) as 設計, the CAE roles as CAE (labels.js roleNames: no 「…役」).
+const AGENT_GROUP_JA = { designer: "設計", cae: "CAE" };
 const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
 const AGENT_ALERT = [RED_STATUS, "解析が通らない"];
 const AGENT_HEED = ["止められた", MISMATCH_STATUS]; // attention (orange), not a NG judgement
@@ -1438,12 +1442,12 @@ function agentEntries(order) {
 function agentRowHtml(s, id, extra = "") {
   const a = s.agents[id];
   const cls = `${agentCls(a)}${extra}`;
-  // the role's name in full (操安の CAE 役), not the domain alone
+  // the role's name in full (操安の CAE), not the domain alone
   if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
   return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
 }
 
-// A bundle's row: 「設計役 ×6」, pressed to show each one (ui.openGroups; closed by default, so the
+// A bundle's row: 「設計 ×6」, pressed to show each one (ui.openGroups; closed by default, so the
 // picture at ?t= does not depend on what was pressed). Its look and status follow the members: an
 // alert first, then the ones at work (the same look as a single row at work), else all done, else
 // the status they share. Closed, it carries the pet (and bubble) of its first member at work, else
@@ -4005,7 +4009,7 @@ $("view-intake").addEventListener("change", (ev) => {
 });
 
 fitStage();
-// the module names (an older record's designer.<module> → 「枠の設計役」) from the start, so a record still being read
+// the module names (an older record's designer.<module> → 「枠の設計」) from the start, so a record still being read
 // does not show the ids; drawn again once they are in
 loadModuleNames().then(() => (drawn.rev = -1));
 // the viewer's answers provisional or not, and the fields with no sample (viewer_link.js); drawn again once in

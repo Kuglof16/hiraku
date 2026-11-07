@@ -4,7 +4,7 @@
   picked, no design yet): the top row says v — and 依頼の時点 (not 記録の途中), no footer line, ①'s
   いま names the picked domains and its cards are picked (調べる / not 候補 nor 考えています); ▶ plays on
   and the top row goes with it (v1 once the first design is in);
-- ② over its questions: the pet of the agent that asked them (the record's lead: まとめ役), a heading
+- ② over its questions: the pet of the agent that asked them (the record's lead: まとめ), a heading
   that says when they were asked, the record's hearings in time order (the first one, before the
   first design, said so); the record's words as the screen says them (v2, not 版 2; the
   requirement's name, not Q54; the part's name, not battery); an answered question shows its answer,
@@ -151,14 +151,14 @@ class OneMomentBrowserTest(unittest.TestCase):
         page, errors = self.open(f"run={RUN}&tab=A2&t=1e6", pets="1")
         page.wait_for_function("document.documentElement.dataset.agentPets", timeout=60000)
         got = self.read(page, A2)
-        self.assertEqual(got["title"], "v2 の途中で まとめ役 が聞いたこと")
+        self.assertEqual(got["title"], "v2 の途中で まとめ が聞いたこと")
         # the hearings in time order: the first (before the first design), at v1, at v2 (the one shown)
         self.assertEqual([c for c, _ in got["rounds"]], ["past", "past", "shown"])
         self.assertTrue(got["rounds"][0][1].startswith("実行の前 (最初のヒアリング): 質問なし"), got["rounds"])
         self.assertTrue(got["rounds"][1][1].startswith("v1 の途中: 確認 6 件・ルール 1 件 → 答え 6 件・設計を直す"), got["rounds"])
         self.assertTrue(got["rounds"][2][1].startswith("v2 の途中: ルール 1 件 → 設計を直す"), got["rounds"])
         if PETS_FILE.is_file():
-            self.assertEqual(got["askers"], [["lead", "まとめ役"]])
+            self.assertEqual(got["askers"], [["lead", "まとめ"]])
         # the record's sentence in the screen's words
         self.assertIn("v2 で電池を 2 つのパックに分けました", got["rqText"])
         self.assertNotIn("版 2", got["rqText"])

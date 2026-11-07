@@ -284,7 +284,7 @@ body:not(.video) #view-intake .in-q.open .in-choices { display: none; }
 .agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
 .agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
 .agents ul.pets.many .petrow .petslot { width: 42px; height: 42px; }
-/* a bundle of one role kind (app.js agentGroupHtml): 「▸ 設計役 ×6」, opened into its members */
+/* a bundle of one role kind (app.js agentGroupHtml): 「▸ 設計 ×6」, opened into its members */
 .agents .ag-toggle { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .agents .ag-toggle .caret { font-size: 0.8em; color: var(--muted); width: 0.9em; }
 .agents .ag-toggle .cnt { font-weight: 700; }
@@ -1468,17 +1468,37 @@ body:not(.video) .tabflow { gap: 2px; }
 body:not(.video) .back-link { font-size: 18px; padding: 4px 12px; font-weight: 600; background: var(--card, #fffdf8); }
 body:not(.video) .runlist a { font-size: 18px; padding: 5px 16px; }
 body:not(.video) .grid-viewer .gv-back { font-size: 20px; font-weight: 600; padding: 8px 20px; border-width: 2px; }
-/* ④: a tile that opens its analysis in the viewer (app.js GRID_FIXED, .can-open) says so */
+/* ④: a tile that opens its analysis in the viewer (app.js GRID_FIXED, .can-open) says so, at the foot of
+   its 3D picture (.pic: the picture's own box, so it never reaches the number's column at the right) */
 body.grid-fixed .grid-view .tile.can-open { position: relative; }
-body.grid-fixed .grid-view .tile.can-open::after {
-  content: "▶ 押すとビューアで見られます"; position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+body.grid-fixed .grid-view .tile.can-open .pic::after {
+  content: "▶ 押すとビューアで見られます"; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 1;
+  max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
   font-size: 17px; font-weight: 600; padding: 5px 16px; border-radius: 999px; background: var(--ink); color: var(--card, #fffdf8);
   pointer-events: none; white-space: nowrap;
 }
 body.grid-fixed .grid-view .tile.can-open:hover { box-shadow: 0 0 0 3px var(--ink); }
-/* ④: the records kept for the run's design (app.js showGridExtras), rows over the top of the tile's picture (clear of its value); each opens the viewer */
-.tile .vextras { position: absolute; left: 12px; right: 36%; top: 30px; z-index: 6; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.tile .vextras li { font-size: 13px; line-height: 1.3; padding: 3px 10px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+/* ④ (fixed): a short tile (1600×900: the head's lines and 次に変えるもの take the height) still shows its whole
+   number: the number's column runs down beside くわしく to the tile's foot, and the value and its limit share a
+   line when they fit (384 mm  ≥ 0 mm) */
+body.grid-fixed .grid-view .tile { display: grid; grid-template-columns: minmax(0, 1fr) min(34%, 240px); grid-template-rows: auto minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+body.grid-fixed .grid-view .tiles.dense .tile { grid-template-columns: minmax(0, 1fr) min(36%, 240px); }
+body.grid-fixed .grid-view .tile > .th { grid-column: 1 / -1; }
+body.grid-fixed .grid-view .tile > .tbody { display: contents; }
+body.grid-fixed .grid-view .tile .pic { grid-column: 1; grid-row: 2; }
+body.grid-fixed .grid-view .tile .side { grid-column: 2; grid-row: 2 / 4; width: auto; max-width: none; min-height: 0; }
+body.grid-fixed .grid-view .tile > details.more { grid-column: 1; grid-row: 3; }
+body.grid-fixed .grid-view .tile > details.more[open] { grid-column: auto; grid-row: auto; }   /* (over the whole tile, as before) */
+body.grid-fixed .grid-view .tile .num { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 0; }
+body.grid-fixed .grid-view .tile .num .nq { flex-basis: 100%; }
+body.grid-fixed .grid-view .tile .num .nl { line-height: 1.2; }
+/* (a tile too short for the row under its number (安全側 n, the tile's pet) leaves that row out, not cut in half) */
+body.grid-fixed .grid-view .tile { container-type: size; }
+@container (max-height: 150px) { body.grid-fixed .grid-view .tile .side .tf { display: none; } }
+/* ④: the records kept for the run's design (app.js showGridExtras): in the tile's head after the domain's name,
+   one line (not over the 3D picture, and no height taken from it); each opens the viewer */
+.tile .vextras { flex: 0 1 auto; min-width: 0; list-style: none; margin: 0 auto 0 12px; padding: 0; display: flex; gap: 6px; overflow: hidden; align-self: center; }
+.tile .vextras li { flex: none; white-space: nowrap; font-size: 13px; line-height: 1.3; padding: 1px 10px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
 .tile .vextras li:hover { background: var(--orange-pale); }
 .tile .vextras li span { color: var(--muted); }
 body:not(.video) .chips { gap: 4px; }

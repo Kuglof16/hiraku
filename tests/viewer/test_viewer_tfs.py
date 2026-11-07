@@ -60,6 +60,8 @@ if __name__ == "__main__":
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.goto(url)
         page.wait_for_function("window.__ready === true", timeout=120000)
+        # the field plays as it opens: stopped, and back at the moment it opens on
+        page.evaluate("(() => { if (HV.state.playing) document.getElementById('play').click(); const e = document.getElementById('time'); e.value = Math.min(HV.state.ctl.t0 || 0, HV.state.ctl.nT - 1); e.dispatchEvent(new Event('input')); })()")
         hot = page.evaluate("""async () => { const D = window.VIEW_DATA.thermal; let best = -1e9, k = 0;
             for (const n of D.nodes) { if (!n.temp) continue; const v = await HV.unpack(n.temp);
               v.forEach((x, i) => { if (x > best) { best = x; k = i; } }); } return k; }""")

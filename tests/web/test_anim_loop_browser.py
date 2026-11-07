@@ -172,7 +172,7 @@ class AnimLoopBrowserTest(unittest.TestCase):
             self.assertAlmostEqual(look["tau"], look["t0"] + 0.5, delta=1e-9, msg=query)
 
     def test_no_layout_breaks(self):
-        # (#card-pred: its heading "...・cae.offroadの CAE 役" takes two lines at 900 wide, at times
+        # (#card-pred: its heading "...・cae.offroadの CAE" takes two lines at 900 wide, at times
         # on one screen, at times on another; a heading this branch does not touch)
         known = ("#card-pred",)
         screens = (

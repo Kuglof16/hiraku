@@ -8,7 +8,7 @@
 // The words for the hooks' notices (what happened / what comes next) and whether a stopped
 // action was later done are here too: the workbench uses them as well.
 
-import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, judgedWords, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, keepAsides, fmtVU, isYesNo, judgedWords, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
 import { FIELD_JA } from "./fields.js";
 import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
 import { judgedResult, referenceResults } from "./judged.js";
@@ -25,7 +25,7 @@ const HOOK_WORDS = {
   HK3: { what: "予測と解析が不一致のまま進もうとしたので、止めました", next: "不一致の原因を書いてから進みます" },
   HK4: { what: "判定がそろう前に終わろうとしたので、止めました", next: "残りの判定を出してから終わります" },
   // modules: HK6 (docs/contract.md: a designer changes only its own module; build_version is refused on a clash or a part outside its space)
-  HK6: { what: "モジュールの持ち場の外を変えようとしたので、止めました", next: "自分のモジュールの中で直すか、パッケージ役に渡します" },
+  HK6: { what: "モジュールの持ち場の外を変えようとしたので、止めました", next: "自分のモジュールの中で直すか、パッケージに渡します" },
 };
 
 export function hookWords(rule) {
@@ -394,7 +394,7 @@ function withNotJudged(c, card) {
 // opts.dev (?dev=1): the card's record words with ids (card.dev) folded under くわしく; else not shown.
 export function presentCardHtml(scene, now, opts = {}) {
   const c = scene.card;
-  const head = `<div class="pc-now">${esc(now)}</div>`;
+  const head = `<div class="pc-now">${keepAsides(now)}</div>`;   // 「… = 1 (shape example)」: not broken inside the brackets
   if (!c) return head;
   const num = c.value
     ? `<div class="pc-num" data-kind="number"><div class="pc-what">${esc(c.what)}</div><div class="pc-val">${esc(c.value)}</div>${c.src ? `<div class="pc-src">${esc(c.src)}</div>` : ""}</div>`

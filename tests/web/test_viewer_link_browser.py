@@ -207,10 +207,39 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         answer = tab.evaluate(f"fetch('/api/runs/{RECORDS_RUN}/viewer/{got['ana']}').then((r) => r.json())")
         self.assertEqual(answer["field"], "assembly")
         self.assertNotEqual(answer.get("source"), viewer_link.SAMPLE_SOURCE)
+        # ?data= gives one field only: no switch to fields that would say 「データがない」, and no heading for it
+        self.assertEqual(tab.evaluate("[...document.querySelectorAll('#switch button')].map((b) => b.id)"), ["sw_assembly"])
+        self.assertFalse(tab.is_visible("#switch") or tab.is_visible("#switchHead"))
+        # the large play button on the 3D view, there when the field has more than one moment: it plays as it
+        # opens (止める); pressed, it stops like the panel's button
+        n = tab.evaluate("HV.state.ctl.nT")
+        self.assertEqual(tab.is_visible("#bigplay"), n > 1)
+        if n > 1:
+            self.assertEqual((tab.text_content("#bigplay"), tab.evaluate("HV.state.playing")), ("❚❚ 止める", True))
+            tab.click("#bigplay")
+            self.assertEqual((tab.text_content("#bigplay"), tab.text_content("#play")), ("▶ 動きを再生", "▶ 再生"))
         if SHOTS:
             tab.wait_for_timeout(1500)
             tab.screenshot(path=str(SHOTS / "records_viewer_tab_1440.png"))
         self.assertEqual(tab_errors, [])
+
+    @unittest.skipUnless(HAS_VIEWER, "needs viewer/")
+    def test_the_viewer_keeps_only_the_fields_whose_data_is_on_the_server(self):
+        """Without ?data= the viewer reads data/<field>.js: a field whose file the server does not have (404) gets
+        no button. This server has the assembly sample and the flooded road's stored record (js/water.js reads
+        fixtures/water.js) only: two buttons, and the first of them (water, after aero) opens."""
+        ctx = self.browser.new_context(viewport={"width": 1440, "height": 900})
+        self.addCleanup(ctx.close)
+        tab = ctx.new_page()
+        errors = []
+        tab.on("pageerror", lambda e: errors.append(str(e)))
+        tab.goto(self.base + "/viewer/index.html", wait_until="domcontentloaded")
+        tab.wait_for_function("window.__ready === true", timeout=VIEWER_WAIT)
+        self.assertEqual(tab.evaluate("window.__field"), "water")   # the first field with data, not 「データがない」
+        self.assertEqual(tab.evaluate("[...document.querySelectorAll('#switch button')].map((b) => b.id)"), ["sw_water", "sw_assembly"])
+        self.assertTrue(tab.is_visible("#switch") and tab.is_visible("#switchHead"))
+        self.assertNotIn("データがない", tab.text_content("#title"))
+        self.assertEqual(errors, [])
 
     @unittest.skipUnless(HAS_VIEWER, "needs viewer/")
     def test_the_viewer_page_says_why_when_the_answer_has_no_field(self):

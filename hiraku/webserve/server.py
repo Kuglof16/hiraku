@@ -452,6 +452,10 @@ class _NullWriter:
     def flush(self) -> None:
         self._raw.flush()
 
+    @property
+    def closed(self) -> bool:  # socketserver's finish() asks before flushing
+        return self._raw.closed
+
 
 def modules_info() -> dict:
     """GET /api/modules: the contract's module ids, their names and the module designers' agent ids."""

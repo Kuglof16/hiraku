@@ -824,6 +824,36 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"t = ", got["t"])
         page.close()
 
+    def test_agents_by_their_plain_names(self):
+        """The agents shown as 設計 / まとめ / パッケージ / CAE, not 「…役」: the screen's own names, and a record's
+        text (which keeps its words) read through roleNames / judgedWords when shown."""
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate("""async () => { const L = await import('/js/labels.js');
+            return { names: ['lead', 'designer', 'packager', 'designer.structure', 'cae.strength'].map((id) => L.agentLongName(id)),
+                     said: L.judgedWords('設計役 3 人の提案を、パッケージ役がまとめ役に渡す。操安の CAE 役と CAE役'),
+                     plain: L.roleNames('役所と役割は残す') }; }""")
+        self.assertEqual(got["names"][:3], ["まとめ", "設計", "パッケージ"])
+        self.assertTrue(got["names"][3].endswith("の設計") and got["names"][4].endswith("の CAE"), got["names"])
+        self.assertEqual(got["said"], "設計 3 人の提案を、パッケージがまとめに渡す。操安の CAEと CAE")
+        self.assertEqual(got["plain"], "役所と役割は残す")
+        self.assertNotRegex(page.evaluate("document.body.innerText"), r"設計役|まとめ役|パッケージ役|CAE ?役")
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_tile_headline_leads_with_the_lane_change_when_nothing_failed(self):
+        """④'s number: with nothing failed, 操安 leads with its double lane change (S3-dlc40) even when another
+        test has less margin; with a failure, the failed one with the least margin, as before."""
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate("""async () => { const { headline } = await import('/js/tiles.js');
+            const v = (id, pass, m) => ({ load_case_id: id, pass, margin_pct: m });
+            const ok = [v('S1-tilt', true, 5), v('S3-dlc40', true, 40), v('S5-slope', true, 12)];
+            const bad = [v('S1-tilt', false, -3), v('S3-dlc40', true, 40), v('S5-slope', false, -8)];
+            const none = [v('P1-step100', true, 9), v('P2-speed', true, 4)];
+            return [headline(ok).load_case_id, headline(bad).load_case_id, headline(none).load_case_id, headline([])]; }""")
+        self.assertEqual(got, ["S3-dlc40", "S5-slope", "P2-speed", None])
+        self.assertEqual(errors, [])
+        page.close()
+
     def test_mesh_convergence_line(self):
         """analysis.mesh_convergence is one line under the analysis' results: the change between the
         two finest meshes against its limit, or, when singular, that the value is not judged."""

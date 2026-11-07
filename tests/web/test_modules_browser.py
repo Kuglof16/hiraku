@@ -220,16 +220,16 @@ class ModulesBrowserTest(_ModulesPage):
         items = card.locator(".rc-list li")
         self.assertEqual([items.nth(i).get_attribute("data-change") for i in range(items.count())], ["chg-0001", "chg-0002", "chg-0003"])
         text = card.inner_text()
-        self.assertIn("足まわりの設計役", text)
+        self.assertIn("足まわりの設計", text)
         self.assertIn(shown_name(page, "front_spring_rate"), text)
-        self.assertIn("パッケージ役が 1 つの設計にまとめるのを待っている", text)
+        self.assertIn("パッケージが 1 つの設計にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
-        self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージ役が 3 つの提案を v2 にまとめた")
+        self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージが 3 つの提案を v2 にまとめた")
         self.assertEqual(card.locator(".rc-list li").count(), 3)
         log = page.locator("#log").inner_text()
-        self.assertIn("パッケージ役が 3 つの提案を v2 にまとめた", log)
-        self.assertIn(f"車体の設計役: {shown_name(page, 'cargo_height')}", log)
+        self.assertIn("パッケージが 3 つの提案を v2 にまとめた", log)
+        self.assertIn(f"車体の設計: {shown_name(page, 'cargo_height')}", log)
         # the grid's head names each module's change
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&pets=0&t=1e6")
         head = page.locator("#grid-head [data-built]").inner_text()
@@ -304,8 +304,8 @@ class ModulesLookBrowserTest(_ModulesPage):
         self.assertEqual(a.locator("#roundcard").screenshot(), b.locator("#roundcard").screenshot())
 
     def test_six_designers_in_the_agents_list(self):
-        names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in SIX]
-        # (the designers are one bundle 「設計役 ×n」 in the list; ?agents=open opens it)
+        names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計" for a in SIX]
+        # (the designers are one bundle 「設計 ×n」 in the list; ?agents=open opens it)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6&agents=open")
         text = page.locator("#agents").inner_text()
         for n in names:

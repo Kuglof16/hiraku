@@ -198,7 +198,9 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: errs.append(str(e)))
     page.goto(url)
     page.wait_for_function("window.__ready === true", timeout=120000)
-    reds = "(() => { const o = []; HV.state.ctx.root.traverse(m => { if (m.visible && m.userData && m.userData.kind === 'space' && m.material.color.getHex() === 0xc8402a) { let v = true; for (let q = m; q; q = q.parent) if (!q.visible) v = false; if (v) o.push(m.userData.occupant); } }); return o; })()"
+    # the field plays as it opens: stopped, and back at the moment it opens on
+    page.evaluate("(() => { if (HV.state.playing) document.getElementById('play').click(); const e = document.getElementById('time'); e.value = Math.min(HV.state.ctl.t0 || 0, HV.state.ctl.nT - 1); e.dispatchEvent(new Event('input')); })()")
+    reds ="(() => { const o = []; HV.state.ctx.root.traverse(m => { if (m.visible && m.userData && m.userData.kind === 'space' && m.material.color.getHex() === 0xc8402a) { let v = true; for (let q = m; q; q = q.parent) if (!q.visible) v = false; if (v) o.push(m.userData.occupant); } }); return o; })()"
     cam = "HV.view.camera.position.toArray().map(v => Math.round(v))"
     out["v5_end"] = page.evaluate(reds)
     c0 = page.evaluate(cam)
