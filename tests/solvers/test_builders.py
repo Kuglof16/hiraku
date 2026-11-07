@@ -341,7 +341,9 @@ class N1HopTest(unittest.TestCase):
         self.assertEqual((c["quantity"], c["op"], c["limit"]["unit"]), ("first_frame_involving_mode", ">=", "Hz"))
         self.assertNotIn("limit_from", c)
         self.assertAlmostEqual(c["limit"]["value"], hop_limit_by_hand(DESIGN, self.lc["params"]["loading"]), places=9)
-        self.assertAlmostEqual(c["limit"]["value"], 12.713, places=3)  # rear: 20 N/mm, 18.05 kg, f_hop 10.59 Hz
+        # rear: 20 N/mm, K2's m_u 19.55 kg (18.05 before K2's caliper masses came into the corners: +1.5 kg each),
+        # f_hop 10.18 Hz
+        self.assertAlmostEqual(c["limit"]["value"], 12.216, places=3)
         for words in ("確かめていない", "90 N/mm", "11.8 Hz", "RECSb40", "13.18 Hz", "+11.6 %", "2026-11-06", "10.59 Hz"):
             self.assertIn(words, c["basis"])
         # the rotation at Q50 x 1.2 (the old criterion, 7.07 Hz) lies below: still in the title and the plan
