@@ -426,12 +426,13 @@ class ClevisMount(unittest.TestCase):
         # in plane alone: 3 M / b^2 with M = 50 x 20
         self.assertAlmostEqual(ka.clevis_weld_stress(0.0, 0.0, 100.0, e, b, t, s), (3000.0 / 1600.0) / a, places=12)
 
-    def test_the_four_utilisations_by_the_contract_s_names(self):
+    def test_the_utilisations_by_the_contract_s_names(self):
         from qa.check_run import MOUNT_QUANTITIES
 
         got = ka.clevis_utilisations((0.0, 300.0, 400.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), d=10.0, n=1, t=4.0,
                                      s=5.0, b=40.0, e=20.0, f_v=384.0, f_b=212.48, f_plate=245.0, f_vw=230.94)
         self.assertEqual(sorted(got), sorted(MOUNT_QUANTITIES))
+        self.assertEqual(got["bolt_utilisation"], max(got["bolt_shear_utilisation"], got["bolt_bearing_utilisation"]))
         self.assertAlmostEqual(got["bolt_shear_utilisation"], ka.clevis_pin_shear(500.0, 10.0, 1) / 384.0, places=12)
         # 500 N in plane, half on each 4 mm plate, on a 10 mm hole: 250 / 40 = 6.25 MPa
         self.assertAlmostEqual(got["bolt_bearing_utilisation"], 6.25 / 212.48, places=12)
