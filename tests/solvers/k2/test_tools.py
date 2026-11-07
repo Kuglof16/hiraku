@@ -71,7 +71,8 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam", "rollover_tilt"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle", "steady_circle", "crash_beam",
+                                 "rollover_tilt", "rollover_beam"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -133,8 +134,8 @@ class Declarations(unittest.TestCase):
 
     def test_stages_for_light_first(self):
         # contract tool_spec.stage (HK5): the K&C bench is a static one-corner model (1), the others
-        # integrate the vehicle in time (2)
-        want = {"kc_bench": 1, "crash_beam": 3}
+        # integrate the vehicle in time (2); the frame as yielding beams is 3 (crash_beam, rollover_beam)
+        want = {"kc_bench": 1, "crash_beam": 3, "rollover_beam": 3}
         for name, tool in TOOLS.items():
             self.assertEqual(tool.describe()["stage"], want.get(name, 2), name)
 

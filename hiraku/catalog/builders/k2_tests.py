@@ -22,6 +22,10 @@ predicts with the slope taken as a lateral acceleration, expects the mismatch
 that gave on the demo vehicle (the cause found by splitting the gap), and
 predicts again with the side-slope balance.
 
+S2 drives a steady circle of S2_RADIUS_M (HIRAKU の仮定) faster up to Q50 (the tool steady_circle). Its step
+predicts the lateral acceleration and the rigid inner wheels' load, expects the mismatch the springs' roll gave on
+the demo vehicle, and predicts again with that roll as a higher CG (lane_change.rollover_threshold).
+
 Past the limit: a catalog spec with "variant": "beyond" makes BUILDERS build
 the case past the design's own limit (BEYOND: F1, S4, S5; load_case_id ending
 -beyond, title starting 限界の外), whose verdict is expected to fail;
@@ -89,6 +93,10 @@ TOLERANCE = {
     # crosswind.critical_wind_speed is the rigid moment balance; K2 adds the body roll on
     # its springs and the tyre deflection, which move the CG toward the downwind wheels
     "F1": 0.10,
+    # the same steady balance on the circle; K2 adds the tyres' deflection, the CG's offset from the centre line and
+    # the driver keeping the circle a little outside (demo v1: a_y -4.6 %, the inner load -2.6 % on rigid supports
+    # and -5 % against the retry with the springs' roll)
+    "S2": 0.10,
     # the path's peak lateral acceleration assumes the vehicle on the centre line; K2's
     # driver model lags the path and the body's acceleration carries yaw and roll transients
     "S3": 0.15,
@@ -270,6 +278,30 @@ def _s6_turn(spec: Record, req: Record, design: Record) -> Record:
 # S6 drives the turn slowly so the tyres hardly slip (a walking pace; K2's choice, not from a standard)
 TURN_SPEED_KMH = 5.0
 
+# S2: the circle's radius, HIRAKU の仮定 (no source read in this repository): a tight bend of a farm or forest track
+# taken at the top speed Q50. At 40 km/h it asks v^2 / (R g) = 0.50 g, below the tyres' friction 0.8 (K2's default), so
+# the tyres hold the circle and the run asks whether the inner wheels stay down at that steady lateral acceleration.
+S2_RADIUS_M = 25.0
+
+
+def _s2_circle(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    if not any((s.get("actuation") or {}).get("steer") for s in design.get("supports", [])):
+        raise BuildError("S2 drives a steady circle: no support has actuation.steer (a design with no steered wheel "
+                         "cannot drive it)")
+    speed = number(req, "Q50", "km/h")
+    # the inner side is the lighter one: the side away from the CG's offset (turning left when it is right of centre)
+    direction = "left" if _cg_y(design, on) <= 0.0 else "right"
+    return _case(spec, "S2", "handling", f"S2-circle{S2_RADIUS_M:g}",
+                 f"半径 {S2_RADIUS_M:g} m の円を {speed:g} km/h まで速さを上げて回り、内側の 2 輪が浮かない "
+                 f"({LOADING_JA[on]}、半径は HIRAKU の仮定)",
+                 {"loading": on, "radius": q(S2_RADIUS_M, "m"), "speed": q(speed, "km/h"), "direction": direction},
+                 keys + ["Q50"],
+                 _crit("min_side_load", ">", q(0.0, "N"),
+                       f"HIRAKU の仮定: the inner wheels must stay down on a {S2_RADIUS_M:g} m circle up to Q50 "
+                       f"{speed:g} km/h (the radius has no source; both wheels of one side lift when their loads "
+                       "together reach 0)", []))
+
 
 # ------------------------------------------------------------------ past the limit
 def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
@@ -342,7 +374,7 @@ def _variant(test_id: str, fn):
 BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
     tid: _variant(tid, fn) for tid, fn in {
         "S1": _s1_tilt, "S1'": _s1p_ssf, "F1": _f1_wind, "S3": _s3_dlc, "S4": _s4_brake, "S4b": _s4b_park,
-        "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel, "S6": _s6_turn}.items()
+        "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel, "S6": _s6_turn, "S2": _s2_circle}.items()
 }
 
 
@@ -458,6 +490,37 @@ def turning_inputs(design: Record, load_case: Record) -> Record:
     return {"L": q(abs(veh.l_steer), "m"), "t": q(max(ys) - min(ys), "m"), "delta_i": q(_m.degrees(veh.max_steer), "deg")}
 
 
+def circle_inputs(design: Record, load_case: Record) -> Record:
+    """lane_change.steady_steer's L (the steered axle to the unsteered one, as K2's Ackermann steering takes it),
+    W_f / W_r (the static loads of the steered / unsteered wheels) and C_f / C_r (their cornering stiffness in the K2
+    model); h, the CG height, for lane_change.inner_wheel_load."""
+    veh, ground = _vehicle(design, load_case)
+    front = [c for c in veh.corners if c.steer and c.kind == "wheel"]
+    rear = [c for c in veh.corners if not c.steer]
+    if not front or not rear:
+        raise BuildError("S2 predicts with the two-axle model: it needs steered wheels and unsteered supports")
+    return {"L": q(abs(veh.l_steer) * 1000.0, "mm"),
+            "W_f": q(sum(c.static_load for c in front), "N"), "W_r": q(sum(c.static_load for c in rear), "N"),
+            "C_f": q(sum(c.c_lat for c in front), "N/rad"), "C_r": q(sum(c.c_lat for c in rear), "N/rad"),
+            "h": _height(veh, ground)}
+
+
+def circle_roll_inputs(design: Record, load_case: Record) -> Record:
+    """circle_inputs with h_roll: the CG height that gives lane_change.inner_wheel_load the lift acceleration of
+    lane_change.rollover_threshold (the body rolling on its springs about a roll axis on the ground, tilt_inputs'
+    m_s, h_s, k, n), h_roll = t / (2 a_y_lift) = h + (m_s / m) h_s R: the springs' roll put in as a higher CG."""
+    from hiraku.catalog.summary import design_summary
+    out = circle_inputs(design, load_case)
+    on = load_case["params"]["loading"]
+    s = design_summary(design)
+    ti = tilt_inputs(design, load_case)
+    lift = _k0("lane_change.rollover_threshold", "a_y_lift",
+               {"t": s["track_front"], "h": ti["h"], "m": s["loadings"][on]["mass"], "m_s": ti["m_s"],
+                "h_s": ti["h_s"], "k": ti["k"], "n": ti["n"]})
+    out["h_roll"] = q(s["track_front"]["value"] / (2.0 * lift), s["track_front"]["unit"])
+    return out
+
+
 def launch_inputs(design: Record, load_case: Record) -> Record:
     """The launch tool's motor and road load (hiraku.solvers.k0_handcalc.scene_inputs.launch_inputs):
     T, i, eta, r for launch.peak_tractive_force (F_max = T i eta / r of the driven wheels), and
@@ -511,6 +574,49 @@ PLANS: dict[str, Record] = {
                 "assumptions": ["横の加速度の山で、定常の荷重の移り"],
                 "inputs": {"m": "load.mass", "a_y": "pred.max_lateral_accel_g", "h": "from.h", "t": "summary.track_front"},
                 "inputs_from": dlc_inputs}]},
+    "S2": {"tool": "steady_circle", "say": "円の半径と速さから横の加速度を出し、そのときの内側の輪の荷重を先に見積もります",
+           "predictions": [
+               {"quantity": "max_lateral_accel_g", "formula_id": "lane_change.steady_steer", "output": "a_y",
+                "assumptions": ["車は荷重条件の半径の円の上を、荷重条件の速さで回る (タイヤは滑り出さない)"],
+                "inputs": {"L": "from.L", "R": "lc.radius", "W_f": "from.W_f", "W_r": "from.W_r", "C_f": "from.C_f",
+                           "C_r": "from.C_r", "v": "lc.speed"},
+                "inputs_from": circle_inputs},
+               {"quantity": "min_side_load", "formula_id": "lane_change.inner_wheel_load", "output": "W_inner",
+                "assumptions": ["定常の円で、剛体の荷重の移り (ばねのロールは入れない)", "重心は中心の線の上"],
+                "inputs": {"m": "load.mass", "a_y": "pred.max_lateral_accel_g", "h": "from.h",
+                           "t": "summary.track_front"},
+                "inputs_from": circle_inputs}],
+           # Run on the demo v1 (two_cargo, 25 m, 40 km/h; the K2 department, 2026-11-07): a_y K0 0.5036 g, K2 0.4804 g
+           # (-4.6 %: the driver holds the circle 0.8 m outside it); min_side_load K0 1437.9 N, K2 1100.1 N (-23.5 %).
+           # Split: the rigid balance with the CG's 3.4 mm offset toward the outer side 1418.0 N; K2 with rigid
+           # supports 1400.3 N (-2.6 %, roll 1.5 deg on the tyres); K2 on its springs rolls 7.0 deg. K0 with the springs' roll (lane_change.rollover_threshold,
+           # a_y_lift 0.793 g, 7.8 deg; h_roll 693.6 mm) as the retry below: 1158.2 N, K2 -5.0 %, within the tolerance
+           # (tests/solvers/k2/test_turning.py S2DemoPlanTest).
+           "expected_mismatch": {
+               "quantity": "min_side_load",
+               "source": "the K2 department's split of the gap on the demo v1 (two_cargo, 25 m circle, 40 km/h): K2 "
+                         "on its springs and with rigid supports against the rigid moment balance, 2026-11-07",
+               "cause": "式は車体をサスペンションごと剛体とみている。K2 では車体がばねの上で外へ約 7° ロールし、重心が外へ"
+                        "動いて内側の輪の荷重が減る (差の 21 % ほど)。サスペンションを剛にした K2 との差は 2.6 % だけ "
+                        "(タイヤのたわみと、重心が外の側へ 3.4 mm ずれている分)",
+               "fix": "ばねのロールを入れた横転の式 lane_change.rollover_threshold の浮く横の加速度から、ロールの分だけ"
+                      "高い重心 (輪距 / (2 × 浮く横の加速度)) にして予測し直す",
+               "retry": {
+                   "say": "ばねで車体がロールする分を重心の高さに入れて、内側の輪の荷重を予測し直します",
+                   "predictions": [
+                       {"quantity": "max_lateral_accel_g", "formula_id": "lane_change.steady_steer", "output": "a_y",
+                        "assumptions": ["車は荷重条件の半径の円の上を、荷重条件の速さで回る (タイヤは滑り出さない)"],
+                        "inputs": {"L": "from.L", "R": "lc.radius", "W_f": "from.W_f", "W_r": "from.W_r",
+                                   "C_f": "from.C_f", "C_r": "from.C_r", "v": "lc.speed"},
+                        "inputs_from": circle_inputs},
+                       {"quantity": "min_side_load", "formula_id": "lane_change.inner_wheel_load", "output": "W_inner",
+                        "assumptions": ["定常の円で、車体はばねの上でロールし、ロールの軸は地面にある "
+                                        "(lane_change.rollover_threshold)",
+                                        "ロールで重心が外へ動く分を、重心が高くなった分として入れる: "
+                                        "h = 輪距 / (2 × 浮く横の加速度)", "重心は中心の線の上"],
+                        "inputs": {"m": "load.mass", "a_y": "pred.max_lateral_accel_g", "h": "from.h_roll",
+                                   "t": "summary.track_front"},
+                        "inputs_from": circle_roll_inputs}]}}},
     "S4": {"tool": "braking", "say": "摩擦の限りで止まるとみて、止まるまでの距離を先に見積もります",
            "predictions": [{
                "quantity": "stopping_distance", "formula_id": "braking.stopping_distance", "output": "s",

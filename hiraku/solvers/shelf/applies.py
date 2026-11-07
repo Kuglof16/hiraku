@@ -230,6 +230,7 @@ SHAPES = {
     "tilt": _k2(rolling=False),
     "rollover_tilt": _k2(rolling=False),  # K2's tilt past its limit (claude/k2-rollover): the same shape as tilt
     "turning_circle": _k2(lambda d: support_with(d, "steer", "かじを切る")),
+    "steady_circle": _k2(lambda d: support_with(d, "steer", "かじを切る")),
     "lane_change": _k2(lambda d: support_with(d, "steer", "かじを切る")),
     "launch": _k2(lambda d: support_with(d, "drive", "駆動する")),
     "step_climb_dynamic": _k2(lambda d: support_with(d, "drive", "駆動する")),

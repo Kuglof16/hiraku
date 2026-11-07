@@ -171,8 +171,10 @@ class WriteLoadCaseTest(Run, unittest.TestCase):
     def test_other_refusals(self):
         with self.assertRaisesRegex(ToolError, "分野は strength"):
             write_load_case(self.ctx, r2_args(domain="handling"), "lead")
-        with self.assertRaisesRegex(ToolError, "選ばれていません"):  # S2 (handling) has no builder; handling not picked
-            write_load_case(self.ctx, r2_args(test_id="S2", domain="handling"), "lead")
+        # C3 (crash) has no builder (load_case_writer._has_builder; S2 has one since steady_circle) and this run picks
+        # strength only, so crash is not picked
+        with self.assertRaisesRegex(ToolError, "選ばれていません"):
+            write_load_case(self.ctx, r2_args(test_id="C3", domain="crash"), "lead")
         with self.assertRaisesRegex(ToolError, "入力の形"):
             write_load_case(self.ctx, {**r2_args(), "criterion": {**r2_args()["criterion"],
                                                                   "limit": {"value": 1.0, "unit": "MPa"}}}, "lead")

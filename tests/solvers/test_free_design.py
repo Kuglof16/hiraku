@@ -207,6 +207,7 @@ class AppliesTest(unittest.TestCase):
             "drive_energy": "battery_voltage", "thermal": "battery_voltage", "fatigue": "fatigue_fat_class",
             "crash": "bumper_stiffness", "entry_opening": "kind seat", "frame_tubes": "space_frame_utv",
             "kc_bench": "kc_table", "turning_circle": "actuation.steer", "lane_change": "actuation.steer",
+            "steady_circle": "actuation.steer",
             "bed_static": "mattress", "actuator_linkage": "bracket_back", "use_fatigue": "bracket_back",
             "actuator_duty": "bracket_back",
         }
