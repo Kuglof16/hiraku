@@ -17,6 +17,7 @@ Field keys added to the common object (see common.py):
 from __future__ import annotations
 
 import math
+import re
 import sys
 
 from viewer.src import common, names
@@ -192,9 +193,33 @@ def wheels_of(design: dict, per_node: dict[str, list[float]] | None = None) -> l
     return out
 
 
+def refill_modes(rec: dict, design: dict, lc: dict | None) -> str | None:
+    """A record with fewer mode_shape fields than mode_N frequencies (the modal tool kept 6 shapes before it kept
+    FIELD_MODES = 10; e.g. the saved run 20261105-150416's ana-0119): the modal tool re-run on the record's design and
+    load case gives every shape; they replace the record's when each re-run frequency is the record's within 1e-6
+    (the same model), and the line returned says so. None: nothing to refill, or the re-run differs (kept as is)."""
+    freqs = sorted((r for r in rec.get("results", []) if re.fullmatch(r"mode_\d+", r["quantity"])),
+                   key=lambda r: int(r["quantity"][5:]))
+    shapes = [f for f in rec.get("fields", []) if f.get("kind") == "mode_shape"]
+    if lc is None or len(shapes) >= len(freqs):
+        return None
+    from hiraku.solvers.shelf.modal import Modal
+
+    new = Modal().run(design, lc, [{"prediction_id": "pred-0001"}], dict(rec.get("params") or {}))
+    got = [f for f in new.get("fields", []) if f.get("kind") == "mode_shape"]
+    if new.get("status") != "ok" or len(got) < len(freqs) or any(
+            abs(float(g["frequency_Hz"]) - float(r["value"])) > 1e-6 * max(1.0, abs(float(r["value"])))
+            for g, r in zip(got, freqs)):
+        return None
+    rec["fields"] = [f for f in rec.get("fields", []) if f.get("kind") != "mode_shape"] + got[:len(freqs)]
+    return (f"モードの形: 記録には {len(shapes)} 個だけ保存されていたので、記録の設計と荷重条件で modal を回し直し、"
+            f"{len(freqs)} 個の形を使った (振動数は記録と 1e-6 の中で一致)")
+
+
 def build(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "modal", version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
+    refilled = refill_modes(rec, design, common.load_case_of(vdir, rec["load_case_id"]))
     obj = common.base_object("nvh", names.title("nvh", "フレームの固有振動と周波数応答"), args.run, vdir, rec, design)
     obj["model"] = "beam"   # the page's NVH field also takes nvh_shell.py's "shell"
     ids = obj["frame"]["node_ids"]
@@ -263,6 +288,8 @@ def build(args) -> dict:
         {"label": "modes", "value": f"{len(modes)} mode shapes stored of {sum(1 for r in rec['results'] if r['quantity'].startswith('mode_'))} frequencies",
          "source": "record fields (mode_shape, per_node vec3 at the frame nodes)"},
     ]
+    if refilled:
+        obj["notes"].append(refilled)
     obj["notes"].append("モード形は大きさを持たない (相対値)。変形は表示用の倍率で、実寸ではない。")
     obj["notes"].append("ひずみは節点の並進だけから求めた推定 (曲げは推定、ねじりは入らない)、そのモードの最大を 1 とした相対値。")
     if missing:

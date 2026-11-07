@@ -203,10 +203,12 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual(o["wall_x_mm"], o["scene"][0]["c"][0] - o["scene"][0]["s"][0] / 2)
         labels = {r["label"] for r in o["inputs"]}
         self.assertTrue({"速さ", "壁", "質量"} <= labels, labels)
-        # the page never moves the A vehicle: no crush(t) translation in its code path
+        # the page draws A's crush(t) on the shape (2026-11-07): the vehicle goes crush(t) towards the wall and what
+        # would pass the wall face (the front end at contact) stays at it; the A record's own crush series drives it
         js = (VIEWER / "js" / "crash.js").read_text(encoding="utf-8")
         a_part = js[js.index("HV.crashA"):js.index("HV.crashB = ")]
-        self.assertNotIn("boxes.off", a_part)
+        self.assertIn("go = Math.max(0, x[S.k])", a_part)
+        self.assertIn("Math.min(cur[i] + go, xFront)", a_part)
         self.assertNotIn("ghost.position", a_part)
 
     def test_crash_b(self):
