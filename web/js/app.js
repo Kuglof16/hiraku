@@ -1126,6 +1126,12 @@ function renderReplayBar() {
 // in time order, the first one (before the first design) said so, the one shown marked, the ones
 // still ahead of the replay faint. Nothing of it in the video's frames (its pets as before).
 const a2When = { host: null, el: null, html: "" };
+// A record whose hearings asked nothing (each went on with the standard values): not on the film
+function noQuestions() {
+  if (VIDEO_LAYOUT) return false;
+  const rounds = hearingRounds(player.events);
+  return rounds.length > 0 && rounds.every((r) => !r.asked);
+}
 function renderA2When(tab) {
   const slot = intake?.petsSlot;
   if (!slot || VIDEO_LAYOUT || draft) return;
@@ -1139,7 +1145,8 @@ function renderA2When(tab) {
     slot.replaceChildren(a2When.host, a2When.el);
   }
   if (tab !== "A2") return;
-  const rounds = hearingRounds(player.events);
+  // (a record that asked nothing: the intake's box says so; no heading and no 「聞いた順」 saying it again)
+  const rounds = noQuestions() ? [] : hearingRounds(player.events);
   const shown = roundAt(rounds, player.playhead);
   const items = rounds.map((r) => {
     const cls = r === shown ? "shown" : r.t > player.playhead + 1e-9 ? "later" : "past";
@@ -1958,9 +1965,14 @@ function renderTabHead(s, tab) {
   const el = $(TAB_HEAD_EL[tab]);
   if (!el) return;
   const view = el.parentElement;
-  const open = tabOpen.has(tab);
+  // ② of a record that asked nothing: the intake's one box says it (the standard values used); no rows over
+  // it saying the same, and the tab not folded under them (the film as before)
+  const quiet = tab === "A2" && noQuestions();
+  el.hidden = quiet;
+  const open = quiet || tabOpen.has(tab);
   view.classList.toggle("folded", !open);
   view.dataset.tab = tab;
+  if (quiet) return;
   const [now, [label, text, tone], next] = TAB_HEADS[tab](s);
   const html =
     `<div class="ch-row clamp1" title="${esc(now)}"><small>いま</small>${esc(now)}</div>` +
