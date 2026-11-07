@@ -12,6 +12,7 @@ import numpy as np
 from hiraku.cad.geom import member_axes as cad_member_axes
 from hiraku.cad.geom import rpy_matrix as cad_rpy
 from hiraku.cfd.geometry import Grid, box, geometry_report, link_arrays, voxelize
+from hiraku.cfd.lattice import C
 from hiraku.cfd.vehicle import Domain, design_shapes, frontal_area_m2, member_axes, moment_centre, rpy_matrix, to_grid
 
 DESIGN = Path(__file__).resolve().parents[1] / "verification" / "fixtures" / "n15-v005-design.json"
@@ -83,7 +84,7 @@ class Design(unittest.TestCase):
         seen = {shapes[i].name for i in np.unique(vox.shape)}
         for thin in ("floor", "floor_front", "deck", "fender_FL_1"):  # 3 mm plates on an 80 mm grid
             self.assertIn(thin, seen)
-        self.assertLess(abs(rep["grid_projected_area_x_error_pct"]), 5.0)
+        self.assertLess(abs(rep["grid_projected_area_x_error_pct"]), 10.0)  # on 80 mm the edges fall anywhere within a cell
         self.assertLess(abs(rep["voxel_volume_error_pct"]), 10.0)
 
     def test_nets_are_screens_not_walls(self):
@@ -107,7 +108,7 @@ class Pockets(unittest.TestCase):
 
     def test_a_sealed_box_of_thin_plates_is_filled(self):
         t = 0.003
-        h = 0.45
+        h = 0.42  # between node planes: the plates hold no node, only cut links
         plates = [box((sx * h, 0, 0), (t, 2 * h, 2 * h)) for sx in (-1, 1)]
         plates += [box((0, sy * h, 0), (2 * h, t, 2 * h)) for sy in (-1, 1)]
         plates += [box((0, 0, sz * h), (2 * h, 2 * h, t)) for sz in (-1, 1)]
@@ -120,11 +121,51 @@ class Pockets(unittest.TestCase):
 
     def test_a_box_with_a_hole_stays_open(self):
         t = 0.003
-        h = 0.45
+        h = 0.42
         plates = [box((sx * h, 0, 0), (t, 2 * h, 2 * h)) for sx in (-1,)]  # one wall missing
         plates += [box((0, sy * h, 0), (2 * h, t, 2 * h)) for sy in (-1, 1)]
         plates += [box((0, 0, sz * h), (2 * h, 2 * h, t)) for sz in (-1, 1)]
         self.assertEqual(voxelize(plates, self.grid()).enclosed_nodes, 0)
+
+
+class CornerClips(unittest.TestCase):
+    def fluid_fluid_diagonals(self, vox) -> int:
+        strides = np.array(vox.grid.strides)
+        neighbour = vox.node - C[vox.dir] @ strides
+        return int(((vox.dir >= 7) & (vox.mask[neighbour] == 0)).sum())
+
+    def test_a_solid_cube_has_no_links_that_only_clip_its_corners(self):
+        for shift in (0.0, 0.1, 0.3, 0.45, 0.6, 0.77):
+            grid = Grid(30, 24, 24, 1.0 / 12.0, np.array([-1.3, -1.0, -1.0]))
+            vox = voxelize([box((shift / 12.0, 0.013, 0.027), (1.0, 1.0, 1.0))], grid)
+            self.assertEqual(self.fluid_fluid_diagonals(vox), 0, shift)
+
+    def test_a_thin_plate_keeps_its_links_on_both_sides(self):
+        grid = Grid(30, 24, 24, 1.0 / 12.0, np.array([-1.3, -1.0, -1.0]))
+        vox = voxelize([box((0.02, 0.0, 0.0), (0.003, 1.0, 1.0))], grid)
+        self.assertEqual(int((vox.mask == 1).sum()), 0)
+        self.assertGreater(self.fluid_fluid_diagonals(vox), 100)
+
+    def test_a_thin_part_keeps_its_links_where_it_meets_another_part(self):
+        grid = Grid(30, 24, 24, 1.0 / 12.0, np.array([-1.3, -1.0, -1.0]))
+        solid = box((0.013, 0.5, 0.027), (0.5, 0.5, 0.5), name="block")
+        plate = box((0.02, 0.0, 0.0), (0.003, 1.0, 1.0), name="plate")
+        alone = voxelize([plate], grid)
+        both = voxelize([plate, solid], grid)
+        kept = both.node[both.shape == 0]
+        self.assertGreater(len(kept), 0.5 * len(alone.node))
+        i, j, k = grid.ijk(both.node[both.shape == 0])
+        self.assertGreater(int((j > 12).sum()), 0)  # also on the side the block stands
+
+    def test_a_face_on_a_node_plane_puts_the_wall_on_the_node(self):
+        grid = Grid(16, 12, 12, 0.125, np.array([-1.0, -0.75, -0.75]))
+        # nodes at -1 + (i + 1/2) 0.125, so the rear face x = 0.1875 passes exactly through a node plane
+        vox = voxelize([box((0.0, 0.0, 0.0), (0.375, 0.375, 0.375))], grid)
+        axial = vox.dir == 1  # arriving along +x at a node just past the rear face
+        i, j, k = grid.ijk(vox.node[axial])
+        rear = np.isclose(grid.origin[0] + (i + 0.5) * grid.dx, 0.3125)
+        self.assertTrue(rear.any())
+        np.testing.assert_allclose(vox.q[axial][rear], 1.0, atol=1e-6)
 
 
 class MovingWall(unittest.TestCase):

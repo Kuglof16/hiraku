@@ -172,12 +172,15 @@ class Domain:
     downstream: float = 10.0
     half_width: float = 4.5
     top: float = 5.5
+    shift_cells: tuple[float, float] = (0.26, 0.13)  # grid x, y against the vehicle, in cells
 
     def grid(self, dx: float) -> Grid:
         nx = int(round((self.upstream + self.downstream) / dx))
         ny = int(round(2.0 * self.half_width / dx))
         nz = int(round(self.top / dx))
-        return Grid(nx, ny, nz, dx, np.array([-self.upstream, -self.half_width, 0.0]))
+        # A fraction of a cell off, so a nearly symmetric design does not sit exactly symmetric on the grid: on reference bodies
+        # an exactly centred grid held a symmetric wake and changed the mean drag.
+        return Grid(nx, ny, nz, dx, np.array([-self.upstream + self.shift_cells[0] * dx, -self.half_width + self.shift_cells[1] * dx, 0.0]))
 
 
 @dataclass
