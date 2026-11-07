@@ -501,6 +501,12 @@ def mode_fields(r: dict, kinds: list[str], n_fields: int, mesh_id: str) -> list[
             u = u * (r["mesh_scale"][i] / r["scale"][i])
             row["label"] = f"mode {i + 1} ({kinds[i]}): {LABEL_SHAPE_LINKAGE}"
             row["per_node"] = {k: [round(float(x), 4) + 0.0 for x in v] for k, v in r["point_shapes"][i].items()}
+        # the design nodes (where the parts' masses sit, carried_by): the mean of their joint's mesh nodes, on the
+        # mesh's scale, so a screen can move each part with its nodes as the model carries its mass (RBE3)
+        per = row.setdefault("per_node", {})
+        for n, ids in mm.mesh.joints.items():
+            if n not in per and len(ids):
+                per[n] = [round(float(x), 4) + 0.0 for x in np.asarray(u)[np.asarray(ids, int)].mean(axis=0)]
         row["per_mesh_node"] = [[round(float(x), 4) + 0.0 for x in v] for v in u]
         out.append(row)
         strain = smodal.mode_strain(mm, r["phi"][:, i])

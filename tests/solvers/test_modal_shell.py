@@ -10,6 +10,7 @@ import numpy as np
 
 from hiraku import contract
 from hiraku.solvers.k1_shell import element
+from hiraku.solvers.k1_shell.mesh import build_mesh
 from hiraku.solvers.k1_shell import modal as smodal
 from hiraku.solvers.shelf.modal_shell import FRAME_SHARE, ModalShell, cantilever_strip_modes, first_frame_involving, \
     make_mesh_record
@@ -185,7 +186,10 @@ class LinkageToolRecordTest(unittest.TestCase):
         shapes = [f for f in rec["fields"] if f["kind"] == "mode_shape"]
         self.assertEqual(len(shapes[0]["per_mesh_node"]), len(mesh["nodes_mm"]))
         layout = smodal.linkage_layout(DESIGN)
-        self.assertEqual(set(shapes[0]["per_node"]), set(layout["points"]))
+        # the linkage's points and the design nodes (the parts' carried_by: a screen moves the parts with them)
+        carried = {n for p in DESIGN["parts"] for n in (p.get("carried_by") or [])} & set(build_mesh(DESIGN, 20.0).joints)
+        self.assertTrue(set(layout["points"]) <= set(shapes[0]["per_node"]))
+        self.assertTrue(carried and carried <= set(shapes[0]["per_node"]), carried - set(shapes[0]["per_node"]))
         big = max(max(abs(x) for v in s["per_node"].values() for x in v) for s in shapes[:1])
         self.assertLessEqual(big, 1.0 + 1e-9)
         # the body bounce lies near the quarter-car estimate on the 60 N/mm tyres (a check of the scale)
