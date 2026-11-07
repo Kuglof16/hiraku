@@ -125,10 +125,17 @@ class BuildTest(unittest.TestCase):
     def test_products_without_the_keys(self):
         for name in ("care-bed.yaml", "electric-guitar.yaml", "serving-robot.yaml"):
             req = copy.deepcopy(load_requirements(ROOT / "data" / "requirements" / "products" / name))
+            have = {r["key"] for r in req["requirements"]}
             for tid in ("R7", "R8"):
                 with self.assertRaises(BuildError, msg=f"{name} {tid}") as e:
                     BUILDERS[tid](SPECS[tid], req, V1)
-                self.assertIn("評価できない", str(e.exception))
+                if all(k in have for k in ("Q75", "Q76")) and tid == "R8":
+                    # the serving robot has R8's keys since the intake department's a67c0852: R8 passes the gate and
+                    # stops later on the loading, because V1 (a vehicle with occupants and cargo) is not its design
+                    self.assertNotIn("評価できない", str(e.exception))
+                    self.assertRegex(str(e.exception), r"requirement Q(33|40) is missing")
+                else:
+                    self.assertIn("評価できない", str(e.exception))
 
 
 class DemoV1Test(unittest.TestCase):
