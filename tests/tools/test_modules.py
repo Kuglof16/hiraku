@@ -77,6 +77,8 @@ class ProposalTest(ModuleCase, unittest.TestCase):
                 ({"module": "occupant", "changes": {"seat_x": self.mm(-1000)}}, "designer.frame", "designer.occupant"),
                 ({"changes": {"seat_x": self.mm(-1000)}}, "designer.occupant", "module"),
                 ({"module": "occupant", "changes": {"seat_x": self.mm(-1000)}}, "designer", "designer.occupant"),
+                # the one designer is told to hand it back to the lead (the vehicle run 20261107-153915)
+                ({"changes": {"seat_x": self.mm(-1000)}}, "designer", "まとめ役"),
                 ({"module": "package", "changes": {"track": self.mm(1400)}}, "packager", "build_version"),
                 ({"module": "package", "changes": {"track": self.mm(1400)}}, "designer.frame", "パッケージ役")):
             with self.subTest(agent=agent, args=args), self.assertRaises(ToolError) as e:

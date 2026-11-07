@@ -354,9 +354,15 @@ class PluginServer:
 
         from hiraku.tools.mcp import HANDLERS, make_handler
 
+        if name == WAIT_TOOL:  # anything that goes wrong comes back as the tool's own error, which says to call again
+            try:
+                await asyncio.to_thread(self.drain)
+                text = await asyncio.to_thread(self.wait_for_roles)
+            except Exception as e:  # noqa: BLE001
+                return {"content": [{"type": "text", "text": f"{WAIT_TOOL} の待ちが途中で失敗しました ({e!r})。"
+                                                             f"もう一度 {WAIT_TOOL} を呼んでください"}], "is_error": True}
+            return {"content": [{"type": "text", "text": text}]}
         await asyncio.to_thread(self.drain)
-        if name == WAIT_TOOL:
-            return {"content": [{"type": "text", "text": await asyncio.to_thread(self.wait_for_roles)}]}
         if name in OWN_TOOLS:
             try:
                 got = await asyncio.to_thread(self.start if name == "start_run" else self.open, args)
@@ -454,12 +460,17 @@ class PluginServer:
             if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk() \
                     or ctx.store.stop_requested():
                 return WAIT_ENDED
-            with locked(ctx.store.path):
-                running = sorted(set((read_state(ctx.store.path).get("running") or {}).values()))
-            if not running:
+            try:
+                with locked(ctx.store.path):
+                    running = sorted(set((read_state(ctx.store.path).get("running") or {}).values()))
+            except (OSError, ValueError) as e:  # the lock held past its timeout, the state half written: poll again
+                # (the vehicle run 20261107-153915: one wait_for_roles came back as an Internal server error)
+                print(f"hiraku plugin: wait_for_roles poll failed, polling again: {e!r}", file=sys.stderr)
+                running = None
+            if running == []:
                 return WAIT_DONE
             if time.monotonic() >= deadline:
-                return WAIT_MORE.format(roles="、".join(running))
+                return WAIT_MORE.format(roles="、".join(running or ["?"]))
             time.sleep(poll_s)
 
     @staticmethod

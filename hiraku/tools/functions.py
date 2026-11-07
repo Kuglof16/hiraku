@@ -1360,13 +1360,23 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     if errs:
         raise ToolError("組んだ設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     load_cases = first_version(ctx, design, req, agent)
-    return {
+    out = {
         "design_version": 1,
         "archetype": args["archetype"],
         "change_reason": reason,
         "load_cases": [{"load_case_id": lc["load_case_id"], "owner": ctx.owner(lc["load_case_id"])} for lc in load_cases],
         "domain_picks": [p["domain"] for p in ctx.project["domain_picks"]],
     }
+    if design.get("modules"):  # the lead learns it here (the vehicle run 20261107-153915 sent the one designer)
+        from hiraku.tools.rules import module_owner
+
+        mods = design["modules"]
+        owners = sorted({module_owner(mods, m["module_id"]) for m in mods if m["module_id"] != "package"})
+        out["modules"] = {m["module_id"]: module_owner(mods, m["module_id"]) for m in mods}
+        out["next"] = ("この設計はモジュールに分かれています。直しは、HIRAKU の振り分けにあるモジュールの設計役 "
+                       f"({', '.join(owners)}) が revise_design に module を付けて出し、次の版はパッケージ役 (packager) が "
+                       "build_version で作ります。1 人の設計役 (designer) には直しを頼みません")
+    return out
 
 
 def first_version(ctx: RunContext, design: Record, req: Record, agent: str) -> list[Record]:
@@ -1396,6 +1406,13 @@ def first_version(ctx: RunContext, design: Record, req: Record, agent: str) -> l
                                  + "; ".join(f"{t}: {why}" for t, why in skipped) if skipped else
                                  f"none of {', '.join(wanted)} has a builder")
         else:
+            # a file's tests must build, except those with no builder: left out and said in one line, as Claude's
+            # picks (the serving robot run 20261107-161234 lost v1 to F3, added at the intake, with no builder)
+            no_builder = [t for t in req.get("tests") or [] if not _has_builder(catalog, t)]
+            if no_builder and len(no_builder) < len(req["tests"]):
+                req = dict(req, tests=[t for t in req["tests"] if t not in no_builder])
+            else:
+                no_builder = []  # all or none without a builder: build_tests says it, as before
             load_cases, skipped = build_tests(catalog, req, design)
     except ValueError as e:
         raise ToolError(f"この設計では試験の荷重条件を組めません: {e}") from None
