@@ -602,6 +602,27 @@ _S1_ROLLOVER = {
            "車が床へ横転するところを、車体と台・床の当たりつきで記録します (判定なし)",
     "predictions": [dict(PLANS["S1"]["predictions"][0], quantity="tip_angle")]}
 PLANS_DRIVE: dict[str, Record] = {f"S1-tilt-{on}{S1_DRIVE_INFIX}{DRIVE_SUFFIX}": _S1_ROLLOVER for on in LOADINGS}
+# S3's drive record at 50 km/h (the video's 40 km/h x S3_DRIVE_FACTOR): S3's steps, and near the tyres' limit the
+# steady inner wheel load is above the lane change's (no criterion: the comparison ends there). The K2 team, 2026-11-07,
+# from the records
+_S3_DRIVE_MISMATCH = {
+    "quantity": "min_side_load",
+    "when": "high",
+    "end": True,
+    "source": ("the design department's video scripted run 20261107-034519-offroad-4w-scripted (EC2), version 5: "
+               "S3-dlc50-drive cmp-0305, lane_change.inner_wheel_load 1813.7 N (pred-0391: m 754.6 kg, a_y 0.5436 g, "
+               "h 572.1 mm, t 1220 mm) against lane_change ana-0172 min_side_load 1275.7 N (-29.7 %). ana-0172: peak "
+               "lateral acceleration 5.839 m/s^2 (0.595 g), peak roll 7.42 deg, the front right wheel lifted "
+               "(min_wheel_load 0). The same formula at 0.595 g gives 1633.9 N; with the centre of gravity moved out by "
+               "h sin(roll) = 73.9 mm (an upper bound: the roll taken about the ground) 1185.8 N (the K2 team's "
+               "calculation from these records)"),
+    "cause": ("手計算は、横の加速度の山 (0.544 g) で定常に回る、固い足回りの車の内側の荷重の移りとみる。K2 の車線変更は、"
+              "切り返しで横の加速度が 0.595 g まで上がり (式に入れると 1633.9 N)、車体が 7.4° 傾いて重心が外へ動く "
+              "(地面のまわりに傾くとみると 73.9 mm、1185.8 N)。手計算はこの 2 つを持たないので、内側の荷重を高く出す。"
+              "走りは記録だけで、合否は出さない"),
+    "fix": "設計の変更は要らない (S3 の判定は S3-dlc の荷重条件でする)。手計算は、定常の回りの値として残す",
+}
+PLANS_DRIVE[f"S3-dlc50{DRIVE_SUFFIX}"] = dict(PLANS["S3"], expected_mismatch=_S3_DRIVE_MISMATCH)
 PLANS.update(PLANS_DRIVE)
 
 # The steps of the cases past the limit that differ from PLANS (F1 and S4 predict as PLANS).
