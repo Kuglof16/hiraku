@@ -17,3 +17,22 @@ answers:
     unit: m/s
     trust: 1
     basis: Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check
+  Q20:
+    value: IPX4
+    trust: 3
+    basis: "assumption (a sample answer: drinks may splash on a restaurant robot)"
+  Q42:
+    value: 5
+    unit: deg
+    trust: 3
+    basis: "assumption (a sample answer: a full cup spills at about 5 degrees of tilt)"
+  Q51:
+    value: 3
+    unit: s
+    trust: 3
+    basis: "assumption (a sample answer: 3 seconds from standing to 1.2 m/s, gentle for guests)"
+  Q74:
+    value: 24
+    unit: V
+    trust: 3
+    basis: "assumption (a sample answer: a 24 V battery pack)"

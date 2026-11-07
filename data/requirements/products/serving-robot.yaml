@@ -32,14 +32,16 @@ requirements:
     basis: assumption
   - key: Q11
     name: 路面・床と摩擦係数
-    value: タイル・木・カーペット
+    value: 0.5
+    unit: "1"
     source: default
-    trust: 1
+    trust: 3
     basis: >-
-      JARI のロボット安定性試験設備の走行路の路面,
+      assumption: the friction coefficient between the wheel and a dry indoor floor (tile, wood, carpet), 0.5, HIRAKU's own
+      value, not read in any source. The floors themselves are the ones of the JARI robot stability test facility's course,
       p.1, https://img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf;
-      read 2026-11-03 in a source check
-    note: 摩擦係数は調べていない
+      read 2026-11-03 in a source check (that page lists the surfaces, not a coefficient)
+    note: タイル・木・カーペットの床。摩擦係数は資料で確かめていない
   - key: Q13
     name: 縦の坂
     value: 8.33
@@ -101,6 +103,24 @@ requirements:
       assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity
       above the shelf it stands on, 150 mm (a cup or a plate on a tray); the demo vehicle's cargo is 150 mm above
       its deck as well. The shelf's own height is the design's, not this value
+  - key: Q52
+    name: 停止距離
+    value: 0.5
+    unit: m
+    source: default
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's own value for a robot that walks beside guests (1.2 m/s): it stops within 0.5 m. Not taken from
+      a standard or a maker's page. (The vehicle's 14 m is the 細目告示 table's, for a road vehicle.)
+  - key: Q53
+    name: 止まっていられる坂
+    value: 8.33
+    unit: "%"
+    source: default
+    trust: 3
+    basis: >-
+      assumption: the robot stays still on the steepest slope it is allowed to drive on, the 1/12 (= 8.33 %) of Q13
+      (バリアフリー法施行令 第19条, read 2026-11-03 in a source check); that parking uses the same slope is HIRAKU's choice
   - key: Q54
     name: 稼働時間
     value: 10

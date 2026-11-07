@@ -29712,9 +29712,10 @@ export const DEMOS = {
        }
       ],
       "default": {
-       "value": "タイル・木・カーペット",
-       "trust": 1,
-       "basis": "JARI のロボット安定性試験設備の走行路の路面, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check"
+       "value": 0.5,
+       "unit": "1",
+       "trust": 3,
+       "basis": "assumption: the friction coefficient between the wheel and a dry indoor floor (tile, wood, carpet), 0.5, HIRAKU's own value, not read in any source. The floors themselves are the ones of the JARI robot stability test facility's course, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check (that page lists the surfaces, not a coefficient)"
       }
      },
      {
@@ -29963,7 +29964,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "2 つ答えてもらいました。答えのなかった 11 つは標準の値です。もともと聞かない項目 21 個も標準の値です。答えも標準の値も無い 4 つは、要件に入っていません",
+   "text": "6 つ答えてもらいました。答えのなかった 11 つは標準の値です。もともと聞かない項目 23 個も標準の値です。設計を始めます",
    "data": {
     "answers": [
      {
@@ -30093,6 +30094,24 @@ export const DEMOS = {
       "unit": "mm"
      },
      {
+      "key": "Q52",
+      "name": "停止距離",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's own value for a robot that walks beside guests (1.2 m/s): it stops within 0.5 m. Not taken from a standard or a maker's page. (The vehicle's 14 m is the 細目告示 table's, for a road vehicle.)",
+      "value": 0.5,
+      "unit": "m"
+     },
+     {
+      "key": "Q53",
+      "name": "止まっていられる坂",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the robot stays still on the steepest slope it is allowed to drive on, the 1/12 (= 8.33 %) of Q13 (バリアフリー法施行令 第19条, read 2026-11-03 in a source check); that parking uses the same slope is HIRAKU's choice",
+      "value": 8.33,
+      "unit": "%"
+     },
+     {
       "key": "Q55",
       "name": "充電時間",
       "source": "default",
@@ -30162,9 +30181,10 @@ export const DEMOS = {
       "key": "Q11",
       "name": "路面・床と摩擦係数",
       "source": "default",
-      "trust": 1,
-      "basis": "JARI のロボット安定性試験設備の走行路の路面, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check",
-      "value": "タイル・木・カーペット"
+      "trust": 3,
+      "basis": "assumption: the friction coefficient between the wheel and a dry indoor floor (tile, wood, carpet), 0.5, HIRAKU's own value, not read in any source. The floors themselves are the ones of the JARI robot stability test facility's course, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check (that page lists the surfaces, not a coefficient)",
+      "value": 0.5,
+      "unit": "1"
      },
      {
       "key": "Q15",
@@ -30185,6 +30205,14 @@ export const DEMOS = {
       "unit": "degC"
      },
      {
+      "key": "Q20",
+      "name": "水・ほこり (IP)",
+      "value": "IPX4",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: drinks may splash on a restaurant robot)"
+     },
+     {
       "key": "Q34",
       "name": "弱い人がいるか",
       "source": "default",
@@ -30202,6 +30230,15 @@ export const DEMOS = {
       "unit": "kg"
      },
      {
+      "key": "Q42",
+      "name": "液体のこぼれまでの余裕角",
+      "value": 5,
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: a full cup spills at about 5 degrees of tilt)",
+      "unit": "deg"
+     },
+     {
       "key": "Q50",
       "name": "最高速度",
       "value": 1.2,
@@ -30209,6 +30246,15 @@ export const DEMOS = {
       "trust": 1,
       "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "unit": "m/s"
+     },
+     {
+      "key": "Q51",
+      "name": "加速",
+      "value": 3,
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: 3 seconds from standing to 1.2 m/s, gentle for guests)",
+      "unit": "s"
      },
      {
       "key": "Q54",
@@ -30245,6 +30291,15 @@ export const DEMOS = {
       "basis": "assumption",
       "value": 1.5,
       "unit": "1"
+     },
+     {
+      "key": "Q74",
+      "name": "電池の電圧",
+      "value": 24,
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer: a 24 V battery pack)",
+      "unit": "V"
      },
      {
       "key": "Q80",
