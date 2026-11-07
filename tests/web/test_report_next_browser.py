@@ -124,7 +124,8 @@ class ReportNextBrowserTest(unittest.TestCase):
         nxt = [{"domain": "powertrain", "change": "台本: variables.motor_peak_torque を大きくする", "reason": "坂で足りない (見本)"},
                {"domain": "crash", "change": "台本: sections.rt40x80x4.5.dims_mm.t を小さくする", "reason": "余裕が大きい (見本)"},
                {"domain": "nvh", "change": "台本: variables.no_such_thing を大きくする", "reason": "見本"}]
-        want = ["台本: モーターの最大トルク を大きくする", "台本: フレームの管の板厚 を小さくする", "台本: 設計の値 を大きくする"]
+        # (the script's 「台本:」 at the start is left out but under ?dev=1)
+        want = ["モーターの最大トルク を大きくする", "フレームの管の板厚 を小さくする", "設計の値 を大きくする"]
         for dev in (False, True):
             with self.subTest(dev=dev):
                 page, errors = self.open("run=sample&pace=0&t=0&tab=grid" + ("&dev=1" if dev else ""))
@@ -142,7 +143,8 @@ class ReportNextBrowserTest(unittest.TestCase):
                 page.close()
 
     def test_no_next_or_before_the_report_no_block(self):
-        page, errors = self.open("run=sample&pace=0&t=0&tab=grid")
+        # (④ shows the run's end on the screen; the film's ④, ?video=1, follows the replay's time)
+        page, errors = self.open("run=sample&pace=0&t=0&tab=grid&video=1")
         events = events_with_report()
         before = page.evaluate(PROBE, [events, 0.5])
         none = page.evaluate(PROBE, [events_with_report([]), 1e6])

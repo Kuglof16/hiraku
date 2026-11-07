@@ -1,10 +1,11 @@
-"""The CAE agents' pets on the intake screens (js/intake_pets.js): A1's domain cards and A2's row.
+"""The agents' pets on the intake screens (js/intake_pets.js): A1's domain cards; on A2 the pet of the
+agent that asked (outside the video layout) and, in the video layout, the row of the CAE agents.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed;
 a test that needs the pets is skipped when promo/pets/pet3d.js is not in the checkout. The run is
 the contract sample's run.started with the events below: domains.picked (six domains picked,
-thermal off) and six CAE agents starting their analyses in ORDER. Shape example only: none of the
-values is a calculation result.
+thermal off), six CAE agents starting their analyses in ORDER, and the lead's hearing (the contract's
+examples). Shape example only: none of the values is a calculation result.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ ORDER = ["cae.crash", "cae.strength", "cae.handling", "cae.nvh", "cae.powertrain
 NAMES = {"cae.crash": "衝突", "cae.strength": "強度信頼性", "cae.handling": "操安", "cae.nvh": "音振", "cae.powertrain": "動力", "cae.aero": "空力"}
 PICKED_T = 0.4
 START_T = {a: 4.0 + 0.5 * k for k, a in enumerate(ORDER)}  # each agent's first analysis.started
+ASK_T, ANSWER_T = 10.0, 11.0  # the lead's hearing.asked and its hearing.answered
 PASS_S = 2.7  # agent_pets.js: a pass is 3 hops of n00.motion.hop_period_s (0.9 s in promo/screens/layout.json)
 STAGE_BOTTOM = 1080 - 170  # the video's subtitle band under it
 REPLY_STEP_S = 0.5  # js/intake/a1.js: with a playback time A1's picked domains answer this far apart, in the cards' order
@@ -59,6 +61,9 @@ def pets_events() -> list[dict]:
         out.append(ev(3.0 + 0.1 * k, "agent.started", a, {"agent_id": a}))
         ana = {"analysis_id": f"ana-{k + 1:04d}", "tool": "shape_example", "load_case_id": "S1-v", "prediction_ids": []}
         out.append({**ev(START_T[a], "analysis.started", a, ana), "domain": a[4:]})
+    # the lead asks (ASK_T) and is answered (ANSWER_T): A2's asker outside the video layout
+    out.append(ev(ASK_T, "hearing.asked", "lead", json.loads((contract.EXAMPLES_DIR / "hearing_asked.json").read_text(encoding="utf-8"))))
+    out.append(ev(ANSWER_T, "hearing.answered", "lead", json.loads((contract.EXAMPLES_DIR / "hearing_answered.json").read_text(encoding="utf-8"))))
     out.append(ev(12.0, "run.finished", "system", {"status": "stopped", "stop_reason": "round_limit"}))
     out.sort(key=lambda e: e["t"])
     for i, e in enumerate(out):
@@ -148,10 +153,24 @@ class IntakePetsTest(unittest.TestCase):
     def read(self, page, t, tab=None):
         return page.evaluate(READ, {"t": t, "tab": tab})
 
-    def test_a2_one_pet_per_cae_agent_of_the_record(self):
-        """A2's row: one pet per CAE agent of the record (six: thermal has no agent), as its role, in the
-        order of their first analysis.started, each with its domain's name under it, all drawn."""
+    def test_a2_the_askers_pet(self):
+        """Outside the video layout A2 has the pet of the agent that asked (the lead: まとめ役), beside the
+        heading of when it asked: none before the asking, working until the answer, then idle; no CAE row."""
         page, errors = self.open("tab=A2&t=0")
+        self.assertEqual(self.read(page, ASK_T - 0.5)["a2"], [])
+        for t, want in ((ASK_T + 0.3, "working"), (ANSWER_T + 0.3, "idle"), (1e6, "idle")):
+            got = self.read(page, t)
+            self.assertEqual([(p["agent"], p["name"], p["state"]) for p in got["a2"]], [("lead", "まとめ役", want)], t)
+            self.assertGreater(got["a2"][0]["ink"], 0)
+        self.assertTrue(page.evaluate("document.querySelector('.a2-pets .a2-askers .ipet') !== null"))
+        self.assertIn("まとめ役 が聞いたこと", page.inner_text("#a2-when"))
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_a2_one_pet_per_cae_agent_of_the_record(self):
+        """The video layout's A2 row: one pet per CAE agent of the record (six: thermal has no agent), as
+        its role, in the order of their first analysis.started, each with its domain's name under it, all drawn."""
+        page, errors = self.open("tab=A2&t=0&video=1")
         got = self.read(page, 1e6)
         self.assertEqual(got["loaded"], "on")
         self.assertEqual([p["agent"] for p in got["a2"]], ORDER)
@@ -165,8 +184,8 @@ class IntakePetsTest(unittest.TestCase):
 
     def test_a2_pose_changes_at_each_analysis_started(self):
         """Before an agent's first analysis.started its pet is idle, from it working: at each start the
-        agents before it work and the ones after it are still idle (the record's order)."""
-        page, errors = self.open("tab=A2&t=0")
+        agents before it work and the ones after it are still idle (the record's order; the video layout)."""
+        page, errors = self.open("tab=A2&t=0&video=1")
         for k, a in enumerate(ORDER):
             for t, working in ((START_T[a] - 0.05, ORDER[:k]), (START_T[a] + 0.05, ORDER[: k + 1])):
                 got = self.read(page, t)
@@ -182,12 +201,14 @@ class IntakePetsTest(unittest.TestCase):
     def test_same_t_same_picture(self):
         """A page opened at ?t= and one played (seeked) to the same t draw the same pictures, on A2 and A1."""
         pages = []
-        # A2 with agents before and after their start; A1 mid pass of its first card and before the last one's turn
-        for tab, t, side in (("A2", START_T["cae.nvh"] + 0.3, "a2"), ("A1", PICKED_T + 1.0, "a1")):
-            a, errors_a = self.open(f"tab={tab}&t=0")
-            self.read(a, 2.0)  # (Chrome moves a 2D canvas off the GPU at its first read)
+        # A2 (the video layout's CAE row) with agents before and after their start, and its asker (outside
+        # it) while asking; A1 mid pass of its first card and before the last one's turn
+        # (warm: a time the canvas is there at, read once first: Chrome moves a 2D canvas off the GPU at its first read)
+        for tab, t, side, more, warm in (("A2", START_T["cae.nvh"] + 0.3, "a2", "&video=1", 2.0), ("A2", ASK_T + 0.3, "a2", "", ASK_T + 0.1), ("A1", PICKED_T + 1.0, "a1", "", 2.0)):
+            a, errors_a = self.open(f"tab={tab}&t=0{more}")
+            self.read(a, warm)
             sought = self.read(a, t)
-            b, errors_b = self.open(f"tab={tab}&t={t}")
+            b, errors_b = self.open(f"tab={tab}&t={t}{more}")
             self.read(b, None)
             opened = self.read(b, None)
             self.assertTrue(sought[side], tab)
@@ -199,8 +220,13 @@ class IntakePetsTest(unittest.TestCase):
             p.close()
 
     def test_a2_slot_stays_empty_without_a_cae_agent(self):
-        """A record without a CAE agent: nothing is put in the slot, so it stays hidden (display: none)."""
+        """The video layout, a record without a CAE agent: nothing is put in the slot, so it stays hidden
+        (display: none). Outside the video layout, with no hearing in the record, the place is hidden too."""
         page, errors = self.open("tab=A2&t=1e6", run=NONE_RUN)
+        self.assertEqual(self.read(page, 1e6)["pets"], None)
+        self.assertEqual(errors, [])
+        page.close()
+        page, errors = self.open("tab=A2&t=1e6&video=1", run=NONE_RUN)
         got = self.read(page, 1e6)
         self.assertEqual(got["loaded"], "on")
         self.assertEqual(got["a2"], [])

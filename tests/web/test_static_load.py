@@ -242,8 +242,10 @@ class StaticLoadBrowserTest(unittest.TestCase):
         self.assertEqual([p for p, _ in res if "/heavy/" in p], [])
         data = sum(n for p, n in res if "/hiraku/data/" in p)
         self.assertLess(data, FIRST_DATA_BYTES, res)
-        # ③: the shown analysis' fields are read and drawn
+        # ③: the shown analysis' fields are read and drawn (the first screen stops at the request's
+        # moment, before any design: the record goes on to its end first)
         page.click('.tab[data-tab="bench"]')
+        page.evaluate("async () => { await window.hiraku.seek(1e6); }")
         page.wait_for_function("performance.getEntriesByType('resource').some((r) => r.name.includes('/heavy/'))", timeout=20000)
         page.wait_for_function("(document.getElementById('legend')?.innerText ?? '').length > 0", timeout=20000)
         page.wait_for_function("!document.getElementById('heavy-note') || document.getElementById('heavy-note').hidden", timeout=20000)

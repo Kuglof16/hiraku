@@ -12,6 +12,7 @@ import { DOMAIN_JA, designNumberName, esc, judgedWords, verLabel } from "./label
 // a design number's path as the reports write it (K5's paths)
 const PATH = /\b(?:variables|sections|parts|materials)\.[A-Za-z0-9_.\-]*[A-Za-z0-9_]/g;
 const UNNAMED_JA = "設計の値";
+const SCRIPT_MARK = /^\s*台本\s*[:：]\s*/;
 
 // A change's words with each path said by its name (escaped HTML). dev: the path after it, small.
 export function changeWords(text, design = null, dev = false) {
@@ -35,7 +36,10 @@ export function reportNextHtml(report, { design = null, dev = false } = {}) {
       const why = String(n.reason ?? "").trim();
       const rule = n.rule_id ? `<span class="rn-rule">決まり ${esc(n.rule_id)} への答え</span>` : "";
       const more = why || rule ? `<details class="more" data-keep="report-next-${i}"><summary>くわしく</summary>${why ? `<div class="rn-why">${changeWords(why, design, dev)}</div>` : ""}${rule}</details>` : "";
-      return `<li data-domain="${esc(n.domain ?? "")}"><b class="rn-dom">${esc(dom)}</b><div class="rn-body"><span class="rn-change">${changeWords(n.change, design, dev)}</span>${more}</div></li>`;
+      // a scripted run's report starts its lines with 「台本:」 (the script's own words): a judge reads
+      // the change without it (?dev=1 keeps it)
+      const change = dev ? n.change : String(n.change).replace(SCRIPT_MARK, "");
+      return `<li data-domain="${esc(n.domain ?? "")}"><b class="rn-dom">${esc(dom)}</b><div class="rn-body"><span class="rn-change">${changeWords(change, design, dev)}</span>${more}</div></li>`;
     })
     .join("");
   const v = Number.isInteger(report.design_version) ? `<span class="rn-src">${verLabel(report.design_version)} の報告から</span>` : "";

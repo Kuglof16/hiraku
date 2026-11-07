@@ -361,6 +361,7 @@ export function applyEvent(s, ev) {
       const n = (d.module_changes ?? []).length;
       if (n) {
         s.builtT[v] = ev.t;
+        (s.builtSeq ??= {})[v] = ev.seq; // (benchnote.js: the round card is the newest event's card)
         log(s, ev, "info", `${who(ev)}が ${n} つの提案を ${verLabel(v)} にまとめた`);
         setActivity(s, ev, `${who(ev)}が ${n} つの提案を ${verLabel(v)} にまとめた`);
         break;

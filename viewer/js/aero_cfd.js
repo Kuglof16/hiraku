@@ -12,7 +12,8 @@ HV.fields = HV.fields || {};
     const field = HV.fields.aero;
     if (field) {   // a page without js/aero.js has no aero field, and this variant stays out of it
       const k2 = field.init;
-      field.variants = [{ key: 'aero', label: 'K2' }, { key: 'aero_cfd', label: 'CFD', always: true }];
+      // lazy: the first view of the aero page does not ask for a record that may not exist (a missing script is an error on the page)
+      field.variants = [{ key: 'aero', label: 'K2' }, { key: 'aero_cfd', label: 'CFD', always: true, lazy: true }];
       field.init = function (D, ctx) { return D.model === 'cfd' ? cfd(D, ctx) : k2.call(this, D, ctx); };
     }
     return start.apply(this, args);
