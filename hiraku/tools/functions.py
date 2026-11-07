@@ -284,6 +284,19 @@ def _record_counts(s: Any) -> Record:
         return {k: len(s.records(k)) for k in RECORD_KINDS}
 
 
+def _stage_fields(ctx: RunContext, lc: Record) -> Record:
+    """A load case's stage for the overview, as HK5 reads it (shelf.load_case_stage), with what sets it
+    (stage_from) or, when it is None, why HK5 does not wait for it (stage_why): the serving robot run
+    20261107-190633 could not tell which stage held stage 2."""
+    from hiraku.tools.shelf import STAGE_NONE_WHY, stage_source
+
+    n = load_case_stage(ctx, lc)
+    if n is None:
+        return {"stage": None, "stage_why": STAGE_NONE_WHY}
+    src = stage_source(ctx, lc)
+    return {"stage": n, **({"stage_from": src} if src else {})}
+
+
 def context_overview(ctx: RunContext) -> Record:
     """get_context's default answer: counts and ids of what each section holds, with the sections named.
     Every call goes into the caller's context; the sections are asked for by name."""
@@ -291,7 +304,7 @@ def context_overview(ctx: RunContext) -> Record:
     return {
         "requirements": {"count": len(ctx.project["requirements"])},
         "load_cases": [{"load_case_id": lc["load_case_id"], "domain": lc["domain"], "owner": ctx.owner(lc["load_case_id"]),
-                        "stage": load_case_stage(ctx, lc), **({"feeds": lc["feeds"]} if lc.get("feeds") else {})}
+                        **_stage_fields(ctx, lc), **({"feeds": lc["feeds"]} if lc.get("feeds") else {})}
                        for lc in ctx.load_cases],
         "judgements": {j["domain"]: j["state"] for j in s.judgements()} if ctx.version else {},
         "records": _record_counts(s),

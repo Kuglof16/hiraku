@@ -156,7 +156,13 @@ def _h5(ctx: RunContext, lc_id: str, tool: str, domain: str | None) -> Denial | 
     left = lower_stage_left(ctx, n, skip=lc_id)
     if not left:
         return None
-    named = "、".join(f"{lc['load_case_id']} ({_stage_ja(s)}、{what})" for s, lc, what in left)
+    from hiraku.tools.shelf import stage_source  # what sets each stage, as get_context's overview says it
+
+    def one(s: int, lc: Record, what: str) -> str:
+        src = stage_source(ctx, lc)
+        return f"{lc['load_case_id']} ({_stage_ja(s)}{f'、段は {src} から' if src else ''}、{what})"
+
+    named = "、".join(one(s, lc, what) for s, lc, what in left)
     reds = [x for x in left if x[2].startswith("NG")]
     red_hint = ""
     if reds:

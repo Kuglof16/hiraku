@@ -53,6 +53,18 @@ class StageTest(RunCase, unittest.TestCase):
                                       "applies_to": ["care_bed"]}
         self.assertEqual(load_case_stage(self.ctx, lc), 3)  # the care bed's stage-0 tool does not check this design
 
+    def test_the_overview_says_what_sets_each_stage_and_why_a_stage_is_none(self):
+        """The serving robot run 20261107-190633: the lead could not tell from the overview which stage held stage
+        2 (P4, C2 and F3 on tools made in the run). The overview's stage is HK5's, with stage_from or stage_why."""
+        from hiraku.tools.functions import context_overview
+        from hiraku.tools.shelf import STAGE_NONE_WHY
+
+        rows = {r["load_case_id"]: r for r in context_overview(self.ctx)["load_cases"]}
+        self.assertEqual((rows["R1-step100"]["stage"], rows["R1-step100"]["stage_from"]), (1, "frame_static (段 1)"))
+        self.ctx.specs["frame_static"] = dict(self.ctx.specs["frame_static"], usable=False)
+        rows = {r["load_case_id"]: r for r in context_overview(self.ctx)["load_cases"]}
+        self.assertEqual((rows["R1-step100"]["stage"], rows["R1-step100"]["stage_why"]), (None, STAGE_NONE_WHY))
+
     def test_the_hook_command_reads_the_servers_stages(self):
         kept = stages_of(self.ctx)
         self.ctx.tools = {}
@@ -87,7 +99,7 @@ class StageTest(RunCase, unittest.TestCase):
         args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": []}
         d = rules.check_analyze(self.ctx, args)
         self.assertEqual(d.rule, rules.HK5)
-        self.assertIn("R1-step100 (段 1 (軽い計算)、未判定)", d.reason)
+        self.assertIn("R1-step100 (段 1 (軽い計算)、段は frame_static (段 1) から、未判定)", d.reason)
         self.assertIn("段 2 (車の動き)", d.reason)
         # a tool of the stage of what is left is not held (HK1 comes next)
         d = rules.check_analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": []})
@@ -122,7 +134,7 @@ class StageTest(RunCase, unittest.TestCase):
             with mock.patch.object(rules, "_verdict_tool", return_value="frame_static"):  # red on the beam (stage 1)
                 d = rules.check_analyze(self.ctx, args)
                 self.assertEqual(d.rule, rules.HK5)
-                self.assertIn("R1-step100 (段 1 (軽い計算)、NG、ver-0009)", d.reason)
+                self.assertIn("R1-step100 (段 1 (軽い計算)、段は frame_static (段 1) から、NG、ver-0009)", d.reason)
                 self.assertIn("revise_design", d.reason)
             with mock.patch.object(rules, "_verdict_tool", return_value="shell_x"):  # red from the heavy tool itself
                 self.assertEqual(rules.check_analyze(self.ctx, args).rule, rules.HK1)
