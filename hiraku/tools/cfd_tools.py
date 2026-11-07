@@ -271,6 +271,16 @@ def cfd_aero(ctx: Any, args: Record | None = None, agent: str | None = None) -> 
     return _replay(ctx, args) if args.get("replay") else _sweep(ctx, args)
 
 
+def k2_parts() -> Any:
+    """What hiraku.cfd.water_coupled uses from K2. It comes through here because hiraku.cfd itself does not import K2."""
+    from types import SimpleNamespace
+
+    from hiraku.solvers.k2_vehicle import drive, model, scenario, sim
+
+    return SimpleNamespace(Motor=drive.Motor, PathDriver=drive.PathDriver, SpeedController=drive.SpeedController, controls=drive.controls, on_board=drive.on_board, start_rolling=drive.start_rolling,
+                           build_vehicle=model.build_vehicle, settle=scenario.settle, hold=scenario.hold, Sim=sim.Sim, quat_from_euler=sim.quat_from_euler)
+
+
 def _input_schema() -> Record:
     """The contract's tool_input once it has it; until then the same shape from here (the lead adds it to the contract)."""
     schema = dict(contract.schema()["$defs"].get(f"tool_input.{NAME}") or INPUT_SCHEMA)

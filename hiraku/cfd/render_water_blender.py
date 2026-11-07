@@ -291,6 +291,7 @@ def road_arrays(road: Any, length: float, width: float, level: float) -> dict[st
 
 CAMERAS = {
     # name: (offset from the vehicle or a fixed place, target, lens mm, follow)
+    "above": ((-1.0, -7.0, 3.27), (-0.5, 0.0, 0.30), 32.0, True),  # about 23 degrees down
     "wide": ((0.0, -11.5, 3.2), (0.0, 0.0, 0.2), 30.0, False),
     "side": ((-0.9, -5.6, 1.15), (-0.5, 0.0, 0.62), 32.0, True),
     "follow": ((-4.3, -4.6, 2.0), (-0.3, 0.0, 0.35), 40.0, True),
@@ -391,10 +392,24 @@ def build_scene(case_folder: Path, design_path: Path, work: Path) -> dict[str, A
     shapes, _ = design_shapes(design, 0.0, inp["speed_ms"], inp["loading"], rotate_wheels=inp["rotate_wheels"], dx=0.0)
     box = case["road"]["box_m"]
     road = Road(inp["depth_m"], 0.5 * case["road"]["water_length_m"], case["road"]["slope"])
+    wheel_centres = {}
+    if "vehicle" in case["records"][0]:  # a coupled run: each wheel is its own object, moved by the suspension
+        for s in shapes:
+            if s.group == "wheels":
+                wheel_centres[s.name] = [float(v) for v in s.center]
+                s.group = s.name
     arrays = {**vehicle_arrays(shapes), **road_arrays(road, box[0], box[1], case["road"]["level_m"])}
     work.mkdir(parents=True, exist_ok=True)
     np.savez(work / "scene.npz", **arrays)
-    return {"case": case, "road": road, "box": box, "dx": inp["dx_m"]}
+    return {"case": case, "road": road, "box": box, "dx": inp["dx_m"], "wheel_centres": wheel_centres}
+
+
+def wheel_offsets(record: dict[str, Any], wheel_centres: dict[str, list[float]]) -> dict[str, list[float]]:
+    """How far each wheel is from its place in the design, in the vehicle's axes, at one frame of a coupled run."""
+    now = record.get("vehicle", {}).get("wheel_centres")
+    if not now:
+        return {}
+    return {name: [float(a - b) for a, b in zip(now[k], wheel_centres[name])] for k, name in enumerate(f"wheel_{w}" for w in ("FL", "FR", "RL", "RR"))}
 
 
 def render(case_folder: Path, design_path: Path, out_folder: Path, frames: list[int], camera: str = "follow", samples: int = 48, size: tuple[int, int] = (1920, 1080),
@@ -410,7 +425,7 @@ def render(case_folder: Path, design_path: Path, out_folder: Path, frames: list[
     todo = frames if mesh_only else [f for f, p in zip(frames, pngs) if not p.exists()]
     for start in range(0, len(todo), batch):
         part = todo[start:start + batch]
-        job = {"scene": str(work / "scene.npz"), "frames": [{"frame": f, "mesh": str(work / f"w{f:04d}.npz"), "pose": records[f]["pose"], "png": str(out_folder / f"{prefix}{f:04d}.png")} for f in part],
+        job = {"scene": str(work / "scene.npz"), "frames": [{"frame": f, "mesh": str(work / f"w{f:04d}.npz"), "pose": records[f]["pose"], "wheels": wheel_offsets(records[f], info["wheel_centres"]), "png": str(out_folder / f"{prefix}{f:04d}.png")} for f in part],
                "camera": CAMERAS[camera], "samples": samples, "size": size, "threads": min(threads, WATER_THREADS), "dx": info["dx"]}
         job_file = work / f"job_{camera}_{prefix}{part[0]}.json"
         job_file.write_text(json.dumps(job), encoding="utf-8")
@@ -783,12 +798,14 @@ def run_in_blender(job_file: str) -> None:
 
     car = bpy.data.objects.new("vehicle", None)
     scene.collection.objects.link(car)
+    parts: dict[str, Any] = {}
     for key in s.files:
         if key.startswith("veh_") and key.endswith("_v"):
             g = key[4:-2]
-            colour, metal, rough = MATERIALS.get(g, MATERIALS["frame"])
+            colour, metal, rough = MATERIALS.get("wheels" if g.startswith("wheel_") else g, MATERIALS["frame"])
             ob = _object(g, _mesh(g, s[key], s[f"veh_{g}_l"], s[f"veh_{g}_s"]), _pbr(g, colour, metal, rough))
             ob.parent = car
+            parts[g] = ob
 
     water_mat = _water_material()
     water_ob = None
@@ -814,6 +831,8 @@ def run_in_blender(job_file: str) -> None:
         x, z, pitch = item["pose"]
         car.location = (x, 0.0, z)
         car.rotation_euler = (0.0, pitch, 0.0)
+        for name, offset_w in item.get("wheels", {}).items():
+            parts[name].location = offset_w
         if follow:
             cam.location = (x + offset[0], offset[1], offset[2] + z * 0.3)
             aim.location = (x + target[0], target[1], target[2] + z * 0.3)
