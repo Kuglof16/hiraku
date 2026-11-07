@@ -292,6 +292,7 @@ class AddedTestsTest(unittest.TestCase):
         self.assertNotIn(tid, [t for p in first["domains"]["picks"] for t in p["test_ids"]] + first["domains"]["assembly_test_ids"])
         tests = request.finish(first["draft"], None, None)["requirements_file"].get("tests") or []
         self.assertNotIn(tid, tests)  # a test with no builder is not in the choice and not in the file: it would refuse every v1
+        self.assertEqual(tests, [])  # every one added was dropped: no tests at all, the run's own choice stands
 
     def test_a_known_products_file_keeps_its_tests_and_gets_the_added_one(self):
         own = load_product("offroad-4w")["tests"]

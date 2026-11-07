@@ -297,7 +297,9 @@ def _file(d: Record, res: Any) -> Record:
             tests = [t for t in tests if stays(t)]
         else:
             tests = kept
-    if not tests and d.get("added_tests"):  # the catalog would choose by the flags and miss them: the file lists the whole choice
+    # the catalog would choose by the flags and miss what Claude added: then the file lists the whole choice. Only a test a run
+    # can build counts: when every one added was dropped, nothing is listed and the run's own choice stands (a file's tests come first)
+    if not tests and any(_buildable(a["test_id"], known) for a in d.get("added_tests") or []):
         tests = [t for t in kept if _buildable(t, known)]  # a test no builder makes would be refused for the whole file: not listed
     if tests:
         rf["tests"] = list(tests)
