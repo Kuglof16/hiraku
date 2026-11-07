@@ -19,11 +19,11 @@ import numpy as np
 
 from hiraku.cfd.cuda import STAMP, Gpu, gpu_or_reason, gpu_turn, source_hash
 from hiraku.cfd.geometry import Cylinder, box
-from hiraku.cfd.render_water_blender import polytope_faces, surface_nets
+from hiraku.cfd.render_water_blender import pass_order, polytope_faces, surface_nets
 from hiraku.cfd.solver import MemoryBudgetError
 from hiraku.cfd.vehicle import design_shapes
 from hiraku.cfd.water import (GRAVITY, RHO_WATER, SOUND_OVER_SPEED, STATEMENT, Road, VehiclePath, WaterGrid, WaterSim, band_of, check_moving_box, check_standing_vehicle, check_still_water, hydrostatic_e,
-                              load_design, particles_inside, read_replay, replay_arrays, run_flooded_road, seed_water, shape_table, sound_speed_for, spin_of, spline_weights, table_distance, tait_pressure,
+                              load_design, particles_inside, plan_case, read_replay, replay_arrays, run_flooded_road, seed_water, shape_table, sound_speed_for, spin_of, spline_weights, table_distance, tait_pressure,
                               thickness_of, time_step, underfloor_columns, underfloor_measure)
 
 DESIGN = Path(__file__).resolve().parents[1] / "verification" / "fixtures" / "n15-v005-design.json"
@@ -33,6 +33,33 @@ BULK = RHO_WATER * 30.0 ** 2
 # budget closed to 7.3e-6 of the box's impulse; the table agreed with the shapes at all 20000 points, within 4.5e-8 m; none of the
 # 152792 particles stayed inside (40 mm).
 BOUNDS = {"still_mean_height_mm": 0.5, "still_top_mm": 3.0, "still_max_speed_ms": 0.005, "box_budget": 1e-4, "table_distance_m": 1e-6, "inside_share": 1e-4}
+
+
+class FrameInterval(unittest.TestCase):
+    def test_the_step_fits_a_whole_number_of_times_in_either_interval(self) -> None:
+        dt_30, n_30 = time_step(0.03, 200.0, 10.0, frame_dt=1.0 / 30.0)
+        dt_90, n_90 = time_step(0.03, 200.0, 10.0, frame_dt=1.0 / 90.0)
+        self.assertEqual((n_30, n_90), (584, 195))
+        self.assertAlmostEqual(dt_30 * 1e6, 57.08, places=2)
+        self.assertAlmostEqual(dt_90 * 1e6, 56.98, places=2)
+
+    def test_the_plan_takes_the_interval_and_keeps_the_default(self) -> None:
+        design = load_design(DESIGN)
+        scene = {"length_m": 8.0, "water_length_m": 5.0, "width_m": 2.4, "height_m": 0.8}
+        usual = plan_case(design, 0.1, 3.0, 0.1, **scene)
+        fine = plan_case(design, 0.1, 3.0, 0.1, frame_dt=1.0 / 90.0, **scene)
+        self.assertAlmostEqual(usual["per_frame"] * usual["dt"], 1.0 / 30.0, places=12)
+        self.assertAlmostEqual(fine["per_frame"] * fine["dt"], 1.0 / 90.0, places=12)
+        self.assertEqual(usual["frames"], math.ceil(usual["duration"] * 30.0))
+        self.assertEqual(fine["frames"], math.ceil(fine["duration"] * 90.0))
+        self.assertAlmostEqual(usual["duration"], fine["duration"])
+
+    def test_a_pass_repeats_nothing_inside_either_part(self) -> None:
+        real_time, slow = pass_order(204, 3)
+        self.assertEqual(len(real_time), 68)
+        self.assertEqual(slow, list(range(204)))
+        self.assertEqual(len(set(real_time)), len(real_time))
+        self.assertEqual(real_time[:3], [0, 3, 6])
 
 
 class Equations(unittest.TestCase):

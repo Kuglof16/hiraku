@@ -701,7 +701,7 @@ def sound_speed_for(speed_ms: float, depth_m: float, gravity: float = GRAVITY) -
 
 def plan_case(design: dict[str, Any], depth_m: float, speed_ms: float, dx: float, rotate_wheels: bool = True, loading: str | None = "two_cargo",
               length_m: float = 15.0, width_m: float = 3.5, height_m: float = 2.5, water_length_m: float = 8.0, slope: float = 0.125,
-              lead_m: float = 0.2, sticky_groups: Sequence[str] = ("wheels",), rng_seed: int = 1) -> dict[str, Any]:
+              lead_m: float = 0.2, sticky_groups: Sequence[str] = ("wheels",), rng_seed: int = 1, frame_dt: float = FRAME_DT) -> dict[str, Any]:
     """Everything a run needs that takes no GPU. The box is 15 m long, not 12: the pass ends with the rear clear of the water,
     so the front is 7.1 m from the middle; in a shorter box it would drive past the end wall and squeeze water against it.
     It is 2.5 m high, not 1.2: at 5 m/s water can rise V^2 / 2g = 1.27 m, and under a lid at 1.2 m the plume spread out flat."""
@@ -716,11 +716,11 @@ def plan_case(design: dict[str, Any], depth_m: float, speed_ms: float, dx: float
     axle_x = [float(s.center[0]) for s in wheels]
     x_front, x_rear = min(axle_x), max(axle_x)
     sound = sound_speed_for(speed_ms, depth_m)
-    dt, per_frame = time_step(dx, sound, 2.0 * speed_ms)
+    dt, per_frame = time_step(dx, sound, 2.0 * speed_ms, frame_dt)
     x_start = road.half_length_m + lead_m - float(lo[0])
     x_end = -road.half_length_m - lead_m - float(hi[0])
     duration = (x_start - x_end) / speed_ms
-    frames = int(math.ceil(duration / FRAME_DT))
+    frames = int(math.ceil(duration / frame_dt))
     particles, level = seed_water(grid, road, depth_m, RHO_WATER * sound ** 2, jitter=SEED_JITTER, rng_seed=rng_seed)
     return {"shapes": shapes, "solid": solid, "info": info, "grid": grid, "road": road, "table": table, "sound": sound, "dt": dt, "per_frame": per_frame,
             "frames": frames, "duration": duration, "x_start": x_start, "path": VehiclePath(road, speed_ms, x_start, x_front, x_rear),
@@ -750,15 +750,17 @@ def replay_arrays(world: np.ndarray, grid: WaterGrid, road: Road, particle_volum
 
 def run_flooded_road(gpu: Gpu, design: dict[str, Any], depth_m: float = 0.2, speed_ms: float = 5.0, dx: float = 0.03, rotate_wheels: bool = True,
                      out: str | Path = "water_case", loading: str | None = "two_cargo", keep_particles: bool = True, analyse: bool = True, reserve_mib: int = 600,
-                     tests_passed: dict[str, Any] | None = None, progress: Callable[[str], None] | None = None, **scene: Any) -> dict[str, Any]:
+                     tests_passed: dict[str, Any] | None = None, progress: Callable[[str], None] | None = None, frame_dt: float = FRAME_DT, **scene: Any) -> dict[str, Any]:
     """A pass through the flooded road: 見せるための計算で、走破の判定ではない.
 
     Saves in `out`: case.json, frames/p*.npz (all particles as 16-bit positions) and, after the analysis, replay.npz (compact,
     for a PC without a GPU). With analyse=False the analysis is left to analyse_case(out, design), so the caller can give up
-    its GPU turn first. Refuses, in Japanese, a run that does not fit the free GPU memory."""
+    its GPU turn first. frame_dt is the time between saved frames; the step is the largest under the CFL limit that fits a whole
+    number of times in it, so a different frame_dt also moves the step slightly (case.json has both). Refuses, in Japanese, a run
+    that does not fit the free GPU memory."""
     say = progress or (lambda s: None)
     memory_at_start = gpu_memory_mib()
-    plan = plan_case(design, depth_m, speed_ms, dx, rotate_wheels, loading, **scene)
+    plan = plan_case(design, depth_m, speed_ms, dx, rotate_wheels, loading, frame_dt=frame_dt, **scene)
     grid: WaterGrid = plan["grid"]
     road: Road = plan["road"]
     table: ShapeTable = plan["table"]
@@ -811,7 +813,7 @@ def run_flooded_road(gpu: Gpu, design: dict[str, Any], depth_m: float = 0.2, spe
         "road": {"water_length_m": 2.0 * road.half_length_m, "slope": road.slope, "level_m": plan["level"], "box_m": [grid.length_m, grid.width_m, grid.height_m]},
         "memory": {"at_start_mib": memory_at_start, "needed_bytes": required_bytes(grid, len(particles), table), "reserve_mib": reserve_mib},
         "particles": len(particles), "particles_removed_at_start": int(inside0.sum()), "cells": list(grid.nodes), "particles_per_cell": 8,
-        "step_s": dt, "steps": sim.steps, "steps_per_frame": per_frame, "frames": len(records), "frame_s": per_frame * dt, "run_wall_s": time.perf_counter() - t0, "device": gpu.name,
+        "step_s": dt, "steps": sim.steps, "steps_per_frame": per_frame, "frames": len(records), "frame_interval_asked_s": frame_dt, "frame_s": per_frame * dt, "run_wall_s": time.perf_counter() - t0, "device": gpu.name,
         "sound_speed_ms": plan["sound"], "bulk_modulus_pa": RHO_WATER * plan["sound"] ** 2, "density_kg_m3": RHO_WATER, "gravity_ms2": GRAVITY, "cfl": CFL, "e_max": E_MAX, "e_min": E_MIN,
         "density_limit": DENSITY_LIMIT, "crowd": CROWD, "particle_mass_kg": sim.mass, "groups": table.groups, "faulted": fault,
         "shapes": {"table": len(table.solids), "planes": len(table.planes), "cylinders": len(table.cyl), "left_out": table.left_out, "wheels_spin_rad_s": [[float(v) for v in spin_of(s)] for s in plan["wheels"]]},

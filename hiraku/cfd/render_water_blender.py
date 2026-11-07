@@ -530,6 +530,50 @@ def encode(folder: Path, order: list[int], mp4: Path, seconds_each: float = 1.0 
     return mp4
 
 
+def pass_order(frames: int, real_time_every: int) -> tuple[list[int], list[int]]:
+    """The two parts of a pass at 30 frames a second, with nothing repeated inside either: real time from every n-th computed
+    frame, then all of them, slowed by that same n."""
+    return list(range(0, frames, real_time_every)), list(range(frames))
+
+
+def encode_pictures(pictures: list[Path], mp4: Path) -> Path:
+    """One video frame per picture at 30 frames a second, in the given order, with nothing dropped or repeated: the pictures are
+    read as a numbered image sequence, with no frame rate filter that could add or remove any."""
+    exe = shutil.which("ffmpeg")
+    if exe is None:
+        raise FileNotFoundError("ffmpeg が見つかりません")
+    mp4.parent.mkdir(parents=True, exist_ok=True)
+    seq = mp4.parent / (mp4.stem + "_seq")
+    shutil.rmtree(seq, ignore_errors=True)
+    seq.mkdir()
+    try:
+        for i, p in enumerate(pictures):
+            os.link(p, seq / f"{i:06d}.png")
+        cmd = [exe, "-y", "-loglevel", "error", "-threads", str(WATER_THREADS), "-framerate", "30", "-start_number", "0", "-i", str(seq / "%06d.png"), "-vf", "scale=1920:1080:flags=lanczos",
+               "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(mp4)]
+        with render_turn():
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    finally:
+        shutil.rmtree(seq, ignore_errors=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {r.stderr[-1500:]}")
+    return mp4
+
+
+def annotated_pictures(case_folder: Path, png_folder: Path, frames: list[int]) -> list[Path]:
+    """The rendered frames with their numbers and the statement drawn on, made once and kept next to the pictures."""
+    case = json.loads((case_folder / "case.json").read_text(encoding="utf-8"))
+    done = png_folder / "annotated"
+    done.mkdir(parents=True, exist_ok=True)
+    out = []
+    for f in frames:
+        target = done / f"{f:04d}.png"
+        if not target.exists():
+            annotate(png_folder / f"{f:04d}.png", target, overlay_lines(case, f))
+        out.append(target)
+    return out
+
+
 def overlay_picture(solids: list[Any], local: np.ndarray, dx: float, out: Path, slices: tuple[float, ...] = (0.0, -0.61), x_range: tuple[float, float] = (-1.6, 1.6), z_range: tuple[float, float] = (0.0, 0.7),
                     title: str = "") -> dict[str, int]:
     """Check (c) as a picture: cuts along the vehicle through the shape objects the picture is drawn from (grey), with the
