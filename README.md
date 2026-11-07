@@ -222,7 +222,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
   - `edit_step`: 立体を名前で選び、動かす・回す・消す・箱や筋かいを足す・断面や肉厚を変える。別のファイルに書き、元は書き換えない
 - 試験ごとの荷重条件の作り方は、カタログ (`data/catalog/tests.yaml`) の 44 試験のうち 31 試験ぶんある。要件のファイルに並べれば実行に乗る。作り方の無い試験は、分野の役かまとめ役が `write_load_case` で荷重条件を書ける (限度は式で書き、数はコードが計算する)。F4・F5 は流れのツールが `judge` で書く。最近足したもの:
   - S2 (旋回での転倒): 半径 25 m の円を、最高速度 (Q50) まで速さを上げて回り、内側の 2 輪が浮かない (`steady_circle`。半径は HIRAKU の仮定。`hiraku/catalog/builders/k2_tests.py`)
-  - R4 (横転時の保護枠): 傾斜台で倒れる角を越えて傾けた車が床に落ち、ロールバーで着地する。その骨組みを降伏する梁として解き、どの部材も乗員の空間に入らない (隙間 ≥ 0 mm)。地面は土 (R4-rollover) と舗装 (R4-rollover-pavement) の 2 通りで、両方 OK のときだけ R4 は OK。HIRAKU 独自の計算の確かめで、規格の試験ではない (`rollover_beam`、`hiraku/catalog/builders/analysis.py` の `r4_rops`)。着地の形は触れる順番で大きく変わるので、隙間は計算機の浮動小数の差でも動く: 同じコードと同じ設計 (デモの v1) で、Windows では土 +48.2 mm・舗装 +45.4 mm の OK、Linux では直した v2 でも −4.2 mm・−10.5 mm の NG だった (差の大きさは確かめていない)。境目に近い設計の R4 の判定は、計算機が変わると入れ替わることがある
+  - R4 (横転時の保護枠): 傾斜台で倒れる角を越えて傾けた車が床に落ち、ロールバーで着地する。その骨組みを降伏する梁として解き、どの部材も乗員の空間に入らない (隙間 ≥ 0 mm)。地面は土 (R4-rollover) と舗装 (R4-rollover-pavement) の 2 通りで、両方 OK のときだけ R4 は OK。HIRAKU 独自の計算の確かめで、規格の試験ではない (`rollover_beam`、`hiraku/catalog/builders/analysis.py` の `r4_rops`)。着地の形は触れる順番で大きく変わるので、隙間は計算機の浮動小数の差でも動く: 同じコードと同じ設計 (デモの v1) で、Windows では土 +48.2 mm・舗装 +45.4 mm の OK、Linux では直した v2 でも −4.2 mm・−10.5 mm の NG だった (差の大きさは確かめていない)。境目に近い設計の R4 の判定は、計算機が変わると入れ替わることがある。動画の車 (v5) は余裕があり、両方で OK: Windows で土 +77.1 mm・舗装 +83.4 mm、Linux (EC2) で +72.8 mm・+80.8 mm (`studies/k2_r4_ec2` の枝で回した、2026-11-07)
   - F2 (空気抵抗): 最高速度 (Q50) で受ける空気抵抗の力が、その速さで使える駆動力から転がり抵抗を引いた残り以下 (平らな道で無風。作者の決め、2026-11-07。`hiraku/catalog/builders/drag.py`)。棚に F2 を解くツールは無い
   - R9 (サスペンションの取付): 金具の板の根元の曲げ・根元の溶接・ピンのせん断と支圧の利用率がどれも 1 以下 (K2 の取付点の力の最大で。`hiraku/catalog/builders/mounts_r9.py`)
 - 実行の記録 (`runs/<id>/events.jsonl`) を再生する画面「③ 解析」(3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
@@ -405,8 +405,8 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `python -m unittest` が集める試験は 4,244 (2026-11-07。`unittest.defaultTestLoader.discover(".").countTestCases()`)。
-  - `git grep "def test_" -- "tests/**/*.py"` は 3,919 行、`git grep -c` で 325 ファイル (2026-11-07。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
+  - `python -m unittest` が集める試験は 4,271 (2026-11-07、1acd22b4 の時点。`unittest.defaultTestLoader.discover(".").countTestCases()`)。
+  - `git grep "def test_" -- "tests/**/*.py"` は 3,946 行、`git grep -l` で 330 ファイル (2026-11-07、1acd22b4 の時点。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
@@ -417,7 +417,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部のツール。
   - このコミットにも `Co-Authored-By: Claude` の行がある。
 - 遅い試験は 2026-11-05 から EC2 の上で回している。EC2 の用意と試験の起動は Codex のセッションが行い、結果を統括部と品質保証部に返す。
-- 全部の branch のコミット 3,213 件のうち、2,479 件に `Co-Authored-By: Claude` の行がある (2026-11-07。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
+- 全部の branch のコミット 3,248 件のうち、2,501 件に `Co-Authored-By: Claude` の行がある (2026-11-07、1acd22b4 の時点。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
 
 ## 期間中に作ったもの
 
