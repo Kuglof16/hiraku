@@ -238,9 +238,10 @@ def pick_domains(
             taken = runnable(catalog, ids, product)  # test_ids: a builder makes the case, or Claude writes it
             unbuilt = [t for t in ids if t not in taken]
             written = written_note(catalog, taken, product)
-            given = (reasons.get(d) or "").strip().rstrip("。")  # the note joins with its own 。
+            given = (reasons.get(d) or "").strip()
             note = "。".join(n for n in (written, unbuilt_note(catalog, unbuilt)) if n)
-            reason = (f"{given}。{note}" if given and note else given) or code_reason(catalog, d, taken, flags, unbuilt, written)
+            # the person's sentence as it is; a note after it joins with one 。 (not two)
+            reason = (f"{given.rstrip('。')}。{note}" if given and note else given) or code_reason(catalog, d, taken, flags, unbuilt, written)
             picks.append({"domain": d, "shown_name": name, "reason": reason, "test_ids": taken})
     record: Record = {"want": want.strip(), "flags": flags}
     if speed_class is not None:

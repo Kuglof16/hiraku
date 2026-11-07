@@ -155,10 +155,19 @@ class ImpliedFlagsTest(unittest.TestCase):
     def test_the_reason_has_one_full_stop_before_the_note_and_an_added_test_is_not_said_to_be_left_out(self):
         from hiraku.intake.domains import add_tests
 
+        from hiraku.intake import domains as dom
+
         rec, _ = self.picked(self.FLAGS, reasons={"handling": "倒れないかを確かめる。"})
         reason = {p["domain"]: p["reason"] for p in rec["picks"]}["handling"]
         self.assertNotIn("。。", reason)
-        self.assertTrue(reason.startswith("倒れないかを確かめる。"), reason)
+        # every test of the domain has a builder now (S2 too): no note follows, and the sentence is as it was given
+        self.assertEqual(reason, "倒れないかを確かめる。")
+        # a note follows when a test cannot be built: one 。 between, not two
+        with mock.patch.object(dom, "has_builder", lambda c, t, p=None: t != "S2"):
+            rec, _ = self.picked(self.FLAGS, reasons={"handling": "倒れないかを確かめる。"})
+        reason = {p["domain"]: p["reason"] for p in rec["picks"]}["handling"]
+        self.assertTrue(reason.startswith("倒れないかを確かめる。S2 "), reason)
+        self.assertNotIn("。。", reason)
 
 
 class WrittenLoadCaseTest(unittest.TestCase):
