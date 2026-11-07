@@ -355,6 +355,36 @@ class CheckDesignTest(WrittenCase, unittest.TestCase):
         self.assertIn("骨組みを囲む箱", notes)
         self.assertIn("carried_by の無い部品: frame", notes)
 
+    def test_a_joint_point_off_the_other_shape_is_said_before_a_version(self):
+        """The serving robot run 20261107-164327: H1-joints red on v4 for a cable whose point is not on the
+        controller's shape. check_design says it (a note: H1 judges it), as joint_gaps counts it."""
+        cabled = copy.deepcopy(self.design)
+        battery = next(p for p in cabled["parts"] if p["id"] == "battery")
+        battery["connects_to"] = [{"to": "tray_top", "via": "cable", "at_mm": [-250.0, 0.0, 2000.0]}]
+        got = check_design(self.ctx, {"design": cabled})
+        self.assertTrue(got["ok"])
+        self.assertGreaterEqual(got["joints"]["gaps"], 1)
+        notes = " | ".join(got["notes"])
+        self.assertIn("H1-joints", notes)
+        self.assertIn("battery → tray_top", notes)
+
+    def test_the_variables_the_tools_read_are_said(self):
+        """The serving robot run 20261107-164327: launch refused P2 and P3 for motor_torque and gear_ratio, which
+        the written design did not give. check_design names the variables the run's tools read and do not find."""
+        from types import SimpleNamespace
+
+        param = lambda n, var, default=None: SimpleNamespace(name=n, var=var, default=default)  # noqa: E731
+        tool = SimpleNamespace(params=(param("motor_torque", ("motor_peak_torque", "motor_torque")),
+                                       param("gear_ratio", ("gear_ratio",)),
+                                       param("efficiency", ("drivetrain_efficiency",), 0.9)))
+        given = dict(self.design, variables={"gear_ratio": {"value": 10, "unit": "1"}})
+        with mock.patch.dict(self.ctx.tools, {"launch_stub": tool}), \
+                mock.patch.dict(self.ctx.specs, {"launch_stub": {"usable": True, "tests": ["R1"]}}):
+            notes = " | ".join(check_design(self.ctx, {"design": given})["notes"])
+        self.assertIn("motor_torque (変数 motor_peak_torque か motor_torque; launch_stub)", notes)
+        self.assertNotIn("gear_ratio (", notes)  # given
+        self.assertNotIn("efficiency (", notes)  # has a default
+
     def test_cargo_against_q40(self):
         light = copy.deepcopy(self.design)
         next(p for p in light["parts"] if p["kind"] == "cargo")["mass_kg"] = 5.0

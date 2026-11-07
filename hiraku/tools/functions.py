@@ -1802,6 +1802,61 @@ def _interference(design: Record, out: Record, notes: list[str]) -> None:
                      "赤になります。骨組みを囲む箱の部品を置いていないか、部品の箱が部材に入っていないかを見てください")
 
 
+def _joints(design: Record, out: Record, notes: list[str]) -> None:
+    """(e2) hiraku.solvers.k4_geometry.joint_gaps, as H1-joints counts it: the connects_to whose at_mm is off either
+    shape (or that do not touch), those that do not say where (no at_mm), and the parts joined to nothing. Said
+    before a version is made (the serving robot run 20261107-164327: H1-joints red on v4 for one cable's point)."""
+    try:
+        from hiraku.solvers.k4_geometry.joints import joint_gaps
+    except ImportError:
+        return
+    try:
+        got = joint_gaps(design)
+    except Exception as e:  # a shape K4 cannot read: said, the other checks stand
+        notes.append(f"つながりを確かめられませんでした ({type(e).__name__}: {e})")
+        return
+    gaps, no_at, unjoined = got.get("gaps") or [], got.get("no_at") or [], got.get("unjoined") or []
+    out["joints"] = {"gaps": len(gaps), "no_at": len(no_at), "unjoined": len(unjoined)}
+    said = []
+    if gaps:
+        said.append("つながる点が相手の形の上に無いか、触れていない: " + "、".join(
+            f"{p} → {to} ({via}、{mm:.1f} mm)" for p, to, via, mm in gaps[:INTERFERENCES_SHOWN]))
+    if no_at:
+        said.append("つながる点 (at_mm) が書かれていない: " + "、".join(f"{p} → {to}" for p, to in no_at[:INTERFERENCES_SHOWN]))
+    if unjoined:
+        said.append("どこにもつながっていない部品: " + "、".join(unjoined[:INTERFERENCES_SHOWN]))
+    if said:
+        notes.append("組み立ての試験 (H1-joints) で赤になるつながり: " + " / ".join(said)
+                     + "。版を作る前に connects_to の at_mm と相手を直してください")
+
+
+def _tool_variables(ctx: RunContext, design: Record, notes: list[str]) -> None:
+    """(g) The design variables the run's tools read (their params' var) that this design does not give and that
+    have no default: said, so that a written design can give them (the serving robot run 20261107-164327: launch
+    refused P2 and P3 for motor_torque and gear_ratio). Some of them are optional for the tool; it says so itself."""
+    from hiraku.tools.shelf import test_family
+
+    tests = {lc["test_id"] for lc in ctx.load_cases}
+    if not tests:  # before version 1: the picks and the file's tests
+        tests = {t for p in claude_picks(ctx) or [] for t in p.get("test_ids") or []}
+        tests |= set((ctx.requirements_file or {}).get("tests") or [])
+    fams = {test_family(t) for t in tests}
+    have = set((design.get("variables") or {}).keys())
+    missing: dict[str, tuple[tuple[str, ...], set[str]]] = {}
+    for name, spec in (ctx.specs or {}).items():
+        if not spec.get("usable") or not any(test_family(t) in fams for t in spec.get("tests") or []):
+            continue
+        for p in getattr((ctx.tools or {}).get(name), "params", None) or ():
+            var = tuple(getattr(p, "var", ()) or ())
+            if not var or getattr(p, "default", None) is not None or have & {*var, p.name}:
+                continue
+            missing.setdefault(p.name, (var, set()))[1].add(name)
+    if missing:
+        notes.append("ツールが設計の変数から読む値で、この設計に無いもの (無いとツールや式が断ることがあります): "
+                     + "、".join(f"{n} (変数 {' か '.join(var)}; {', '.join(sorted(tools))})"
+                                 for n, (var, tools) in sorted(missing.items())))
+
+
 def _requirement_value(req: Record, key: str) -> Any:
     return next((r.get("value") for r in req.get("requirements") or [] if r.get("key") == key), None)
 
@@ -1859,6 +1914,9 @@ def design_check(ctx: RunContext, design: Record) -> Record:
                    "counts": {k: len(v) for k, v in ids.items()}}
     if not problems:
         _interference(design, out, notes)
+        if not design.get("archetype"):  # a written design: its joints and the variables the tools read
+            _joints(design, out, notes)
+            _tool_variables(ctx, design, notes)
     _masses(ctx, design, out, notes, whole=not problems)
     out["ok"] = not problems
     return out
