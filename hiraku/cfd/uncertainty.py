@@ -49,28 +49,50 @@ def soc_end(e_wh: float, e_batt_kwh: float, soc_start_pct: float) -> float:
     return soc_start_pct - e_wh / (e_batt_kwh * 1000.0) * 100.0
 
 
-def validation_error_pct(path: Path = VALIDATION_FILE) -> float | None:
-    """The largest |value| of any key ending in error_pct in the validation file, or None when there is none.
+# The reference bodies by kind. A design here is a set of boxes and tubes with sharp edges, so the band on its results comes from
+# the sharp bodies, whose separation is pinned at the edges. The round bodies are reported separately (validation_by_class).
+SHARP_BODIES = ("cube", "plate")
 
-    The largest, so the band does not rest on the body the solver happens to do best on."""
-    path = Path(path)
-    if not path.is_file():
-        return None
+
+def _largest_error(node: Any) -> float | None:
     found: list[float] = []
 
-    def walk(node: Any) -> None:
-        if isinstance(node, dict):
-            for k, v in node.items():
+    def walk(item: Any) -> None:
+        if isinstance(item, dict):
+            for k, v in item.items():
                 if str(k).endswith("error_pct") and isinstance(v, (int, float)) and not isinstance(v, bool):
                     found.append(abs(float(v)))
                 else:
                     walk(v)
-        elif isinstance(node, list):
-            for v in node:
+        elif isinstance(item, list):
+            for v in item:
                 walk(v)
 
-    walk(json.loads(path.read_text(encoding="utf-8")))
+    walk(node)
     return max(found) if found else None
+
+
+def validation_by_class(path: Path = VALIDATION_FILE) -> dict[str, float | None]:
+    """The largest |error| in % per kind of reference body: sharp edges, a round nose (Ahmed), spheres."""
+    path = Path(path)
+    if not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    bodies = data.get("bodies") if isinstance(data, dict) else None
+    if not isinstance(bodies, dict):
+        return {"all": _largest_error(data)}
+    return {"sharp_edges": _largest_error({k: v for k, v in bodies.items() if k in SHARP_BODIES}),
+            "round_nose": _largest_error({k: v for k, v in bodies.items() if k.startswith("ahmed")}),
+            "sphere": _largest_error({k: v for k, v in bodies.items() if k.startswith("sphere")})}
+
+
+def validation_error_pct(path: Path = VALIDATION_FILE) -> float | None:
+    """The band for a design's results: the largest error on the sharp bodies at any grid level, or on all bodies when the file
+    names none. The largest, so the band does not rest on the level the solver happens to do best on."""
+    classes = validation_by_class(path)
+    if "sharp_edges" in classes:
+        return classes["sharp_edges"]
+    return classes.get("all")
 
 
 def _verdict(value: float | None, criterion: Record | None) -> str | None:

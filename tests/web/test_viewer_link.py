@@ -129,7 +129,7 @@ class ViewerLinkServerTest(unittest.TestCase):
         self.assertEqual(none, {"field": None, "reason": "この解析は絵にしない"})
         got = self.json("built", f"/api/viewer?run={self.kept}")
         self.assertFalse(got["provisional"])
-        self.assertEqual(got["runs"], {self.kept: {"provisional": False}})
+        self.assertEqual({k: r["provisional"] for k, r in got["runs"].items()}, {self.kept: False})
 
     def test_a_run_with_only_events_goes_to_the_entry(self):
         # a saved run of showcase/ keeps only events.jsonl: the entry builds its records from the events
@@ -140,7 +140,10 @@ class ViewerLinkServerTest(unittest.TestCase):
         self.assertEqual(self.calls[-1][1], aid)
         self.assertNotEqual(got.get("source"), viewer_link.SAMPLE_SOURCE)
         info = self.json("built", f"/api/viewer?run={SCRIPTED_RUN}")
-        self.assertEqual(info["runs"], {SCRIPTED_RUN: {"provisional": False}})
+        self.assertEqual({k: r["provisional"] for k, r in info["runs"].items()}, {SCRIPTED_RUN: False})
+        # each design.created's design_key (viewer/src/common.py), in order: v5 is the CFD fixture's design
+        self.assertEqual(info["runs"][SCRIPTED_RUN]["design_keys"][-1], "7caab1a546ac")
+        self.assertEqual(len(info["runs"][SCRIPTED_RUN]["design_keys"]), 5)
 
     @unittest.skipUnless(viewer_link.entry() is not None, "viewer.src.build is not here")
     def test_the_real_entry_on_the_analysis_departments_fixture(self):
@@ -154,7 +157,7 @@ class ViewerLinkServerTest(unittest.TestCase):
         self.assertNotIn("\n", none["reason"])
         info = self.json("entry", f"/api/viewer?run={self.fx}")
         self.assertFalse(info["provisional"])
-        self.assertEqual(info["runs"], {self.fx: {"provisional": False}})
+        self.assertEqual({k: r["provisional"] for k, r in info["runs"].items()}, {self.fx: False})
         tables = viewer_link.entry_tables()
         self.assertEqual(info["fields"], tables[0])
         self.assertEqual(info["not_here"], tables[1])
@@ -210,6 +213,41 @@ class ViewerLinkServerTest(unittest.TestCase):
             self.assertTrue((out / "viewer" / "index.html").is_file())
             self.assertFalse((out / "viewer" / "src").exists())
         self.assertEqual(total["files"], sum(1 for p in out.rglob("*") if p.is_file()))
+
+    def test_static_export_has_the_fixtures_and_the_runs_design_keys(self):
+        # ④'s aero tile opens viewer/fixtures/ (the analysis department's records for one design) when
+        # pressed: the static site has them, and data/viewer.json each run's design_keys to tell where
+        out = self.tmp / "static-fx"
+        events = SAVED_DIR / SCRIPTED_RUN / "events.jsonl"
+        viewer_link.export(out, {SCRIPTED_RUN: events}, self.data, build=False)
+        for name in ("aero_cfd.json", "water.js"):
+            src = REPO_DIR / "viewer" / "fixtures" / name
+            self.assertEqual((out / "viewer" / "fixtures" / name).read_bytes(), src.read_bytes(), name)
+        info = json.loads((out / "data" / "viewer.json").read_text(encoding="utf-8"))
+        self.assertIn("7caab1a546ac", info["runs"][SCRIPTED_RUN]["design_keys"])
+
+    def test_the_screens_extras_are_the_fixtures_design(self):
+        # web/js/viewer_link.js VIEWER_EXTRAS: the design_key the fixtures were made for, their pages
+        js = (REPO_DIR / "web" / "js" / "viewer_link.js").read_text(encoding="utf-8")
+        body = re.search(r"export const VIEWER_EXTRAS = \[(.*?)\];", js, re.S).group(1)
+        rows = re.findall(r'id: "(\w+)", domain: "(\w+)", designKey: "(\w+)".*?page: "([^"]+)"', body)
+        self.assertEqual([(r[0], r[1]) for r in rows], [("aero_cfd", "aero"), ("water", "aero")])
+        cfd = json.loads((REPO_DIR / "viewer" / "fixtures" / "aero_cfd.json").read_text(encoding="utf-8"))
+        water = (REPO_DIR / "viewer" / "fixtures" / "water.js").read_text(encoding="utf-8")
+        for _, _, key, _ in rows:
+            self.assertEqual(key, cfd["source"]["design_key"])
+        self.assertIn(f'"design_key":"{rows[1][2]}"', water.replace(" ", ""))
+        self.assertEqual(rows[0][3], "index.html?data=fixtures/aero_cfd.json#aero_cfd")
+        self.assertEqual(rows[1][3], "index.html#water")
+        # (only 150416-scripted's v5 is that design among the saved runs)
+        have = sorted(d.name for d in SAVED_DIR.iterdir() if (d / "events.jsonl").is_file() and key in viewer_link.design_keys(d / "events.jsonl"))
+        self.assertEqual(have, [SCRIPTED_RUN])
+
+    def test_the_fixtures_are_served(self):
+        status, ctype, body = self.get("sample", "/viewer/fixtures/aero_cfd.json")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["field"], "aero_cfd")
+        self.assertEqual(self.get("sample", "/viewer/fixtures/water.js")[0], 200)
 
 
 if __name__ == "__main__":

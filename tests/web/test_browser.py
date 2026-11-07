@@ -1604,10 +1604,10 @@ class BrowserReplayTest(unittest.TestCase):
             page.wait_for_url(f"**/?run={run_id}")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_function("document.getElementById('runlist').hidden && !document.getElementById('loading-note')")
-            # back to the list by 「☰ 一覧へ」 at the top left by the wordmark; the run's id is not on the screen without ?dev=1
+            # back to the list by 「☰ 記録の一覧へ」 at the top left by the wordmark; the run's id is not on the screen without ?dev=1
             back = page.evaluate("""() => ({ link: [...document.querySelectorAll(".brand a, #mode a")].map((a) => [a.textContent, a.getAttribute("href")]),
                                              text: document.getElementById("mode").textContent })""")
-            self.assertEqual(back["link"], [["☰ 一覧へ", "?list=1"]])
+            self.assertEqual(back["link"], [["☰ 記録の一覧へ", "?list=1"]])
             self.assertNotIn(run_id, back["text"])
             page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .pick")
