@@ -1291,6 +1291,16 @@ def claude_picks(ctx: RunContext) -> list[Record] | None:
     return None
 
 
+def claude_assembly_ids(ctx: RunContext) -> list[str]:
+    """The assembly tests of the last domains.picked (pick_domains keeps them in assembly_test_ids, not in picks:
+    assembly is not one of the analysis domains), [] when the run has none."""
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "domains.picked":
+            ids = (e.get("data") or {}).get("assembly_test_ids")
+            return [str(t) for t in ids] if isinstance(ids, list) else []
+    return []
+
+
 def _has_builder(catalog: Any, test_id: str) -> bool:
     """Whether the test has a load case builder: the intake department's has_builder when there is one,
     else hiraku.catalog.build.builder_for. An unknown test id has none."""
@@ -1374,7 +1384,9 @@ def first_version(ctx: RunContext, design: Record, req: Record, agent: str) -> l
         if claude is not None and any(p.get("test_ids") for p in claude):
             from hiraku.catalog.build import build_load_cases
 
-            wanted = list(dict.fromkeys(t for p in claude for t in p.get("test_ids") or []))
+            # the picked domains' tests and the assembly tests pick_domains keeps beside them (H1, H3, H5 to H7)
+            wanted = list(dict.fromkeys([*(t for p in claude for t in p.get("test_ids") or []),
+                                         *claude_assembly_ids(ctx)]))
             no_builder = [t for t in wanted if not _has_builder(catalog, t)]
             skipped = []
             load_cases = build_load_cases(catalog, req, design, [t for t in wanted if t not in no_builder], skipped,
