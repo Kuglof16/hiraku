@@ -2534,9 +2534,39 @@ const tileViews = new TileViews("real", () => (drawn.rev = -2));
 const TILE_PIC_WAIT_MS = 150;
 let tilePicTimer = null;
 
+// ④'s 「直して OK になった試験」 (tiles.js .vstory) on one line: the tests that do not fit are left out
+// and named by 「ほか n」 at the end (their lines in its title). Not on the film (its ④ as before).
+function fitStory() {
+  const ul = $("grid-head").querySelector(".vstory");
+  if (!ul || VIDEO_LAYOUT) return;
+  ul.querySelector(".vmore")?.remove();
+  const items = [...ul.children];
+  for (const li of items) li.hidden = false;
+  const room = ul.clientWidth - (parseFloat(getComputedStyle(ul).paddingRight) || 0);
+  if (!room) return; // (not laid out: ④ not shown)
+  const out = (li) => li.offsetLeft + li.offsetWidth > room;
+  let hidden = items.filter(out);
+  if (!hidden.length) return;
+  for (const li of hidden) li.hidden = true;
+  const more = document.createElement("li");
+  more.className = "vmore";
+  ul.appendChild(more);
+  for (;;) {
+    more.textContent = `ほか ${hidden.length}`;
+    more.title = hidden.map((li) => li.textContent).join("\n");
+    const shown = items.filter((li) => !li.hidden);
+    if (!out(more) || shown.length <= 1) break;
+    const last = shown[shown.length - 1];
+    last.hidden = true;
+    hidden = [last, ...hidden];
+  }
+}
+window.addEventListener("resize", () => fitStory());
+
 // A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
   const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
+  fitStory();
   // the pictures kept are copied at once; new ones are drawn once the grid has settled and the
   // page has loaded, one a task (a record loading renders the grid at each event, and a picture
   // costs frames of the software renderer)
@@ -2595,7 +2625,7 @@ function renderGrid(s) {
   // the newest report's next changes (none written yet, or no next: no block)
   const nx = $("report-next");
   // (the design numbers' paths said by their names, of the report's version; the paths under ?dev=1)
-  const html = reportNextHtml(s.report, { design: s.designs[s.report?.design_version] ?? s.designs[s.currentVersion] ?? null, dev: DEV, cases: s.project?.load_cases, plain: !DEV && !VIDEO_LAYOUT });
+  const html = reportNextHtml(s.report, { design: s.designs[s.report?.design_version] ?? s.designs[s.currentVersion] ?? null, dev: DEV, cases: s.project?.load_cases, plain: !DEV && !VIDEO_LAYOUT, fold: !VIDEO_LAYOUT });
   if (nx.dataset.html !== html) {
     nx.dataset.html = html;
     nx.innerHTML = html;

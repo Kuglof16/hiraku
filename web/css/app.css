@@ -1060,6 +1060,11 @@ body.video .domain-head .dh-close { display: none; }
 /* the newest report's next changes (js/report_next.js): the domain, the change large, the reason under くわしく */
 .report-next { flex: none; max-height: 34%; overflow: auto; border: 1.5px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 16px; }
 .report-next[hidden] { display: none; }
+/* (folded, not on the film: one line 「次に変えるもの (n)」 that opens the rows) */
+.report-next:has(> .rn-fold) { padding: 4px 16px; }
+.report-next .rn-fold > summary { cursor: pointer; list-style-position: inside; }
+.report-next .rn-fold > summary h3 { display: inline; margin: 0; font-size: 17px; }
+.report-next .rn-fold[open] > summary { margin-bottom: 4px; }
 .report-next h3 { margin: 0 0 4px; font-size: 18px; }
 .report-next .rn-src { margin-left: 10px; font-size: 13px; font-weight: 400; color: var(--muted); }
 .report-next ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -1513,7 +1518,13 @@ body.grid-fixed .grid-view .replay-tag { display: none; }
 body:has(#grid-viewer:not([hidden])) .hookline { display: none !important; }
 
 /* ④: what the versions fixed, one line per test that went from NG to OK (tiles.js storyHtml) */
-.vstory { flex-basis: 100%; list-style: none; margin: 6px 0 2px; padding: 8px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 2px 18px; font-size: 16px; background: var(--card, #fffdf8); border: 1.5px solid var(--line, #ccc); border-radius: 10px; }
+/* one line: the tests that do not fit are 「ほか n」 at its end (app.js fitStory) */
+.vstory { flex-basis: 100%; list-style: none; margin: 4px 0 0; padding: 4px 12px; display: flex; flex-wrap: nowrap; gap: 0 22px; overflow: hidden; position: relative; min-width: 0; font-size: 15px; background: var(--card, #fffdf8); border: 1.5px solid var(--line, #ccc); border-radius: 10px; }
+.vstory li { flex: none; white-space: nowrap; }
+.vstory li[hidden] { display: none; }
+.vstory .vmore { color: var(--muted); font-weight: 700; cursor: help; }
+/* (the change of the version, one line; its whole words in its title) */
+body:not(.video) .grid-head .change.long { -webkit-line-clamp: 1; }
 .vstory .sng { color: var(--red, #c0392b); font-weight: 700; }
 .vstory .sok { color: var(--green, #2e7d32); font-weight: 700; }
 body.video .vstory { display: none; } /* (the film's ④ as before) */

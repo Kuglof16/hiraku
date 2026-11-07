@@ -47,7 +47,7 @@ export function changeWords(text, design = null, dev = false, { cases = null, pl
   return out + esc(String(text ?? "").slice(at));
 }
 
-export function reportNextHtml(report, { design = null, dev = false, cases = null, plain = false } = {}) {
+export function reportNextHtml(report, { design = null, dev = false, cases = null, plain = false, fold = false } = {}) {
   const next = Array.isArray(report?.next) ? report.next.filter((n) => n && String(n.change ?? "").trim()) : [];
   if (!next.length) return "";
   const rows = next
@@ -63,5 +63,7 @@ export function reportNextHtml(report, { design = null, dev = false, cases = nul
     })
     .join("");
   const v = Number.isInteger(report.design_version) ? `<span class="rn-src">${verLabel(report.design_version)} の報告から</span>` : "";
+  // (fold: one closed line, 「次に変えるもの (n)」, that opens the rows; the tiles' pictures keep the height)
+  if (fold) return `<details class="rn-fold" data-keep="report-next-fold"><summary><h3>次に変えるもの (${next.length})${v}</h3></summary><ul>${rows}</ul></details>`;
   return `<h3>次に変えるもの${v}</h3><ul>${rows}</ul>`;
 }
