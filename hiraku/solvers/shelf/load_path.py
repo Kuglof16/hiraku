@@ -527,6 +527,7 @@ def newton_solve(model: FEModel, cables: Cable, F: np.ndarray, tol: float = NET_
         ok = True
         for s in range(1, steps + 1):
             Fs = F * (s / steps)
+            alpha, prev = 1.0, math.inf
             for it in range(iterations):
                 cables.disp = np.stack([U[cables.conn[:, 0], :3], U[cables.conn[:, 1], :3]], axis=1)
                 model._k_cache = None  # the cables' stiffness changed with their shape
@@ -554,8 +555,14 @@ def newton_solve(model: FEModel, cables: Cable, F: np.ndarray, tol: float = NET_
                     ok = False
                     break
                 step = float(np.abs(dU[:, :3]).max())
-                U = U + dU * min(1.0, NET_STEP_MM / step) if step > 0.0 else U
-                if step <= tol * max(1.0, float(np.abs(U[:, :3]).max())):
+                # a cable at the slack limit flips taut / slack from one step to the next and the steps stop
+                # shrinking: when a step is not smaller than the one before, take half of it (down to 1/64), and
+                # back up to the whole step while they shrink
+                alpha = max(alpha / 2.0, 1.0 / 64.0) if step >= prev else min(1.0, alpha * 2.0)
+                prev = step
+                take = alpha * min(1.0, NET_STEP_MM / step) if step > 0.0 else 0.0
+                U = U + dU * take
+                if step * take <= tol * max(1.0, float(np.abs(U[:, :3]).max())):
                     break
             else:
                 ok = False
