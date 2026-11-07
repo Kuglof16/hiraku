@@ -141,7 +141,7 @@ export const AGENT_STOP_NOTE_CHARS = 40; // a stop_reason up to this long is sho
 // reason: stop_reason, trimmed), or null when the record says neither (records from before a31e520).
 export function agentStopWhy(d) {
   const code = typeof d?.stop_code === "string" ? d.stop_code : null;
-  const reason = typeof d?.stop_reason === "string" && d.stop_reason.trim() ? d.stop_reason.trim() : null;
+  const reason = typeof d?.stop_reason === "string" && d.stop_reason.trim() ? roleNames(d.stop_reason.trim()) : null;
   const words = AGENT_STOP_JA[code] ?? null;
   if (!words && !reason) return null;
   return { code, words, reason };
@@ -900,7 +900,7 @@ export function runSummaryJa(r) {
 // else the stop_code's words. Before its first design (no version): 「v1 を作る前に止まりました」 first.
 export function stopWhyJa(r) {
   if (!r?.finished || !["stopped", "failed"].includes(runState(r))) return "";
-  const raw = String(r.stop_reason ?? "").trim();
+  const raw = roleNames(String(r.stop_reason ?? "").trim());
   const first = /[ぁ-んァ-ン一-龥]/.test(raw) ? raw.split("。")[0].trim() : "";
   const why = first || STOP_CODE_JA[r.stop_code] || (raw ? `止まった理由: ${raw}` : "");
   const v = Number.isInteger(r.last_version) ? r.last_version : null;
@@ -979,7 +979,8 @@ export function esc(s) {
 // than the line), so a line does not break inside a short aside.
 export function keepAsides(s, max = 40) {
   const re = new RegExp(`\\(((?:[^()]|\\([^()]*\\)){1,${max}})\\)`, "g");
-  return esc(s).replace(re, '<span class="aside">($1)</span>');
+  // (the agents by their plain names: roleNames)
+  return esc(roleNames(s)).replace(re, '<span class="aside">($1)</span>');
 }
 
 // A design generator's choices (revise_design choices; their meaning: hiraku/designgen/ladder_4w.py

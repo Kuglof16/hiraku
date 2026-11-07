@@ -21,6 +21,7 @@ come from the records (read here). Browser tests: python -m tests.web.browser (n
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 import threading
@@ -172,7 +173,8 @@ class JudgeBrokenBrowserTest(unittest.TestCase):
     # 7 ------------------------------------------------------------------------------------------
     def test_a_run_stopped_before_v1(self):
         fin = [e for e in events(ROBOT) if e["kind"] == "run.finished"][-1]["data"]
-        why = fin["stop_reason"].split("。")[0].strip()
+        # (the agents by their plain names on the screen, labels.js roleNames: まとめ役 → まとめ)
+        why = re.sub(r"(設計|まとめ|パッケージ)役|CAE ?役", lambda m: m.group(1) or "CAE", fin["stop_reason"].split("。")[0].strip())
         want = f"この記録は v1 を作る前に止まりました ({why})"
         page, errors = self.open("list=1")
         page.wait_for_selector(f'tr[data-run="{ROBOT}"]', timeout=60000)

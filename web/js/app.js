@@ -32,7 +32,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, stopWhyJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, judgedWords, roleNames, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, stopWhyJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { pathCheckedWhy } from "./why_line.js";
@@ -2628,7 +2628,7 @@ function renderGrid(s) {
     // (round_limit / cost_limit, or the Claude runner's English "cost limit ..." / "turn limit ...").
     const code = s.stopCode ?? (/^cost limit\b/.test(s.stopReason ?? "") ? "cost_limit" : /^turn limit\b/.test(s.stopReason ?? "") ? "turn_limit" : s.stopReason);
     const words = code === "round_limit" ? `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した` : STOP_CODE_JA[code];
-    const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
+    const why = words ?? (s.stopReason ? `止まった理由: ${esc(judgedWords(s.stopReason))}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
     banner.innerHTML = `<b>${why}。NG が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>${
       // 「▶ その場で走らせる」 is at the top right only under ?dev=1 with a server (renderTopbar)
       DEV && !STATIC
@@ -3628,7 +3628,8 @@ async function openRun(runId) {
 
 // A text of the run list (a want, a demo row's line), escaped, with each short aside in brackets
 // kept on one line (the run list's .nw): not "(無料・ / Claude なし)".
-const prose = (s) => esc(s).replace(/\(([^()]{1,40})\)/g, '<span class="nw">($1)</span>');
+// (the agents by their plain names: judgedWords' roleNames)
+const prose = (s) => esc(roleNames(s)).replace(/\(([^()]{1,40})\)/g, '<span class="nw">($1)</span>');
 
 async function fetchRuns() {
   return (await fetch(getUrl("/api/runs"), { cache: "no-store" })).json();

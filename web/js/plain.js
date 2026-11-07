@@ -20,7 +20,7 @@
 // The name put in is in span.rn, which ?dev=1 hides (the record's own word shows there).
 // Numbers and units, OK / NG and vN are never record words, so they stay.
 
-import { BASE_JA, esc, plainToolName, quantityName } from "./labels.js";
+import { BASE_JA, esc, plainToolName, quantityName, roleNames } from "./labels.js";
 
 // Lower-case words of the screen's own, not a record's English: units and names said as they are.
 const OWN_WORDS = new Set(["von", "hooks", "deg", "rpm", "rad"]);
@@ -291,6 +291,8 @@ export const hasHidden = (text, opts = {}) => recordMask(text, opts).some(Boolea
 //   brackets shown) in one piece (span.aside), so a line does not break inside it
 // opts.empty: words put in (span.rn) when nothing but the "who:" before the first colon is left
 export function markRecordWords(text, opts = {}) {
+  // (the agents by their plain names, labels.js roleNames: 設計 / まとめ / パッケージ / CAE, not 「…役」)
+  text = roleNames(text);
   if (FILM) return filmMarks(text);
   const { s, out, names, text: plain } = maskOf(text, opts.name, opts.terms);
   const opens = new Set();
