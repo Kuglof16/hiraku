@@ -122,14 +122,53 @@ requirements:
       assumption: the robot stays still on the steepest slope it is allowed to drive on, the 1/12 (= 8.33 %) of Q13
       (バリアフリー法施行令 第19条, read 2026-11-03 in a source check); that parking uses the same slope is HIRAKU's choice
   - key: Q54
-    name: 稼働時間
-    value: 10
-    unit: h
+    name: 稼働時間 (距離に直した値)
+    value: 43.2
+    unit: km
     source: default
-    trust: 1
+    trust: 3
     basis: >-
-      各社の稼働時間 9〜18 h の下の側, https://www.keenon.com/en/product/T9 ほか;
-      the range 9-18 h read 2026-11-03 in a source check (Keenon)
+      computed: 10 h x Q50 1.2 m/s (4.32 km/h) = 43.2 km, the distance of one charge if the robot never stands still (an upper
+      bound; HIRAKU's choice). The 10 h is the lower side of the makers' operating hours 9-18 h, https://www.keenon.com/en/product/T9
+      and others; the range 9-18 h read 2026-11-03 in a source check (Keenon). The builders (P4, T1, T2) read a distance in km,
+      so the hours are turned into one here
+  - key: Q75
+    name: 横の加速度
+    value: 0.049
+    unit: g
+    source: default
+    trust: 3
+    basis: >-
+      computed: v^2 / (R g) = (1.2 m/s)^2 / (3 m x 9.80665 m/s^2) = 0.049 g, the sideways acceleration of the tightest turn the
+      file allows (Q50 1.2 m/s, Q58 3 m). That the design's inertia loads use it is HIRAKU's choice (assumption); the vehicle's
+      value is not borrowed
+  - key: Q76
+    name: 前後の加速度
+    value: 0.147
+    unit: g
+    source: default
+    trust: 3
+    basis: >-
+      computed: v^2 / (2 s g) = (1.2 m/s)^2 / (2 x 0.5 m x 9.80665 m/s^2) = 0.147 g, the braking of a stop within Q52 0.5 m from
+      Q50 1.2 m/s (it is larger than the start, Q51 3 s: 0.04 g). That the design's inertia loads use it is HIRAKU's choice
+      (assumption); the vehicle's value is not borrowed
+  - key: Q12
+    name: 路面の粗さ (ISO 8608 のクラス)
+    value: A
+    source: default
+    trust: 3
+    basis: >-
+      assumption: an indoor floor (tile, wood, carpet) is taken as ISO 8608 class A, the smoothest class; not read in any source
+      for floors (ISO 8608 is for roads). It is only the input the fatigue builder needs
+  - key: Q90
+    name: 走行距離 (疲労)
+    value: 78840
+    unit: km
+    source: default
+    trust: 3
+    basis: >-
+      computed: Q03 10 h a day for 5 years, at Q50 1.2 m/s (4.32 km/h) with the robot never standing still: 43.2 km x 365 x 5 =
+      78 840 km (an upper bound; HIRAKU's choice). The hours and the years are Q03's assumption
   - key: Q55
     name: 充電時間
     value: 4.5

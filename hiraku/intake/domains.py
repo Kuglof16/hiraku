@@ -297,8 +297,9 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
 
     tests: [{test_id, reason}], each a test of the catalog that is not in the record yet; a test whose domain is not picked
     lights it (the reason is that domain's reason); a test of a domain the code left off takes the domain off the `off` list.
-    no_addition_reason: why Claude looked and adds nothing. Returns (record, ignored, no_builder): ignored are the ids
-    the record already had, no_builder the added ones no builder makes a load case for (write_load_case or a tool).
+    no_addition_reason: why Claude looked and adds nothing. Returns (record, ignored, []): ignored are the ids the record already had.
+    A test no builder makes a load case for is refused (IntakeError naming it, with the tests that can be added): the run's
+    file lists tests a run can build, and one without a builder refuses every first version.
     """
     tests = list(tests or [])
     reason = (no_addition_reason or "").strip()
@@ -313,7 +314,7 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
     flags = record.get("flags") or {}
     added = [dict(a) for a in record.get("added_tests", [])]
     ignored: list[str] = []
-    no_builder: list[str] = []
+    refused: list[str] = []
     seen: set[str] = set()
     for item in tests:
         if not isinstance(item, dict) or not str(item.get("test_id", "")).strip() or not str(item.get("reason", "")).strip():
@@ -330,6 +331,9 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
             ignored.append(tid)
             continue
         seen.add(tid)
+        if not has_builder(catalog, tid, product):
+            refused.append(tid)
+            continue
         d = test["domain"]
         if d == "assembly":
             out["assembly_test_ids"].append(tid)
@@ -344,13 +348,18 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
             pick["test_ids"].append(tid)
             pick["reason"] = _without_unbuilt(pick["reason"], f"{tid} {test['title']}") or why
         added.append({"test_id": tid, "reason": why})
-        if not has_builder(catalog, tid, product):
-            no_builder.append(tid)
+    if refused:  # nothing is added when one is refused: Claude chooses again from the tests a run can build
+        addable = [t for t in catalog.tests if t["id"] not in have and t["id"] not in seen and has_builder(catalog, t["id"], product)]
+        named = "・".join(f"{t} {catalog.test(t)['title']}" for t in refused)
+        offer = ("足せる試験: " + "、".join(f"{t['id']} {t['title']}" for t in addable)
+                 if addable else "この製品で足せる試験はありません (荷重条件を作れる試験は、もう選びに入っています)")
+        raise IntakeError(f"{named} は荷重条件の作り方 (builder) がまだ無いので、足せません。{offer}。"
+                          "足せる試験から選び直すか、足すものが無いときは tests を空にして no_addition_reason (見直した理由) だけで呼んでください")
     if added:
         out["added_tests"] = added
     if reason:
         out["no_addition_reason"] = reason
-    return out, ignored, no_builder
+    return out, ignored, []
 
 
 def project_picks(record: Record) -> list[Record]:

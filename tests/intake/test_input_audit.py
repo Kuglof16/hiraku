@@ -12,6 +12,7 @@ from hiraku.solvers.k0_handcalc import units
 
 NUM = re.compile(r'number\((?:body_mass_in_kg\()?req\)?,\s*"(Q[0-9]+)",\s*"([^"]+)"')
 REQ = re.compile(r'requirement\(req,\s*"(Q[0-9]+)"(?:,\s*"([^"]+)")?')
+LOOP = re.compile(r'_loop\(spec,\s*req,\s*"(Q[0-9]+)"\)')  # the forest loop reads its distance key in km
 
 
 def builder_numbers() -> dict[str, set[str]]:
@@ -37,7 +38,7 @@ class ProductFilesTest(unittest.TestCase):
 
     def test_the_builder_scan_finds_the_numbers_it_should(self):
         nums = builder_numbers()
-        for key in ("Q11", "Q50", "Q52", "Q53", "Q60"):
+        for key in ("Q11", "Q50", "Q52", "Q53", "Q60", "Q90"):
             self.assertIn(key, nums)
 
     def test_no_entry_a_builder_reads_as_a_number_is_a_sentence_or_in_a_unit_it_cannot_convert(self):

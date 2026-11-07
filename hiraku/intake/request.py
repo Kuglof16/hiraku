@@ -25,7 +25,7 @@ import yaml
 from hiraku import contract
 from hiraku.intake import events as ev
 from hiraku.intake import hearing
-from hiraku.intake.domains import IntakeError
+from hiraku.intake.domains import IntakeError, has_builder
 from hiraku.intake.guess import guess_flags
 from hiraku.intake.pipeline import intake, save
 from hiraku.intake.products import load_product, product_files
@@ -254,6 +254,15 @@ def _look(d: Record, *, warnings: list[str] | None = None, cost_usd: float | Non
     return out
 
 
+def _buildable(test_id: str, product: str | None) -> bool:
+    """Does a run have a builder for the test? A file that lists a test without one makes every first version refuse
+    ("test F3 has no load-case builder yet"), and a file's tests come before the run's own choice: such a test stays in
+    the choice (domains.picked) for write_load_case, not in the file's tests."""
+    from hiraku.catalog import load_catalog
+
+    return has_builder(load_catalog(), test_id, product)
+
+
 def _file(d: Record, res: Any) -> Record:
     rf = copy.deepcopy(res.requirements_file)
     kept = list(dict.fromkeys([t for p in res.domains["picks"] for t in p["test_ids"]] + list(res.domains["assembly_test_ids"])))
@@ -264,8 +273,8 @@ def _file(d: Record, res: Any) -> Record:
             if k in own:
                 rf[k] = own[k]
         tests = own.get("tests")
-        if tests and d.get("added_tests"):  # what Claude added to the choice joins the file's tests (adding only)
-            tests = [*tests, *[a["test_id"] for a in d["added_tests"] if a["test_id"] not in tests]]
+        if tests and d.get("added_tests"):  # what Claude added to the choice joins the file's tests (adding only), the ones a run can build
+            tests = [*tests, *[a["test_id"] for a in d["added_tests"] if a["test_id"] not in tests and _buildable(a["test_id"], known)]]
         if "beyond" in own:
             rf["beyond"] = list(own["beyond"])
     rf.update(d["limits"])
@@ -288,8 +297,10 @@ def _file(d: Record, res: Any) -> Record:
             tests = [t for t in tests if stays(t)]
         else:
             tests = kept
-    if not tests and d.get("added_tests"):  # the catalog would choose by the flags and miss them: the file lists the whole choice
-        tests = kept
+    # the catalog would choose by the flags and miss what Claude added: then the file lists the whole choice. Only a test a run
+    # can build counts: when every one added was dropped, nothing is listed and the run's own choice stands (a file's tests come first)
+    if not tests and any(_buildable(a["test_id"], known) for a in d.get("added_tests") or []):
+        tests = [t for t in kept if _buildable(t, known)]  # a test no builder makes would be refused for the whole file: not listed
     if tests:
         rf["tests"] = list(tests)
     if "beyond" in rf and "tests" in rf:

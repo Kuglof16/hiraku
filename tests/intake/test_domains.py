@@ -158,14 +158,7 @@ class ImpliedFlagsTest(unittest.TestCase):
         rec, _ = self.picked(self.FLAGS, reasons={"handling": "倒れないかを確かめる。"})
         reason = {p["domain"]: p["reason"] for p in rec["picks"]}["handling"]
         self.assertNotIn("。。", reason)
-        left = [t for t in ("S2",) if "S2" in reason]
-        if left:  # S2 has no builder here: the note says so, and adding it takes the sentence out
-            self.assertIn("S2", reason)
-            after, _, _ = add_tests(rec, [{"test_id": "S2", "reason": "転ぶ向きを見る"}])
-            again = {p["domain"]: p for p in after["picks"]}["handling"]
-            self.assertIn("S2", again["test_ids"])
-            self.assertNotIn("S2 旋回", again["reason"])  # taken into the run: not "left out" any more
-            self.assertTrue(again["reason"].startswith("倒れないかを確かめる"))
+        self.assertTrue(reason.startswith("倒れないかを確かめる。"), reason)
 
 
 class WrittenLoadCaseTest(unittest.TestCase):

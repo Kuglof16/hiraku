@@ -216,28 +216,31 @@ class AddTestsToolTest(ToolsTestCase):
         call("add_tests", ctx, tests=[{"test_id": left[1], "reason": "二つ目"}])
         self.assertEqual([a["test_id"] for a in self.picked(ctx)["added_tests"]], left)
 
-    def test_a_test_no_builder_makes_a_case_for_is_added_and_the_tool_says_where_to_go(self):
+    def test_a_test_no_builder_makes_a_case_for_is_refused_with_the_tests_that_can_be_added(self):
+        from hiraku.intake import domains as dom
+
         ctx = make_ctx(self.root)
         call("pick_domains", ctx, **self.ARGS)
+        with mock.patch.object(dom, "has_builder", lambda c, t, p=None: t == "N1"):  # only N1 can be built
+            with self.assertRaises(ToolError) as e:
+                call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
+        msg = str(e.exception)
+        self.assertIn("builder", msg)
+        self.assertIn("足せる試験: N1", msg)  # the tests that can be added are shown
+        self.assertIn("no_addition_reason", msg)  # and the way out: add nothing, with the reason
+        self.assertNotIn("added_tests", self.picked(ctx))  # nothing was added
+
+    def test_when_no_test_can_be_added_the_message_says_so_and_adding_nothing_goes_on(self):
         from hiraku.intake import domains as dom
 
+        ctx = make_ctx(self.root)
+        call("pick_domains", ctx, **self.ARGS)
         with mock.patch.object(dom, "has_builder", lambda c, t, p=None: False):
-            got = call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
-        self.assertEqual(got["no_builder"], ["F1"])
-        self.assertIn("write_load_case", got["next"])
-
-
-    def test_no_builder_is_said_whether_or_not_a_load_case_writer_is_registered(self):
-        from hiraku.intake import domains as dom
-
-        for writer in (None, lambda *a: None):  # write_load_case registered (as hiraku.tools does) or not
-            with self.subTest(writer=writer is not None):
-                ctx = make_ctx(Path(tempfile.mkdtemp(dir=self.root)))
-                call("pick_domains", ctx, **AddTestsToolTest.ARGS)
-                with mock.patch.object(dom, "load_case_writer", writer), mock.patch.object(dom, "has_builder", lambda c, t, p=None: False):
-                    got = call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
-                self.assertEqual(got["no_builder"], ["F1"])
-                self.assertIn("write_load_case", got["next"])
+            with self.assertRaises(ToolError) as e:
+                call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
+            self.assertIn("足せる試験はありません", str(e.exception))
+            got = call("add_tests", ctx, no_addition_reason="荷重条件を作れる試験は、もう選びに入っている")
+        self.assertTrue(got["recorded"])
 
 
 class NoIdsInSentencesTest(ToolsTestCase):
