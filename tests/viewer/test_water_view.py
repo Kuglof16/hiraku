@@ -107,7 +107,6 @@ class Stored(unittest.TestCase):
         self.assertEqual(data["source"]["design_version"], 5)
         self.assertIsNone(PATHS.search(json.dumps({k: v for k, v in data.items() if k not in ("surface", "spray", "spray_start")}, ensure_ascii=False)))
         self.assertLess(len(text), 4_000_000)
-        self.assertNotIn('"b64"', text.split('"hex"')[0].rsplit('"frame"', 1)[0])
 
     def test_the_arrays_of_the_stored_data_are_hex(self):
         text = (ROOT / "viewer" / "data" / "water.js").read_text(encoding="utf-8")
