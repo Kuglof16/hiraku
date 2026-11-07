@@ -1,7 +1,9 @@
 """The flooded road's place in the viewer: the stored water record (hiraku.cfd.water's case.json and replay.npz) as data for the
 page. Nothing is computed here and no GPU is needed.
 
-    python -m viewer.src.water <case folder> --design <design.json>   # -> viewer/data/water.js
+    python -m viewer.src.water <case folder> --design <design.json>   # -> viewer/fixtures/water.js
+
+The stored file is kept in the repository (viewer/fixtures/, not the ignored viewer/data/), so the place opens with no run and no GPU.
 
 The data (window.VIEW_DATA["water"]), on top of what every field has (common.py):
     statement                the sentence the page always shows: for showing, not a judgement of what can be crossed
@@ -27,6 +29,7 @@ Record = dict[str, Any]
 TOOL = "flooded_road"
 SPRAY_PER_FRAME = 1200  # the sample the page draws: enough to see the spray, small enough to keep in the repository
 SEED = 5
+STORED = common.VIEWER / "fixtures"
 CHECK_NAMES = {"still_water": "静止した水の水位と残留速度", "moving_box": "移動する箱の運動量の釣り合い", "standing_vehicle": "計算の形と描く形が同じ (水の粒子が形の中に残らない)",
                "standing_vehicle_grid_only": "同じ確かめの、粒子を形の外へ戻す段を外した参考", "standing_vehicle_25mm": "同じ確かめの 25 mm 格子"}
 
@@ -41,6 +44,7 @@ def _hex(packed: Record) -> Record:
 
 def extra(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--design", type=Path, help="the design the case was run on (default: <case>/design.json)")
+    ap.set_defaults(out=STORED)
 
 
 def _road_height(depth_level_m: float, half_length_m: float, slope: float, blend_m: float, x: np.ndarray) -> np.ndarray:
