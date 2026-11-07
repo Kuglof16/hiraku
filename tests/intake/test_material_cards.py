@@ -12,6 +12,11 @@ SAME = {"E_MPa": "E_MPa", "nu": "nu", "density_kg_m3": "density_kg_m3", "yield_M
         "elongation_pct": "elongation_pct"}
 
 
+# A folder on a drive (not the "s:/" of a link), a home folder, or a mail address. The home folder's name is joined so
+# the repository's own scan does not read this line.
+PRIVATE_PLACES = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]|[\\/]" + "Users" + r"[\\/]|/home/|[\w.+-]+@[\w-]+\.[a-z]{2,}", re.I)
+
+
 def load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -49,7 +54,13 @@ class MaterialCardTest(unittest.TestCase):
         for path in CARDS:
             text = path.read_text(encoding="utf-8")
             with self.subTest(card=path.name):
-                self.assertIsNone(re.search("FU" + "MI|[A-Z]:[/\\\\]Cl" + "aude", text))
+                self.assertIsNone(PRIVATE_PLACES.search(text))  # any folder on a drive, home folder or mail address, by its shape
+
+    def test_the_place_check_sees_paths_and_mail_but_not_links(self):
+        for seen in ("D:/runs/a", "E:\\runs\\a", "/home/a/b", "x\\" + "Users" + "\\a", "a.b@example.org"):
+            self.assertIsNotNone(PRIVATE_PLACES.search(seen), seen)
+        for unseen in ("https://example.org/a", "Re 1e5: 0.47", "ratio 1:2", "read 2026-11-06"):
+            self.assertIsNone(PRIVATE_PLACES.search(unseen), unseen)
 
     def test_a_card_has_the_values_of_the_same_material_in_materials_json(self):
         materials = load(ROOT / "materials.json")
