@@ -135,7 +135,7 @@ export function roundCardHtml(s, playhead) {
     const base = s.designs[pending[0].baseVersion] ?? s.designs[s.currentVersion];
     const who = new Set(pending.map((p) => p.agent_id ?? moduleOwner(p.module_id, base))).size;
     return (
-      `<div class="rc-head" data-round="pending">${esc(verLabel(pending[0].baseVersion ?? s.currentVersion))} を直す提案: 設計役 ${who} 人が並べて出した</div>` +
+      `<div class="rc-head" data-round="pending">${esc(verLabel(pending[0].baseVersion ?? s.currentVersion))} を直す提案: 設計 ${who} 人が並べて出した</div>` +
       `<ol class="rc-list">${pending.map((p) => rowHtml(p, base)).join("")}</ol>` +
       `<div class="rc-foot">${esc(agentName("packager"))}が 1 つの設計にまとめるのを待っている</div>`
     );

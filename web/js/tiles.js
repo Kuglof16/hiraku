@@ -254,9 +254,15 @@ function tilePet(s, d, pets) {
 
 // The tile's one number: the verdict that decides the domain as recorded (a failed one first,
 // else the one with the smallest margin, margin_pct; else the first). null without verdicts.
+// With nothing failed, a domain leads with the test that stands for it when it has one (操安: the double lane change).
+const LEAD_CASE = [/dlc/i];
 export function headline(verdicts) {
   if (!verdicts.length) return null;
   const failed = verdicts.filter((x) => x.pass === false);
+  if (!failed.length) {
+    const lead = verdicts.find((x) => LEAD_CASE.some((re) => re.test(x.load_case_id ?? "")));
+    if (lead) return lead;
+  }
   const list = failed.length ? failed : verdicts;
   const m = (x) => (Number.isFinite(x.margin_pct) ? x.margin_pct : Infinity);
   return list.reduce((a, b) => (m(b) < m(a) ? b : a));

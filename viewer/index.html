@@ -31,6 +31,7 @@
   button.on { border-color: var(--ink); background: var(--ink); color: var(--panel); font-weight: 600; }
   button:disabled { opacity: 0.5; cursor: default; }
   #switch { display: flex; flex-wrap: wrap; gap: 4px; }
+  #switch[hidden], #switchHead[hidden] { display: none; }   /* one field with data: no switch (js/main.js) */
   #switch button { font-size: 14px; padding: 3px 12px; }
   /* nothing is drawn over the 3D view: the header sits above it, the rest in the side panel and the bottom pane */
   #hud { position: absolute; left: 0; top: 0; right: 340px; height: 86px; overflow: hidden; padding: 4px 16px; background: var(--paper); border-bottom: 1px solid var(--rule); }
@@ -73,6 +74,13 @@
   #fieldpanel .list { max-height: 260px; overflow-y: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--card); }
   #fieldpanel .list div { padding: 1px 6px; cursor: pointer; }
   #fieldpanel .list div.on { background: var(--ink); color: var(--panel); }
+  /* the large play button at the 3D view's lower left (the panel's 「▶ 再生」 found at a glance): red with a white rim
+     until pressed (the one red that is not a criterion's NG, as the person asked), dark while it plays (「❚❚ 止める」) */
+  #bigplay { position: absolute; left: 16px; bottom: 252px; z-index: 5; font-size: 20px; font-weight: 700; padding: 10px 26px;
+    background: #d3352b; color: #fff; border: 2px solid #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+  #bigplay:hover { background: #b02a21; border-color: #fff; }
+  #bigplay.playing, #bigplay.playing:hover { background: #1c1f24; }
+  #bigplay[hidden] { display: none; }
 </style>
 <!-- three.js r170 (0.170.0) from jsDelivr, the same version and URL form as web/index.html. -->
 <script type="importmap">
@@ -101,6 +109,7 @@
 <body>
 <div id="loading">読み込み中…</div>
 <div id="view"></div>
+<button id="bigplay" type="button" hidden>▶ 動きを再生</button>
 <div id="hud">
   <div id="head1"><span id="title"></span><span id="source"></span></div>
   <div id="tline"></div>
@@ -109,7 +118,7 @@
 <div id="bottom"><div id="plotwrap"><canvas id="plot"></canvas></div><div id="inputs"></div></div>
 
 <div id="panel">
-  <h3>分野</h3>
+  <h3 id="switchHead">分野</h3>
   <div id="switch"></div>
 
   <h3>選択</h3>

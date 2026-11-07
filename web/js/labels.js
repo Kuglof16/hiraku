@@ -87,9 +87,9 @@ export function plainReason(reason) {
 }
 
 export const ROLE_JA = {
-  lead: "まとめ役",
-  designer: "設計役",
-  packager: "パッケージ役",
+  lead: "まとめ",
+  designer: "設計",
+  packager: "パッケージ",
   system: "HIRAKU",
   user: "あなた",
 };
@@ -784,13 +784,13 @@ export function agentName(id) {
   if (!id) return "";
   if (ROLE_JA[id]) return ROLE_JA[id];
   if (id.startsWith("cae.")) return DOMAIN_JA[id.slice(4)] ?? id;
-  if (designerRole(id)) return `${DESIGNER_ROLES_JA[designerRole(id)]}の設計役`; // designer.structure → 構造の設計役
-  if (designerModule(id)) return `${moduleName(designerModule(id))}の設計役`; // older records: designer.<module>
+  if (designerRole(id)) return `${DESIGNER_ROLES_JA[designerRole(id)]}の設計`; // designer.structure → 構造の設計
+  if (designerModule(id)) return `${moduleName(designerModule(id))}の設計`; // older records: designer.<module>
   return id;
 }
 
 export function agentLongName(id) {
-  if (id && id.startsWith("cae.")) return `${agentName(id)}の CAE 役`;
+  if (id && id.startsWith("cae.")) return `${agentName(id)}の CAE`;
   return agentName(id);
 }
 
@@ -973,10 +973,10 @@ export function keepAsides(s, max = 40) {
 // 不合格 and for 緑 / 赤 meaning a verdict, 判定 for 合否, 比べ for 照合 (a prediction against an
 // analysis) and 不一致 for 食い違い, vN for 版 N. The record keeps its own words (beyond.js reads
 // them as written); only what is shown changes. 赤 / 緑 as a colour (赤い, 赤色, 半透明の赤 ...)
-// are kept.
+// are kept. The agents by their plain names (roleNames): 設計 / まとめ / パッケージ / CAE, not 「…役」.
 const NOT_ASCII = "[^\\s\\x00-\\x7f]";
 export function judgedWords(text) {
-  return String(text ?? "")
+  return roleNames(String(text ?? ""))
     // judge.py's 「まだ OK にできない試験」 (before: まだ合格にできない) names a test still held
     // back, often beside its NG value: no OK beside it on the screen
     .replace(/まだ\s*(?:合格|OK)\s*にできない/g, "まだ判定を出せない")
@@ -989,6 +989,12 @@ export function judgedWords(text) {
     .replace(/版\s*(\d+)/g, "v$1")
     .replace(new RegExp(`(${NOT_ASCII})(OK|NG|v\\d)`, "g"), "$1 $2")
     .replace(new RegExp(`(OK|NG)(${NOT_ASCII})`, "g"), (m, w, c) => ("、。・)）:：".includes(c) ? m : `${w} ${c}`));
+}
+
+// The agents' names as shown: 「設計」「まとめ」「パッケージ」「CAE」 (「…役」 reads as a part in a play).
+// Records, prompts and agent ids keep their own words; a record's text is read through this when shown.
+export function roleNames(text) {
+  return String(text ?? "").replace(/(設計|まとめ|パッケージ)役|CAE ?役/g, (m, w) => w ?? "CAE");
 }
 
 // What an agent said, as plain text: Markdown marks (bold, headings, code,

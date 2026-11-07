@@ -394,7 +394,7 @@ class AgentPetsTest(unittest.TestCase):
         self.assertEqual((got["why"], got["shown"]), ("仕事を終えた", True))
 
     def test_the_cae_roles_are_one_row_until_opened(self):
-        """The seven CAE agents are one row 「CAE 役 ×7」 (one designer, one lead: their own rows),
+        """The seven CAE agents are one row 「CAE ×7」 (one designer, one lead: their own rows),
         closed by default; its look follows the members (at work: the same class as a member's row at
         work); pressed, it opens into the seven rows and closes again; the same t is the same list."""
         base = self.serve()
@@ -408,7 +408,7 @@ class AgentPetsTest(unittest.TestCase):
             text = page.inner_text("#agents")
             self.assertEqual([r["agent"] or r["group"] for r in closed], ["lead", "designer", "packager", "cae"], t)
             head = closed[3]
-            self.assertEqual((head["text"], head["open"]), ("▸CAE 役 ×7", "false"), t)
+            self.assertEqual((head["text"], head["open"]), ("▸CAE ×7", "false"), t)
             page.click("#agents [data-agent-group='cae']")
             page.wait_for_selector("#agents li.member")
             opened = page.evaluate(rows)
@@ -436,7 +436,7 @@ class AgentPetsTest(unittest.TestCase):
         self.assertEqual(got["loaded"], "none")
         self.assertEqual(got["pets"], [])
         self.assertEqual(got["circles"], len(AGENTS))
-        self.assertTrue(any(n.startswith("まとめ役") for n in got["names"]), got["names"])
+        self.assertTrue(any(n.startswith("まとめ") for n in got["names"]), got["names"])
         grid = page.evaluate(READ, {"t": None, "tab": "grid"})
         self.assertEqual(grid["pets"], [])
         self.assertEqual(grid["circles"], 8)  # one per tile, as before

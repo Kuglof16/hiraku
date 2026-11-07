@@ -29,6 +29,21 @@ def check(viewer: Path | str, field: str, shot: str | None = None, t: int | None
         out["title"] = page.text_content("#title")
         out["nT"] = page.evaluate("HV.state.ctl ? HV.state.ctl.nT : 0")
         out["variant"] = page.evaluate("HV.state.variant")
+        # the large play button on the 3D view (for a field with more than one moment): the field plays as soon as
+        # it opens, so it says 止める in the dark colour; pressed, it stops (red, 動きを再生) like the panel's
+        # button, and the checks below see one moment
+        bg = "getComputedStyle(document.getElementById('bigplay')).backgroundColor"
+        big = {"shown": page.is_visible("#bigplay"), "text": page.text_content("#bigplay"), "playing": page.evaluate("HV.state.playing")}
+        if big["shown"]:
+            big["bg"] = page.evaluate(bg)
+            page.click("#bigplay")
+            page.mouse.move(0, 0)   # off the button: its colour, not the hover's
+            big["stopped"] = page.text_content("#bigplay")
+            big["stopped_bg"] = page.evaluate(bg)
+            big["panel"] = page.text_content("#play")
+            # back at the moment the field opens on (it played from there)
+            page.eval_on_selector("#time", "e => { e.value = Math.min(HV.state.ctl.t0 || 0, HV.state.ctl.nT - 1); e.dispatchEvent(new Event('input')); }")
+        out["bigplay"] = big
         if mode is not None:
             page.evaluate(f"HV.state.ctl.selectMode({mode})")
             page.wait_for_timeout(200)
@@ -69,6 +84,7 @@ def check(viewer: Path | str, field: str, shot: str | None = None, t: int | None
         out["surround"] = page.evaluate("(() => { const b = document.getElementById('surroundBox'); return b ? { open: b.open, text: b.textContent } : null; })()")
         out["inputs"] = page.text_content("#inputs")[:2000]
         out["switch"] = page.evaluate("[...document.querySelectorAll('#switch button')].map(b => b.textContent)")
+        out["switch_shown"] = page.evaluate("!document.getElementById('switch').hidden && !document.getElementById('switchHead').hidden")
         # the code names after the Japanese quantity names (small grey type) in the inputs pane
         out["codes"] = page.evaluate("[...document.querySelectorAll('#inputs .code')].map(e => e.textContent)")
         out["contour"] = page.evaluate("(() => { const c = HV.state.ctl && HV.state.ctl.contour && HV.state.ctl.contour(); return c ? { min: c.min, max: c.max, note: c.note || '', title: c.title || '', scale: c.scale || '' } : null; })()")

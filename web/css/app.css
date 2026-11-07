@@ -264,7 +264,7 @@ body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 70
 .agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
 .agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
 .agents ul.pets.many .petrow .petslot { width: 42px; height: 42px; }
-/* a bundle of one role kind (app.js agentGroupHtml): 「▸ 設計役 ×6」, opened into its members */
+/* a bundle of one role kind (app.js agentGroupHtml): 「▸ 設計 ×6」, opened into its members */
 .agents .ag-toggle { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .agents .ag-toggle .caret { font-size: 0.8em; color: var(--muted); width: 0.9em; }
 .agents .ag-toggle .cnt { font-weight: 700; }

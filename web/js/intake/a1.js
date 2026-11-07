@@ -146,7 +146,7 @@ export function renderA1(el, m, api, ui) {
   const review = reviewLine(m);
   // the lead's own pet beside the headline (ui.petSlots "lead"; the host mounts role lead): working while the choice is being made
   const thinking = !!(m.chat.length || m.want || m.domains?.want) && (draftN > 0 || waitN > 0 || !m.domains);
-  const leadSlot = petSlot({ domain: "lead", shownName: "まとめ役", state: thinking ? "wait" : m.domains ? "done" : "idle", litAt: null }, ui);
+  const leadSlot = petSlot({ domain: "lead", shownName: "まとめ", state: thinking ? "wait" : m.domains ? "done" : "idle", litAt: null }, ui);
   const ask = askingPanel(m, api, ui);
   el.classList?.[ask ? "add" : "remove"]("has-ask");
   const want = m.want || m.domains?.want || [...m.chat].reverse().find((c) => c.who === "user")?.text || "";

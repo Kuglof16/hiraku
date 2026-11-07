@@ -21,7 +21,9 @@ HV.fields.nvh = {
     if (wheels) ctx.root.add(wheels.group);
     const frf = D.frf ? { x: await HV.unpack(D.frf.x), y: await HV.unpack(D.frf.y) } : null;
     const NT = 48;
-    const S = { mode: 0, scale: 150, t: 0, log: false, by: 'strain' };
+    // it opens on the highest mode (the frame's own modes; the lowest are the body on its springs)
+    const top = D.modes.reduce((b, m, i) => (m.f_Hz > D.modes[b].f_Hz ? i : b), 0);
+    const S = { mode: top, scale: 150, t: 0, log: false, by: 'strain' };
     const v3 = (a, j) => [a[3 * j], a[3 * j + 1], a[3 * j + 2]];
     function moveParts(k) {   // k: mm per unit of the shape now
       const P = pmot[S.mode];

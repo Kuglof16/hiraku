@@ -49,6 +49,21 @@ window.HV = window.HV || {};
     });
   }
 
+  // A field has data here: one of its variants is in VIEW_DATA (?data=: only the given one), else its
+  // data/<key>.js (as loadData reads it) is on the server. Only a 404 counts as missing: a page opened from
+  // disk cannot ask (fetch refuses file:), and a server that does not answer HEAD, keep the field.
+  async function hasData(field) {
+    const keys = ((HV.fields[field] || {}).variants || [{ key: field }]).map(v => v.key);
+    if (keys.some(k => window.VIEW_DATA && window.VIEW_DATA[k])) return true;
+    if (HV.dataFromUrl) return false;
+    if (location.protocol === 'file:') return true;
+    for (const k of keys) {
+      const st = await fetch(`data/${k}.js`, { method: 'HEAD', cache: 'no-store' }).then(r => r.status, () => 0);
+      if (st !== 404) return true;
+    }
+    return false;
+  }
+
   // index.html?data=<url>#<field>: the JSON of viewer.src.build ({field, data, title, source}, or {field: null,
   // reason}) or a bare data object, put where VIEW_DATA[field] is read (field: the hash, else the JSON's field)
   async function loadUrlData(url, hash) {
@@ -77,11 +92,15 @@ window.HV = window.HV || {};
     const plot = new HV.Plot($('plot'), (i, x) => { if (st.ctl && st.ctl.plotClick) { const t = st.ctl.plotClick(i, x); if (t !== undefined && t !== null) setTime(t); refresh(); } });
     HV.state = st; HV.view = view;
 
-    // field switch
-    for (const f of HV.FIELD_ORDER) {
+    // field switch: only the fields with data here, so no button opens 「データがない」 (hasData); one field left,
+    // the header names it, so the switch and its heading go
+    const withData = [];
+    for (const f of HV.FIELD_ORDER) if (await hasData(f)) withData.push(f);
+    for (const f of withData) {
       const b = document.createElement('button'); b.textContent = (HV.fields[f] || { label: f }).label; b.id = 'sw_' + f;
       b.onclick = () => open(f); $('switch').appendChild(b);
     }
+    $('switch').hidden = $('switchHead').hidden = withData.length <= 1;
 
     // clipping
     for (const k of ['x', 'y', 'z']) {
@@ -99,9 +118,17 @@ window.HV = window.HV || {};
     $('time').oninput = e => { setTime(+e.target.value); };
     $('prev').onclick = () => setTime(st.t - 1);
     $('next').onclick = () => setTime(st.t + 1);
+    // playing: the panel's button and the large one on the 3D view (#bigplay) say the same
+    function setPlaying(on) {
+      st.playing = on;
+      $('play').textContent = on ? '❚❚ 停止' : '▶ 再生';
+      $('bigplay').textContent = on ? '❚❚ 止める' : '▶ 動きを再生';
+      $('bigplay').classList.toggle('playing', on);
+    }
+    $('bigplay').onclick = () => $('play').click();
     // a field with real times (ctl.times, s) plays at a chosen fraction of real time; others step frames
     $('play').onclick = () => {
-      st.playing = !st.playing; $('play').textContent = st.playing ? '❚❚ 停止' : '▶ 再生';
+      setPlaying(!st.playing);
       stopPlay();
       if (!st.playing || !st.ctl) return;
       const tt = st.ctl.times;
@@ -175,7 +202,7 @@ window.HV = window.HV || {};
     // field: a field name; want: one of its data variants (HV.fields[f].variants [{key, label}], e.g. the NVH
     // field's beam (data/nvh.js) and shell (data/nvh_shell.js) records); the first that exists by default
     async function open(field, want) {
-      stopPlay(); st.playing = false; $('play').textContent = '▶ 再生';
+      stopPlay(); setPlaying(false); $('bigplay').hidden = true;
       document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.id === 'sw_' + field));
       if (st.ctx) { view.scene.remove(st.ctx.root); if (st.ctx.fixed) view.scene.remove(st.ctx.fixed); }
       view.materials.length = 0; showInfo(null);
@@ -260,6 +287,7 @@ window.HV = window.HV || {};
         (asm ? `<details><summary>記録の前提 (${D.assumptions.length})</summary><ul>${asm}</ul></details>` : '');
       // controls
       $('time').max = ctl.nT - 1; st.t = Math.min(ctl.t0 || 0, ctl.nT - 1);
+      $('bigplay').hidden = !(ctl.nT > 1);   // one moment: nothing to play
       $('scaleLabel').textContent = ctl.scale.label; $('scaleNote').textContent = ctl.scale.note || '';
       for (const id of ['scale', 'scaleNum']) { $(id).min = ctl.scale.min; $(id).max = ctl.scale.max; $(id).step = ctl.scale.step; $(id).value = ctl.scale.value; }
       $('timeNote').textContent = ctl.timeNote || '';
@@ -282,13 +310,14 @@ window.HV = window.HV || {};
       ctl.setScale(ctl.scale.value);
       setTime(st.t);
       window.__field = field;
+      if (ctl.nT > 1) $('play').click();   // a field over time plays as soon as it opens
     }
     HV.open = open;
 
     const first = (location.hash || '').slice(1) || (fromUrl && fromUrl.field) || '';
     $('loading').style.display = 'none';
     const byVariant = HV.FIELD_ORDER.find(f => ((HV.fields[f] || {}).variants || []).some(v => v.key === first));
-    await open(HV.FIELD_ORDER.includes(first) ? first : byVariant || HV.FIELD_ORDER[0], byVariant ? first : undefined);
+    await open(HV.FIELD_ORDER.includes(first) ? first : byVariant || withData[0] || HV.FIELD_ORDER[0], byVariant ? first : undefined);
     if (fromUrl && fromUrl.reason) { $('title').textContent = '見せられない解析'; $('source').textContent = fromUrl.reason; }
     window.__ready = true;
   };
