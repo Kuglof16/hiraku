@@ -2302,6 +2302,10 @@ function fitOverlays() {
     if (src && !VIDEO_LAYOUT) {
       if (src.hidden) src.hidden = false;
       lg.classList.remove("squeeze");
+      // (measured without the list's minimum of the last fit: with it the column shrinks the list below its
+      // own height, the legend seems to fit, and the list then comes back past the frame; 1280 x 720)
+      const fl = lg.querySelector(".fields");
+      if (fl) setStyle(fl, "minHeight", "");
       const tight = lg.scrollHeight > lg.clientHeight + 1;
       src.hidden = tight;
       const tip = tight ? src.textContent : "";
@@ -2314,6 +2318,11 @@ function fitOverlays() {
     // squeezed, the list keeps the height of the chosen button at least (52: app.css .squeeze's most), so it
     // can be scrolled into sight whole (160725 at 1440 x 900: the list had 19 px for a 21 px button)
     if (f) setStyle(f, "minHeight", on && lg.classList.contains("squeeze") ? `${Math.min(52, on.offsetHeight + 2)}px` : "");
+    // (but never past the legend's frame: what the minimum adds over the frame comes off it again; 1280 x 720)
+    if (f && f.style.minHeight && lg.scrollHeight > lg.clientHeight + 1) {
+      const over = lg.scrollHeight - lg.clientHeight;
+      setStyle(f, "minHeight", `${Math.max(0, Math.floor(parseFloat(f.style.minHeight) - over))}px`);
+    }
     // (again when the box's height changes: squeezed after the first scroll, the button was left out of sight)
     const shownKey = on ? `${on.dataset.variant}:${f.clientHeight}` : "";
     if (f && on && f.dataset.shown !== shownKey) {
