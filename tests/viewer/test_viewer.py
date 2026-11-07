@@ -806,9 +806,9 @@ class PageTest(unittest.TestCase):
         least = common.result(rec, "occupant_space_margin")
         self.assertIn(f"乗員の空間の余裕 {js_fmt(least)} mm", out["hud"])
         self.assertAlmostEqual(self.crash_c["summary"]["margin"]["value"], least)
-        # the default colour: the end hinge rotation, one hue (no red), the run's largest
+        # the default colour: the end hinge rotation, the 5 colours of the other fields (turbo), the run's largest
         self.assertAlmostEqual(out["contour"]["max"], self.crash_c["colour"]["hinge_max"], places=3)
-        self.assertEqual(out["contour"].get("scale"), "seq")
+        self.assertNotEqual(out["contour"].get("scale"), "seq")
         self.assertIn("ヒンジ回転", out["contour"]["title"])
         self.assertGreater(out["contour"]["max"], 1.0)
         self.assertIn("軸応力 (5 ms の平均)", out["panel"])
