@@ -146,10 +146,15 @@ def record_kinds(path: Path) -> set[str]:
     return kinds
 
 
-def first_run(runs: list[dict[str, Any]], saved_dir: Path) -> dict[str, Any] | None:
+def first_run(runs: list[dict[str, Any]], saved_dir: Path, named: str | None = None) -> dict[str, Any] | None:
     """The run a bare static page opens on ①: a finished saved run whose record has the request and
     everything ① and ② show (FIRST_NEEDS); the recommended run (default) when it has, else the
-    newest that has. None when no run has (the page then opens on the run list)."""
+    newest that has. None when no run has (the page then opens on the run list). named: a run the
+    export was told to open (--default-run), taken when it is a finished saved run, with or without
+    a hearing: the page opens it as it ended, on ④ (app.js FIRST); a scripted run asks nothing."""
+    chosen = next((r for r in runs if named and r["run_id"] == named and r["saved"] and r["finished"]), None)
+    if chosen:
+        return {"run": chosen["run_id"], "why": "the recommended run (--default-run), opened as it ended on ④"}
     ok = [r for r in runs if r["saved"] and r["finished"] and r.get("want")
           and set(FIRST_NEEDS) <= record_kinds(saved_dir / r["run_id"] / EVENTS_FILE)]
     if not ok:
@@ -521,7 +526,7 @@ def export(
 
         viewer_link.export(out, {r["run_id"]: (SAMPLE_EVENTS if r["run_id"] == SAMPLE_ID else saved_dir / r["run_id"] / EVENTS_FILE)
                                  for r in runs})
-    first = first_run(runs, saved_dir)
+    first = first_run(runs, saved_dir, default_run)
     _write(data / "static.json", _json_bytes({"extras": extras, "first": first}))
     version_site(out)
     files ={p.relative_to(out).as_posix(): p.stat().st_size for p in sorted(out.rglob("*")) if p.is_file()}
