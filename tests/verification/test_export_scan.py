@@ -42,7 +42,7 @@ class ExportScanTest(unittest.TestCase):
         self.assertEqual([str(f) for f in findings if f.level == "error"], [])
 
     def test_planted_words_and_paths_are_found(self):
-        home = "C:" + "/Users/someone/x"  # (split so this file holds no such path)
+        home = "C:" + "/Users/" + "someone/x"  # (split so this file holds no such path)
         out = self._export("planted", {
             "data/events.jsonl.gz": json.dumps({"text": f"zqprivatezq {home}"}),
             "notes.txt": "D:\\\\work\\\\a",

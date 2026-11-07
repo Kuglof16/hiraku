@@ -63,12 +63,16 @@ NOT_CODE = ("hiraku/contract/examples/", "hiraku/contract/hiraku.schema.json")
 NUMBER_DIRS = ("hiraku/solvers/", "hiraku/catalog/", "hiraku/tools/", "hiraku/designgen/", "data/")
 SELF = "qa/judge_scan.py"  # holds the patterns themselves
 NO_SPEECH_CHECK = ("CLAUDE.md",)  # states the rule against quoting
-EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# the local part is at most 64 characters (RFC 5321, 4.5.3.1.1); the bound also keeps a long run of letters and
+# digits without an @ (base64 data in viewer fixtures) linear instead of quadratic
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 EMAIL_OK = re.compile(r"(@users\.noreply\.github\.com|noreply@anthropic\.com|@example\.(com|org))$")
 # made-up addresses in tests: top-level domains reserved for testing and examples (RFC 2606), never real
 EMAIL_RESERVED = re.compile(r"\.(invalid|example|test)$", re.IGNORECASE)
-HOME_RE = re.compile(r"(?i)([a-z]:[\\/]+users[\\/]+[^\\/\s]+|/Users/[^/\s]+|/home/[^/\s]+)")
-KEY_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|ANTHROPIC_API_KEY\s*=\s*['\"]?[A-Za-z0-9_-]{12,}")
+# a home folder with a user name: the name is name characters only, so a regular expression that mentions the
+# folder (as tests/viewer/no_paths.py: /home/|...) is not read as a path
+HOME_RE = re.compile(r"(?i)([a-z]:[\\/]+users[\\/]+[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+)")
+KEY_RE =re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|ANTHROPIC_API_KEY\s*=\s*['\"]?[A-Za-z0-9_-]{12,}")
 LOCAL_FILES = re.compile(r"(^|/)(\.env(\..*)?|CLAUDE\.local\.md|[^/]*\.local\.[^/]+)$|^runs/|^\.private/")
 SPEECH_RE = re.compile(r"本人|発言|と言(った|われ)|って言|さんが|devlog|日記|今日は|昨日は|"
                        r"\b(he|she|they) said\b|\bsaid that\b|\bI think\b|\bwe decided\b", re.I)

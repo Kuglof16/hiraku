@@ -73,10 +73,28 @@ class JudgeScan(unittest.TestCase):
     def test_email_home_path_and_key(self):
         self.commit({"hiraku/b.py": "\n".join([
             f'CONTACT = "someone{AT}mail.example.net"',
-            'P = r"C:' + "\\" + "Users" + "\\" + 'someone\\x"',
+            'P = r"C:' + "\\" + "Users" + "\\" + 'taro\\x"',
             'K = "sk-' + 'ant-' + "a" * 24 + '"',
         ]) + "\n"})
         self.assertTrue({"email", "home.path", "secret"} <= self.rules())
+
+    def test_a_long_run_without_an_at_is_quick_and_an_address_after_it_is_found(self):
+        import time
+        scan = js.Scan(self.repo, "main", self.hook)
+        line = "A" * 300_000 + f" someone{AT}mail.example.net"  # (a base64 run as in the viewer fixtures)
+        t = time.perf_counter()
+        scan.check_line("x.json:1", line, doc=False)
+        self.assertLess(time.perf_counter() - t, 5.0)  # unbounded, it took minutes (11/7)
+        self.assertEqual([f.text for f in scan.findings if f.rule == "email"], [f"someone{AT}mail.example.net"])
+
+    def test_a_pattern_that_names_the_home_folders_is_not_a_path(self):
+        home = "/" + "Users" + "/"
+        self.commit({"tests/test_x.py": "\n".join([
+            f'B = r"[A-Za-z]:\\\\|{home}|' + '/' + 'home/|x"',  # as tests/viewer/no_paths.py
+            f'C = "{home}taro/x"',  # a folder with a name still counts
+        ]) + "\n"})
+        scan = js.Scan(self.repo, "main", self.hook)
+        self.assertEqual([f.text for f in scan.run() if f.rule == "home.path"], [home + "taro"])
 
     def test_made_up_addresses_on_reserved_domains_are_left_out(self):
         self.commit({"promo/tests/test_x.py": "\n".join([
