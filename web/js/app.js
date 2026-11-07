@@ -1891,7 +1891,7 @@ const TAB_HEADS = {
       "ツールを選ぶと、確かめた問題と結果が右に出る",
     ];
   },
-  A7() {
+  A7(s) {
     const host = $("asm-host");
     const cap = host.querySelector(".asm-caption")?.textContent.trim() ?? "";
     const sum = host.querySelector(".asm-sum")?.textContent.trim() ?? "";

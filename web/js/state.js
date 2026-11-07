@@ -319,7 +319,8 @@ export function applyEvent(s, ev) {
       const said = STOP_CODE_JA[d.stop_code] ?? d.stop_reason;
       const why = said && d.stop_code !== "done" ? `・${said}` : "";
       log(s, ev, d.status === "failed" ? "bad" : "info", `実行が終わった (${d.status ?? ""}${why})${ev.text ? ": " + ev.text : ""}`);
-      setActivity(s, ev, ev.text || "実行が終わった");
+      // (a run that stopped or failed says so, as the top's 途中で止まった / エラーで止まった)
+      setActivity(s, ev, d.status === "stopped" ? "実行はここで止まりました" : d.status === "failed" ? "実行はエラーで止まりました" : ev.text || "実行が終わった");
       break;
     }
     case "agent.started": {
