@@ -1456,6 +1456,11 @@ body.grid-fixed .grid-view .tile.can-open::after {
   pointer-events: none; white-space: nowrap;
 }
 body.grid-fixed .grid-view .tile.can-open:hover { box-shadow: 0 0 0 3px var(--ink); }
+/* ④: the records kept for the run's design (app.js showGridExtras), rows over the top of the tile's picture (clear of its value); each opens the viewer */
+.tile .vextras { position: absolute; left: 12px; right: 36%; top: 30px; z-index: 6; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tile .vextras li { font-size: 13px; line-height: 1.3; padding: 3px 10px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+.tile .vextras li:hover { background: var(--orange-pale); }
+.tile .vextras li span { color: var(--muted); }
 body:not(.video) .chips { gap: 4px; }
 body:not(.video) .chip { padding: 3px 8px 3px 7px; }
 body.grid-fixed .grid-view .replay-tag { display: none; }

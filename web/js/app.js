@@ -69,7 +69,7 @@ import { GripView } from "./grip_panel.js"; // grip: the tyres of a driving reco
 import { hasGrip } from "./grip_view.js"; // grip:
 import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
-import { VIEWER_WORDS, loadViewerInfo, viewerButtonHtml, viewerProvisional, viewerRunId, viewerTarget, viewerUrl } from "./viewer_link.js"; // 「ビューアで見る」
+import { VIEWER_WORDS, extraUrl, loadViewerInfo, viewerButtonHtml, viewerExtras, viewerInfo, viewerProvisional, viewerRunId, viewerTarget, viewerUrl } from "./viewer_link.js"; // 「ビューアで見る」
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
@@ -561,7 +561,7 @@ function gridState() {
   return gridMemo.s;
 }
 let gridDrawnKey = null;
-const gridKey = (gs) => `${wholeMemo.gen ?? 0}|${wholeMemo.n}|${gs.currentVersion}`;
+const gridKey = (gs) => `${wholeMemo.gen ?? 0}|${wholeMemo.n}|${gs.currentVersion}|${viewerInfo().loaded}`;
 
 const anaOfVerdict = (s, x) => s.analyses[x.analysis_id ?? s.comparisons[x.comparison_id]?.analysis_id] ?? null;
 const lastInRecord = (s, list) => {
@@ -606,6 +606,14 @@ function openGridAnalysis(s, d, ana) {
   showGridNote();
 }
 
+// A record kept for the run's design (viewer_link.js VIEWER_EXTRAS), pressed on its tile
+function openGridExtra(s, d, e) {
+  ui.gridNote = null;
+  ui.gridViewer = { extra: e.id, title: `${DOMAIN_JA[d] ?? d}・${e.label}`, note: e.note, domain: d, field: e.field, url: extraUrl(e) };
+  showGridViewer(s);
+  showGridNote();
+}
+
 function closeGridViewer() {
   ui.gridViewer = null;
   showGridViewer(null);
@@ -640,13 +648,34 @@ function showGridViewer(s) {
     delete el.dataset.ana;
     return;
   }
-  const ana = s?.analyses?.[g.ana];
-  const tid = (s?.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id)?.test_id ?? ana?.load_case_id ?? g.ana;
-  el.querySelector(".gv-title").textContent = `${DOMAIN_JA[g.domain] ?? g.domain}・${tid}・${ana?.tool ?? ""} (${verLabel(ana?.design_version ?? "")})`;
-  el.querySelector(".gv-sample").textContent = viewerProvisional(viewerRunId(s)) ? VIEWER_WORDS.sample : "";
-  el.dataset.ana = g.ana;
+  if (g.extra) {
+    el.querySelector(".gv-title").textContent = g.title;
+    el.querySelector(".gv-sample").textContent = g.note;
+    delete el.dataset.ana;
+    el.dataset.extra = g.extra;
+  } else {
+    const ana = s?.analyses?.[g.ana];
+    const tid = (s?.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id)?.test_id ?? ana?.load_case_id ?? g.ana;
+    el.querySelector(".gv-title").textContent = `${DOMAIN_JA[g.domain] ?? g.domain}・${tid}・${ana?.tool ?? ""} (${verLabel(ana?.design_version ?? "")})`;
+    el.querySelector(".gv-sample").textContent = viewerProvisional(viewerRunId(s)) ? VIEWER_WORDS.sample : "";
+    el.dataset.ana = g.ana;
+    delete el.dataset.extra;
+  }
   el.dataset.field = g.field;
   if (frame.getAttribute("src") !== g.url) frame.setAttribute("src", g.url);
+}
+
+// The rows of the records kept for the run's design (viewer_link.js viewerExtras), on their tile
+function showGridExtras(s) {
+  const run = viewerRunId(s);
+  for (const tile of $("tiles").querySelectorAll(".tile[data-domain]")) {
+    tile.querySelector('[data-role="viewer-extras"]')?.remove();
+    const list = viewerExtras(run, tile.dataset.domain);
+    tile.classList.toggle("has-extras", list.length > 0);
+    if (!list.length) continue;
+    const rows = list.map((e) => `<li data-extra="${esc(e.id)}" title="押すと、ビューアで見ます"><b>${esc(e.label)}</b> <span>— ${esc(e.note)}</span></li>`).join("");
+    tile.insertAdjacentHTML("beforeend", `<ul class="vextras" data-role="viewer-extras">${rows}</ul>`);
+  }
 }
 
 // The line of an analysis with no viewer, on its tile (put back each time the tiles are drawn).
@@ -726,6 +755,16 @@ const intakeApi = {
   },
   get setLimits() {
     return draft?.state && !draft.busy && !draft.starting ? (limits) => draftChange({ limits }) : undefined;
+  },
+  // ②'s rule cards name the parts a rule hit: the part's name in the design as it is now (the
+  // current version, else the newest one there is); null when no design has that id
+  partName(id) {
+    const s = player.state;
+    const designs = s?.designs ?? {};
+    const vs = Object.keys(designs).map(Number).filter(Number.isFinite);
+    const v = designs[s?.currentVersion] ? s.currentVersion : vs.length ? Math.max(...vs) : null;
+    const part = (designs[v]?.parts ?? []).find((p) => p.id === id);
+    return part?.name ?? null;
   },
 };
 
@@ -2428,6 +2467,7 @@ function renderGrid(s) {
     }
     for (const b of $("grid-head").querySelectorAll(".vbox[data-ver]")) b.classList.add("pick");
     showGridNote();
+    showGridExtras(s);
   }
   // a tile (or a chip of a domain not picked) whose domain has analysed something by now can
   // replay it in the tab (pressed: openDomain)
@@ -3055,6 +3095,13 @@ $("tiles").addEventListener("click", (ev) => {
   if (GRID_FIXED) {
     // ④ as the run ended: a test's row opens its analysis, the tile (or a chip) the domain's
     const s = gridState();
+    const extra = ev.target.closest('[data-role="viewer-extras"] [data-extra]');
+    if (extra) {
+      const d = extra.closest(".tile[data-domain]")?.dataset.domain;
+      const e = viewerExtras(viewerRunId(s), d).find((x) => x.id === extra.dataset.extra);
+      if (e) openGridExtra(s, d, e);
+      return;
+    }
     const row = ev.target.closest('[data-role="test-row"][data-ana], .num[data-ana]');
     const tile = ev.target.closest(".tile[data-domain], .offchip[data-domain]");
     if (!tile || ev.target.closest("a, summary, [data-role=viewer-none]")) return;
