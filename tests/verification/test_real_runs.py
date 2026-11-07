@@ -170,9 +170,14 @@ class _ScriptedRunTests:
             self.assertEqual(len(fin), 1, f"stdout: {proc.stdout[-800:]}")
             why = f"{project.get('stop_reason')}; stdout: {proc.stdout[-800:]}"
             if name.endswith(CLAUDE_ONLY):
-                self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
-                said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
-                self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
+                # with a shelf tool for its load cases the scripted run judges them (n13: K2's rollover_beam for
+                # R4 since a7d7bb0f): it ends done or at round_limit (v1's R4 is near the limit, so which one
+                # depends on the machine; 設計部 and K2, 11/7). Without one it stops not_judged and says so.
+                ended = (project["status"], fin[0]["data"].get("stop_code"))
+                self.assertIn(ended, (("done", "done"), ("stopped", "round_limit"), ("stopped", "not_judged")), why)
+                if ended == ("stopped", "not_judged"):
+                    said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
+                    self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
             elif name in BEHIND_RED:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 self.assertTrue(any(p in (project.get("stop_reason") or "") for p in LOWER_RED), why)
