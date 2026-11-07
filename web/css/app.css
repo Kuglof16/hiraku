@@ -147,6 +147,24 @@ body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 70
 .replaybar .rb-want b { margin-right: 8px; }
 /* ... and no box to write or send in (① 's request box, ② 's note and answers): nothing is sent there */
 .static-export #view-intake .in-composer { display: none; }
+/* ② (js/app.js renderA2When): over the questions, the asker's pet, when they were asked and the
+   record's hearings in time order; the place is hidden when it holds nothing */
+#view-intake .a2-pets:not(.has-when):not(.ipets) { display: none; }
+#view-intake .a2-pets.has-when { display: flex; align-items: flex-start; gap: 14px; margin: 0 0 10px; }
+#view-intake .a2-askers:not(.ipets) { display: none; }
+.a2-when { flex: 1 1 auto; min-width: 0; }
+.a2-when-title { margin: 6px 0 4px; font-size: 20px; line-height: 1.35; }
+.a2-when-sub { font-size: 13px; color: var(--muted); }
+.a2-rounds { margin: 2px 0 0; padding-left: 1.5em; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.a2-rounds li.shown { font-weight: 700; color: var(--ink); }
+.a2-rounds li.later { opacity: 0.6; }
+/* a question already answered (or past answering): the answer's line only, not the choices as
+   buttons nor the 答えました tag above it (the video's frames as before) */
+body:not(.video) #view-intake .in-q:has(.in-answer) .in-choices,
+body:not(.video) #view-intake .in-q:has(.in-answer) > header .in-state,
+body:not(.video) #view-intake .in-rq:has(.in-answer) .in-why,
+body:not(.video) #view-intake .in-q.ended .in-choices,
+body:not(.video) #view-intake .in-q.open .in-choices { display: none; }
 .tab-arrow { flex: none; width: 14px; height: 14px; color: var(--line); }
 .tabtip {
   position: absolute;
