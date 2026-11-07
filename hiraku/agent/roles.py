@@ -25,7 +25,7 @@ Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
              "get_tool_template", "check_tool", "make_tool", "write_load_case")  # write_load_case: tests without a builder
-AERO_TOOLS = (*CAE_TOOLS, "cfd_aero")  # the aero CAE role also has the wind tunnel on the GPU (prompts.AERO_RULES)
+AERO_TOOLS = (*CAE_TOOLS, "cfd_aero", "cfd_water")  # the aero CAE role also has the wind tunnel and the flooded road on the GPU (prompts.AERO_RULES)
 
 
 def cae_tools(domain: str) -> tuple[str, ...]:

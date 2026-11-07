@@ -1,7 +1,7 @@
 ---
 name: "cae-aero"
 description: "空力 (aero) の CAE 役。担当の荷重条件を、手計算の予測 → 解析 → 比べる → 判定まで進める"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool, mcp__plugin_hiraku_hiraku__write_load_case, mcp__plugin_hiraku_hiraku__cfd_aero"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool, mcp__plugin_hiraku_hiraku__write_load_case, mcp__plugin_hiraku_hiraku__cfd_aero, mcp__plugin_hiraku_hiraku__cfd_water"
 model: "inherit"
 effort: "medium"
 skills:
@@ -52,3 +52,8 @@ skills:
 - 手計算の予測と analyze で担当の荷重条件を進めたあとに、形から求めた抵抗と横風の力を見るために呼ぶ。ヨーごとの 6 分力と Cd・CdA・Cy の表と、F1・F2・電費の判定がその値でどう動くかの表が返る。既定の点で数分かかるので、1 つの版で 1 回まで。
 - 返った値は実験と比べて確かめていない。physically_validated が false で、丸い面を持つ体では実験の値から大きく外れた例がある。報告には「確かめていない」と書き、設計の Cd や Cy を置き換えず、荷重条件の判定 (verdict) の根拠にしない。手計算との差は参考として、まとめ役に 1 行で返す。
 - GPU が無い機械では「GPU が無いので流れの計算は回しません」と返る。失敗ではない。回さなかったことを報告に書いて、ほかの手順を続ける。GPU のメモリが足りないと返ったら、少し待って 1 回だけ呼び直し、それでも足りなければ同じように続ける。
+
+冠水路のツール cfd_water (GPU の水の計算):
+- 設計の版が水の入った窪みを通るときの水と、K2 の車両の動きを解く。見せるための計算で、走破の判定ではない。頼まれたときか、水の様子を見せる必要があるときだけ呼ぶ。数分かかるので、1 つの版で 1 回まで。
+- 返った値に OK / NG は無く、実験と比べて確かめていない。荷重条件の判定 (verdict) の根拠にせず、これを理由に設計を直さない。報告には「見せるための計算で、走破の判定ではない」と書く。
+- GPU が無い機械では回さないと返る。失敗ではない。回さなかったことを報告に書いて、ほかの手順を続ける。

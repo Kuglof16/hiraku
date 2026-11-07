@@ -65,6 +65,40 @@ class WithoutGpu(ToolBase):
         self.assertIn("vehicle_moves", tool["input_schema"]["properties"])
 
 
+class Roles(unittest.TestCase):
+    def test_in_the_run_and_only_the_aero_role_has_it(self) -> None:
+        from hiraku import contract
+        from hiraku.agent import roles
+        from hiraku.tools.functions import RUN_TOOLS
+
+        self.assertIn("cfd_water", RUN_TOOLS)
+        self.assertIn("cfd_water", roles.cae_tools("aero"))
+        for domain in contract.DOMAINS:
+            if domain != "aero":
+                self.assertNotIn("cfd_water", roles.cae_tools(domain), domain)
+        self.assertNotIn("cfd_water", roles.PACKAGER_TOOLS)
+        self.assertNotIn("cfd_water", roles.DESIGNER_TOOLS)
+
+    def test_the_aero_role_is_told_it_is_not_a_judgement(self) -> None:
+        from hiraku.agent import prompts
+
+        text = prompts.cae_prompt("aero")
+        for word in ("cfd_water", "見せるための計算で、走破の判定ではない", "判定 (verdict) の根拠にせず", "GPU が無い"):
+            self.assertIn(word, text)
+        self.assertNotIn("cfd_water", prompts.cae_prompt("nvh"))
+
+    def test_the_plugins_aero_agent_has_the_tool(self) -> None:
+        agents = Path(__file__).resolve().parents[2] / "plugins" / "hiraku" / "agents"
+        self.assertIn("cfd_water", (agents / "cae-aero.md").read_text(encoding="utf-8").split("---")[1])
+        self.assertNotIn("cfd_water", (agents / "cae-nvh.md").read_text(encoding="utf-8"))
+
+    def test_the_schema_here_is_the_contracts(self) -> None:
+        from hiraku import contract
+
+        here = dict(cfd_tools.WATER_INPUT_SCHEMA)
+        self.assertEqual(json.loads(json.dumps(here)), contract.schema()["$defs"]["tool_input.cfd_water"])
+
+
 class VehicleSummary(unittest.TestCase):
     def test_against_the_road(self) -> None:
         def record(t: float, z: float, pitch: float, front_ground: float, tyre: float) -> dict:

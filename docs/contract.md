@@ -144,6 +144,8 @@ MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp
 
 `cfd_aero` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役だけが使う。`analyze` を通らないので HK1〜HK5 の外で、値は判定の根拠にしない) は、設計の v の流れを GPU で解き、`<実行のフォルダ>/cfd/v<N>/` に各ケースの記録と `aero_record.json` を書く。GPU が無ければ回さないと答え、CPU では回さない。GPU のメモリが足りなければ待つように答える。`replay` は保存した記録を GPU なしで読む。解析の記録の `physically_validated` が false の値は、実験と比べて確かめていない (`assumptions` にも 確かめていない と書く)。
 
+`cfd_water` (実行の中で使うツール `RUN_TOOLS` にあり、役では空力の CAE 役だけが使う。`analyze` を通らないので HK1〜HK5 の外) は、設計の v が冠水路を通るときの水を GPU で解き、`<実行のフォルダ>/cfd/v<N>/water_.../` に `case.json`、`replay.npz`、`water_record.json` を書く。既定では車両が K2 で水に応えて動く。見せるための計算で、走破の判定ではない: 記録の先頭の `statement` にそう書き、OK / NG も基準も持たず、判定の根拠にしない。`physically_validated` は false。GPU が無ければ回さないと答え、CPU では回さない。`replay` は保存した記録を GPU なしで読む。
+
 ## Claude が書く設計 (2026-11-06)
 
 作るものを型で限定しない。設計は 2 つの道から作れる。

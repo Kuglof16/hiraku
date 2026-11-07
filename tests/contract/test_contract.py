@@ -507,6 +507,16 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(ok("tool_input.cfd_aero", {"replay": "cfd/v5/aero.txt"}), [])
         self.assertNotEqual(ok("tool_input.cfd_aero", {"wind_ms": 0}), [])
 
+    def test_cfd_water_tool_inputs(self):
+        self.assertIn("cfd_water", contract.MCP_TOOLS_LATER)
+        ok = contract.errors
+        self.assertEqual(ok("tool_input.cfd_water", {}), [])
+        self.assertEqual(ok("tool_input.cfd_water", {"design_version": 5, "depth_mm": 200, "speed_kmh": 18, "dx_mm": 30, "vehicle_moves": False, "frame_hz": 90, "keep_particles": True}), [])
+        self.assertEqual(ok("tool_input.cfd_water", {"replay": "cfd/v5/water_200mm/water_record.json"}), [])
+        self.assertNotEqual(ok("tool_input.cfd_water", {"dx_mm": 5}), [])
+        self.assertNotEqual(ok("tool_input.cfd_water", {"depth_mm": 900}), [])
+        self.assertNotEqual(ok("tool_input.cfd_water", {"replay": "cfd/v5/water.txt"}), [])
+
     def test_cad_tool_inputs(self):
         for name in ("export_step", "import_step", "edit_step"):
             self.assertIn(name, contract.MCP_TOOLS_LATER)
