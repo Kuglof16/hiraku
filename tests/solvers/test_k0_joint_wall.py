@@ -135,5 +135,31 @@ class JointWallInputsTest(unittest.TestCase):
         self.assertGreater(step["inputs"]["M"]["value"], self.butt["inputs"]["M"]["value"])
 
 
+class SplitCrossMemberTest(unittest.TestCase):
+    """Tower braces standing on cross_B (tower_brace_y > 0) split it into cross_B_L, cross_B, cross_B_R: the hand
+    calculations still see one cross member between the rail joints (v5: R3's end cross member and R1s' station B)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = designgen.regenerate(V1, {"tower_brace_b": {"value": 35.0, "unit": "mm"},
+                                          "tower_brace_t": {"value": 4.5, "unit": "mm"},
+                                          "tower_brace_y": {"value": 150.0, "unit": "mm"}})
+
+    def test_the_run_counts_as_one_member(self):
+        props = frame_inputs.member_props(self.d)
+        self.assertEqual([m for m in props if m.startswith("cross_B")], ["cross_B_L", "cross_B", "cross_B_R"])
+        whole = frame_inputs._member_between(props, "LB", "RB")
+        self.assertIsNotNone(whole)
+        self.assertEqual(whole["run"], ["cross_B_L", "cross_B", "cross_B_R"])
+        self.assertAlmostEqual(whole["length"], sum(props[m]["length"] for m in whole["run"]), places=6)
+        self.assertIsNone(frame_inputs._member_between(props, "LB", "RE"))  # not on one line
+
+    def test_r3_and_r1s_hand_inputs(self):
+        frame_inputs.end_cross_member_inputs(self.d, loading="two_cargo")  # raised DesignError before
+        from hiraku.solvers.shelf.frame_static import front_supports
+        r = frame_inputs.joint_wall_inputs(self.d, "two_cargo", 100.0, front_supports(self.d))
+        self.assertIn("LB", [j["node"] for j in r["joints"]])
+
+
 if __name__ == "__main__":
     unittest.main()
