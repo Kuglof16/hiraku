@@ -1504,8 +1504,10 @@ body.grid-fixed .grid-view .tile { container-type: size; }
 /* ④: the records kept for the run's design (app.js showGridExtras): in the tile's head after the domain's name,
    one line (not over the 3D picture, and no height taken from it); each opens the viewer */
 .tile .vextras { flex: 0 1 auto; min-width: 0; list-style: none; margin: 0 auto 0 12px; padding: 0; display: flex; gap: 6px; overflow: hidden; align-self: center; }
-.tile .vextras li { flex: none; white-space: nowrap; font-size: 13px; line-height: 1.3; padding: 1px 10px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
-.tile .vextras li:hover { background: var(--orange-pale); }
+/* (buttons that read as buttons: ▶, filled, as the picture's 「▶ 押すとビューアで見られます」) */
+.tile .vextras li { flex: none; white-space: nowrap; font-size: 15px; font-weight: 600; line-height: 1.3; padding: 3px 14px; border: 0; border-radius: 999px; background: var(--ink); color: var(--card, #fffdf8); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); }
+.tile .vextras li b { font-weight: 600; }
+.tile .vextras li:hover { background: var(--orange, #d9822b); }
 .tile .vextras li span { color: var(--muted); }
 body:not(.video) .chips { gap: 4px; }
 body:not(.video) .chip { padding: 3px 8px 3px 7px; }

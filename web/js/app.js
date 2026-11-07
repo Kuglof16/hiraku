@@ -590,6 +590,11 @@ const lastInRecord = (s, list) => {
 // analysis of the version (ok first), else of any version.
 function tileAnalysis(s, d) {
   const v = s.currentVersion;
+  // the analysis of the tile's large number (tiles.js headline: 強度 R1s → its frame_shell, the plates' mesh),
+  // so the 3D that opens is the one the number comes from
+  const big = headline(domainVerdicts(s, d, v));
+  const bigAna = big ? s.analyses[big.analysis_id ?? s.comparisons[big.comparison_id]?.analysis_id] : null;
+  if (bigAna) return bigAna;
   const judged = lastInRecord(s, domainVerdicts(s, d, v).map((x) => anaOfVerdict(s, x)));
   if (judged) return judged;
   const lcs = new Set((s.project?.load_cases ?? []).filter((c) => c.domain === d).map((c) => c.load_case_id));
@@ -696,7 +701,8 @@ function showGridExtras(s) {
     const list = viewerExtras(run, tile.dataset.domain);
     tile.classList.toggle("has-extras", list.length > 0);
     if (!list.length) continue;
-    const rows = list.map((e) => `<li data-extra="${esc(e.id)}" title="押すと、ビューアで見ます"><b>${esc(e.label)}</b>${e.note ? ` <span>— ${esc(e.note)}</span>` : ""}</li>`).join("");
+    // (a button that reads as one: ▶ and the name, as the picture's 「▶ 押すとビューアで見られます」)
+    const rows = list.map((e) => `<li data-extra="${esc(e.id)}" role="button" title="押すと、ビューアで見ます${e.note ? ` (${esc(e.note)})` : ""}"><b>▶ ${esc(e.label)}</b></li>`).join("");
     // in the tile's head, after the domain's name: off the 3D picture, and no height taken from it
     const name = tile.querySelector(".th h3");
     const html = `<ul class="vextras" data-role="viewer-extras">${rows}</ul>`;
