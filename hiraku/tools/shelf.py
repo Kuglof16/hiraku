@@ -214,6 +214,39 @@ def _own_stage(ctx: RunContext, load_case: Record) -> int | None:
     return min((tool_stage(ctx, n) for n in covering), default=None)
 
 
+def stage_source(ctx: RunContext, load_case: Record) -> str | None:
+    """What sets load_case_stage, for people (get_context's overview, HK5's refusal): the lightest tool that
+    checks the load case (made in the run or on the shelf), or the load case feeding it that is heavier; None
+    when the stage is None or the tools are not here (the plugin's hook command). The stage changes as the shelf
+    and the design do: a tool made in the run, or a written design that gains the variables a tool needs."""
+    if not ctx.tools:
+        return None
+    from hiraku.tools.functions import not_applying
+
+    fam = test_family(load_case["test_id"])
+    covering = [n for n, s in ctx.specs.items()
+                if s.get("usable") and any(test_family(t) == fam for t in s.get("tests") or [])
+                and not_applying(ctx, n) is None]
+    q = (load_case.get("criterion") or {}).get("quantity")
+    if q:
+        covering = [n for n in covering if _gives(ctx.tools.get(n), q) is not False] or covering
+    if not covering:
+        return None
+    tool = min(covering, key=lambda n: (tool_stage(ctx, n), n))
+    own = tool_stage(ctx, tool)
+    lc_id = load_case["load_case_id"]
+    ups = [(load_case_stage(ctx, lc), lc["load_case_id"]) for lc in ctx.load_cases if lc_id in (lc.get("feeds") or [])]
+    heavier = [(s, u) for s, u in ups if s is not None and s > own]
+    if heavier:
+        s, u = max(heavier)
+        return f"{u} (上流の荷重条件、段 {s})"
+    return f"{tool} (段 {own})"
+
+
+STAGE_NONE_WHY = ("この荷重条件を見るツールが棚に無いか、この版の設計に当てはまらない (HK5 はこれを待たない)。ツールを作るか、"
+                  "設計がツールの要る物を持つと段が付く")
+
+
 def stages_of(ctx: RunContext) -> Record:
     """{"tools": name -> stage, "cases": load case id -> stage}, for a context without the tools."""
     return {"tools": {n: tool_stage(ctx, n) for n in set(ctx.specs) | set(ctx.tools)},
