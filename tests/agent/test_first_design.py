@@ -333,5 +333,18 @@ class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertFalse((self.ctx.store.path / layout.STOP_REQUEST_FILE).exists())
 
 
+class FileTestWithoutBuilderTest(FirstDesignCase, unittest.TestCase):
+    """A file's test with no builder (F3 here) is left out of version 1 and said in one line, as Claude's picks;
+    the serving robot run 20261107-161234 lost its v1 to it."""
+    tests = ["R1", "F3"]
+
+    def test_version_1_is_made_without_it(self):
+        propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+        self.assertEqual({lc["test_id"] for lc in self.ctx.load_cases}, {"R1"})
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and "builder" in (e.get("text") or "")]
+        self.assertEqual(len(said), 1)
+        self.assertIn("F3", said[0])
+
+
 if __name__ == "__main__":
     unittest.main()

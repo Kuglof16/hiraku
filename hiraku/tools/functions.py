@@ -1384,6 +1384,13 @@ def first_version(ctx: RunContext, design: Record, req: Record, agent: str) -> l
                                  + "; ".join(f"{t}: {why}" for t, why in skipped) if skipped else
                                  f"none of {', '.join(wanted)} has a builder")
         else:
+            # a file's tests must build, except those with no builder: left out and said in one line, as Claude's
+            # picks (the serving robot run 20261107-161234 lost v1 to F3, added at the intake, with no builder)
+            no_builder = [t for t in req.get("tests") or [] if not _has_builder(catalog, t)]
+            if no_builder and len(no_builder) < len(req["tests"]):
+                req = dict(req, tests=[t for t in req["tests"] if t not in no_builder])
+            else:
+                no_builder = []  # all or none without a builder: build_tests says it, as before
             load_cases, skipped = build_tests(catalog, req, design)
     except ValueError as e:
         raise ToolError(f"この設計では試験の荷重条件を組めません: {e}") from None
