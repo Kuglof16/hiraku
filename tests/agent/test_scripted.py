@@ -208,6 +208,35 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         scripted._run_step(self.ctx, lc, "cae.strength", "frame_static", {"predictions": [bad]})
         self.assertEqual(len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"]), before)
 
+    def test_a_prediction_reading_a_skipped_one_is_skipped_too(self):
+        """R3 on the reach222 v5 (EC2 d3e700b7): the leg's damage is skipped (its reader cannot read the design) and
+        fatigue.worst_of_two_welds, which reads pred.fatigue_damage_mount_leg, is skipped with it (not an IndexError)."""
+        from hiraku.agent import scripted
+
+        def unreadable(design, load_case):
+            raise ValueError("no rear overhang with an end cross member")
+
+        lc = self.ctx.load_case("R1-step100")
+        leg = {"quantity": "fatigue_damage_mount_leg", "formula_id": "frame_static.rail_bending", "output": "sigma",
+               "inputs": {}, "inputs_from": unreadable}
+        worst = {"quantity": "fatigue_damage", "formula_id": "fatigue.worst_of_two_welds", "output": "D",
+                 "inputs": {"D_a": "pred.fatigue_damage_mount_leg", "D_b": "pred.fatigue_damage_end_cross_member"}}
+        self.assertEqual(scripted._predict(self.ctx, lc, "cae.strength", [leg, worst]), [])
+        said = [e["data"] for e in self.ctx.store.events() if e["kind"] == "agent.said"
+                and (e.get("data") or {}).get("skipped_prediction")]
+        self.assertEqual([d["quantity"] for d in said[-2:]], ["fatigue_damage_mount_leg", "fatigue_damage"])
+        self.assertIn("fatigue_damage_mount_leg", said[-1]["reason"])
+
+    def test_the_fixed_v5_revision_goes_to_every_module(self):
+        """The submission's v5 (rev_joints, reach222) is applied whole: without it the EC2 runs of d3e700b7 used only
+        the modules v4's reds name and built three different v5s."""
+        from tests.tools.helpers import _REAL_LOAD_PLAN  # the real plan (RunCase patches load_plan with a stand-in)
+
+        for req in ("offroad-4w", "offroad-4w-video", "offroad-4w-n15"):
+            last = _REAL_LOAD_PLAN("offroad-4w", req)["revise"][-1]
+            self.assertIn("rail_t", last["changes"], req)
+            self.assertTrue(last.get("whole"), req)
+
     def test_a_load_case_the_analysis_judged_is_not_compared(self):
         """A load with no path: the analysis's unsupported_load makes the verdict (judge); the scripted step says so and
         compares nothing (run 20261104-091550: R8-stress on version 2 with parts not yet mounted)."""
