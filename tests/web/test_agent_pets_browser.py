@@ -63,7 +63,8 @@ LONG_REASON = "解析の道具が入力のファイルを読めずに終わっ�
 # (agent, data, the agents' pane's why line or None, the log line's words in brackets or None, the note or None)
 STOPS = [
     # (the pane's line is short: labels.js AGENT_STOP_SHORT_JA; the log keeps AGENT_STOP_JA)
-    ("cae.crash", {"stop_code": "done", "stop_reason": "仕事を終えた (形の見本)"}, "仕事を終えた", "自分の仕事を終えた", "仕事を終えた (形の見本)"),
+    # (done: the name's 「終わり」 says it; no 「仕事を終えた」 line under it)
+    ("cae.crash", {"stop_code": "done", "stop_reason": "仕事を終えた (形の見本)"}, None, "自分の仕事を終えた", "仕事を終えた (形の見本)"),
     ("cae.nvh", {"stop_code": "run_ended"}, "動いている間に実行が終わった", "動いている間に実行が終わった", None),
     ("cae.strength", {"stop_code": "user_stop"}, "人が止めた", "人が止めた", None),
     ("cae.thermal", {"stop_code": "error", "stop_reason": LONG_REASON}, "エラーで終わった", "エラーで終わった", None),
@@ -391,7 +392,7 @@ class AgentPetsTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertNotIn("手を止めた", got["say"])
         self.assertFalse(got["saying"])
-        self.assertEqual((got["why"], got["shown"]), ("仕事を終えた", True))
+        self.assertIsNone(got["why"])  # (done: the row's 「終わり」 says it, no line under the name)
 
     def test_the_cae_roles_are_one_row_until_opened(self):
         """The seven CAE agents are one row 「CAE 役 ×7」 (one designer, one lead: their own rows),

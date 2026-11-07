@@ -1506,3 +1506,5 @@ body.video .vstory { display: none; } /* (the film's ④ as before) */
 .hero-go { flex: none; font-size: 24px; font-weight: 700; padding: 10px 28px; border-radius: 999px; border: none; background: var(--ink, #1c1c1c); color: #fff; cursor: pointer; }
 .hero-go:hover { filter: brightness(1.25); }
 .hero-note { flex: none; max-width: 300px; font-size: 14px; color: var(--muted); line-height: 1.4; }
+/* the legend still too tall once its source line is out (app.js fitOverlays): its list of fields scrolls in a short box */
+.legend.squeeze > .fields { max-height: 52px; min-height: 0; }

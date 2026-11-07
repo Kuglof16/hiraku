@@ -215,7 +215,8 @@ export function petRowHtml(id, status, { tag = "li", cls = "", name = null, why 
 // Why an agent stopped, one line: the code's short words (labels.js AGENT_STOP_SHORT_JA), else the reason cut
 // short; the whole reason is the title.
 export function stopWhyHtml(why) {
-  if (!why) return "";
+  // (done: the row says 「終わり」 by the name already; 「仕事を終えた」 under it would say it again)
+  if (!why || why.code === "done") return "";
   const chars = [...(AGENT_STOP_SHORT_JA[why.code] ?? why.words ?? why.reason ?? "")];
   const text = chars.length > SAY_CHARS ? `${chars.slice(0, SAY_CHARS - 1).join("")}…` : chars.join("");
   const title = why.reason && why.reason !== text ? why.reason : "";
