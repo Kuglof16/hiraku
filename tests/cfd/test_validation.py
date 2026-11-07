@@ -11,9 +11,14 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import unittest
 
 from hiraku.cfd import benchmarks as b
+
+# A folder on a drive (not the "s:/" of a link), a home folder, or a mail address. The home folder's name is joined so
+# the repository's own scan does not read this line.
+PRIVATE_PLACES = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]|[\\/]" + "Users" + r"[\\/]|/home/|[\w.+-]+@[\w-]+\.[a-z]{2,}", re.I)
 
 # The tolerances fixed before the runs. Changing one to make a body pass is what this line is here to stop.
 FROZEN_TOLERANCE_PCT = {"sphere": 5.0, "sphere_turbulent": 10.0, "plate": 10.0, "cube": 10.0, "ahmed25": 10.0, "ahmed35": 10.0}
@@ -175,10 +180,14 @@ class Replay(unittest.TestCase):
 
     def test_public_record_names_no_private_paths(self):
         text = b.RECORD.read_text(encoding="utf-8")
-        # joined from pieces, so the repository's own private-name scan does not read this test as a leak
-        home = "C:" + "/" + "Cla" + "ude"
-        for word in (home, home.replace("/", "\\\\"), "FU" + "MI", "@" + "gmail"):
-            self.assertNotIn(word, text)
+        # any absolute folder on this machine (a drive letter, a home folder) or a mail address, named by its shape only
+        self.assertIsNone(PRIVATE_PLACES.search(text))
+
+    def test_the_place_check_sees_paths_and_mail_but_not_links(self):
+        for seen in ("D:/runs/a", "E:\\runs\\a", "/home/a/b", "x\\" + "Users" + "\\a", "a.b@example.org"):
+            self.assertIsNotNone(PRIVATE_PLACES.search(seen), seen)
+        for unseen in ("https://example.org/a", "Re 1e5: 0.47", "ratio 1:2"):
+            self.assertIsNone(PRIVATE_PLACES.search(unseen), unseen)
 
 
 @unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "遅い試験 (GPU で走らせ直す): HIRAKU_SLOW_TESTS=1 のときだけ")
