@@ -1288,7 +1288,8 @@ class CheckRun(unittest.TestCase):
         self.assertNotIn("cause.settled", self.rules(self.path_checked_flow()))
 
     def test_r9_judges_a_mount_utilisation_at_most_1(self):
-        # contract 40645e0: bolt_shear / bolt_bearing / plate_bending / weld utilisation, unit 1, <= 1
+        # contract 40645e0: bolt (the larger of shear and bearing) / bolt_shear / bolt_bearing / plate_bending /
+        # weld utilisation, unit 1, <= 1
         def run(**crit):
             ev = sample_events()
             lc = copy.deepcopy(ev[0]["data"]["load_cases"][0])
@@ -1298,6 +1299,7 @@ class CheckRun(unittest.TestCase):
             ev[0]["data"]["load_cases"].append(lc)
             return [f.message for f in self.findings(ev) if f.rule == "R9.criterion"]
         self.assertEqual(run(), [])
+        self.assertEqual(run(quantity="bolt_utilisation"), [])  # the R9-bolt builder's name (mounts_r9.py)
         self.assertTrue(any("not one of" in m for m in run(quantity="max_stress")))
         self.assertTrue(any("not <= 1" in m for m in run(limit={"value": 0.8, "unit": "1"})))
         self.assertTrue(any("not <= 1" in m for m in run(op="<")))

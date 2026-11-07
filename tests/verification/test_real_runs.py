@@ -473,6 +473,10 @@ OLD_CODE_SKIPS = {
     "20261104-011628-care-bed": {
         "HK4_no_stop_before_judged": "11/4 のコードの記録。今の判定の決まりでは音振は判定なしのまま",
     },
+    # (not older code: the check asks more than the run's hook; settled in the contract after the submission)
+    "20261107-164004-free-utv": {
+        "HK6_module_scope": "hook は赤の荷重条件との対応を見ないので、実行では通った",
+    },
 }
 
 

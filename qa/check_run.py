@@ -167,7 +167,9 @@ def utilisation(value, limit, op) -> float | None:
         return 0.0 if OPS[op](value, limit) else UTIL_CAP
     return ratio
 MOUNT_TEST = "R9"  # suspension mounts (contract 40645e0): a bracket's bolts, plate and weld at the mount force
-MOUNT_QUANTITIES = ("bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
+# bolt_utilisation: the larger of bolt_shear_utilisation and bolt_bearing_utilisation, the name the R9-bolt
+# builder judges (hiraku/catalog/builders/mounts_r9.py; docs/contract.md, 金具の継ぎ手)
+MOUNT_QUANTITIES = ("bolt_utilisation", "bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
                     "weld_utilisation")
 PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
 FREE_PARTS = "free_parts"  # the version-wide count of the same formula, and a tool result that must be 0 then
