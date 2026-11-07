@@ -479,6 +479,28 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         (self.ctx.store.path / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")  # the stop button
         self.assertEqual(self.server.wait_for_roles(wait_s=0, poll_s=0), plugin.WAIT_ENDED)
 
+    def test_a_failed_poll_of_wait_for_roles_polls_again_and_a_failure_is_the_tools_own_error(self):
+        """The vehicle run 20261107-153915: one wait_for_roles came back as an Internal server error. A poll that
+        cannot take the lock (or read the state) polls again; anything else is the tool's error, not the server's."""
+        from unittest import mock
+
+        calls = []
+        real = plugin.read_state
+
+        def flaky(path):
+            calls.append(1)
+            if len(calls) == 1:
+                raise TimeoutError("held by another process")
+            return real(path)
+
+        with mock.patch.object(plugin, "read_state", flaky):
+            self.assertEqual(self.server.wait_for_roles(wait_s=5, poll_s=0), plugin.WAIT_DONE)
+        self.assertEqual(len(calls), 2)
+        with mock.patch.object(self.server, "drain", side_effect=RuntimeError("boom")):
+            out = asyncio.run(self.server.call_tool(plugin.WAIT_TOOL, {}))
+        self.assertTrue(out["is_error"])
+        self.assertIn(plugin.WAIT_TOOL, out["content"][0]["text"])
+
     def call_text(self, name):
         return asyncio.run(self.server.call_tool(name, {}))["content"][0]["text"]
 
