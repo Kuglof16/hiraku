@@ -1052,10 +1052,15 @@ class LaunchTest(unittest.TestCase):
 
         self.assertEqual(design_way({}), {"design_way": "written", "archetypes": []})
         self.assertEqual(design_way(None), {"design_way": "written", "archetypes": []})
-        flags = yaml.safe_load((REPO_DIR / "data" / "requirements" / "products" / "serving-robot.yaml").read_text(encoding="utf-8"))["flags"]
-        got = design_way(flags)
+        def flags(name):
+            return yaml.safe_load((REPO_DIR / "data" / "requirements" / name).read_text(encoding="utf-8"))["flags"]
+
+        # a vehicle people ride: the kinds of design that fit (ladder_4w and space_frame_utv are for those)
+        got = design_way(flags("offroad-4w.yaml"))
         self.assertEqual(got["design_way"], "archetype")
         self.assertIn("ladder_4w", got["archetypes"])
+        # a serving robot nobody rides: no kind fits, Claude writes the design
+        self.assertEqual(design_way(flags("products/serving-robot.yaml")), {"design_way": "written", "archetypes": []})
 
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})
