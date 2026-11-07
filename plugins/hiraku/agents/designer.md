@@ -1,7 +1,7 @@
 ---
 name: "designer"
 description: "設計役。通らなかった試験の記録から設計の変数を選んで変え、revise_design で次の版を作る。合う型の無い製品では write_design で設計そのものを書く"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__propose_design, mcp__plugin_hiraku_hiraku__revise_design, mcp__plugin_hiraku_hiraku__write_design, mcp__plugin_hiraku_hiraku__edit_design, mcp__plugin_hiraku_hiraku__check_design"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__propose_design, mcp__plugin_hiraku_hiraku__revise_design, mcp__plugin_hiraku_hiraku__write_design, mcp__plugin_hiraku_hiraku__edit_design, mcp__plugin_hiraku_hiraku__check_design, mcp__plugin_hiraku_hiraku__export_step, mcp__plugin_hiraku_hiraku__import_step, mcp__plugin_hiraku_hiraku__edit_step"
 model: "inherit"
 effort: "high"
 skills:

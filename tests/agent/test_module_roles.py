@@ -94,7 +94,8 @@ class ModuleRolesTest(unittest.TestCase):
                                           "designer-suspension", "packager"])
         for name in ("designer-frame", "designer-powertrain", "designer-suspension"):
             d = agents[name]
-            self.assertEqual(d.tools, [contract.mcp_name(t) for t in ("get_context", "list_tools", "revise_design")])
+            self.assertEqual(d.tools, [contract.mcp_name(t) for t in ("get_context", "list_tools", "revise_design",
+                                                                      *contract.MCP_TOOLS_CAD)])
             self.assertIn(name.split("-", 1)[1], d.prompt)
             self.assertIn("revise_design", d.prompt)
             self.assertEqual(d.skills, ["hiraku:revise-a-module"])

@@ -7,6 +7,7 @@ from unittest import mock
 
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 
+from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.runner import MessageLog, MissingApiKey, build_options, final_status, require_api_key, run_with_claude
@@ -47,8 +48,11 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__write_load_case", o.allowed_tools)  # the lead may write a load case
         self.assertIn("mcp__hiraku__cfd_aero", o.allowed_tools)  # the wind tunnel; with no GPU it says so and does not run
         self.assertIn("mcp__hiraku__cfd_water", o.allowed_tools)  # the flooded road: for showing, not a judgement
-        # with find_tradeoffs and add_tests (intake), write_design, edit_design, check_design, write_load_case, cfd_aero and cfd_water
-        self.assertEqual(len(o.allowed_tools), 28)
+        for name in contract.MCP_TOOLS_CAD:  # the CAD tools (hiraku/tools/cad_tools.py), the designers'
+            self.assertIn(f"mcp__hiraku__{name}", o.allowed_tools)
+        # with find_tradeoffs and add_tests (intake), write_design, edit_design, check_design, write_load_case, cfd_aero,
+        # cfd_water and the three CAD tools
+        self.assertEqual(len(o.allowed_tools), 31)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])

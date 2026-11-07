@@ -191,7 +191,7 @@ TOOLS: dict[str, Record] = {
     name: {"description": DESCRIPTIONS[name], "input_schema": _input_schema(name), "function": FUNCTIONS[name]}
     for name in FUNCTIONS
 }
-assert all(t in contract.MCP_TOOLS_LATER for t in TOOLS)
+assert tuple(TOOLS) == contract.MCP_TOOLS_CAD
 
 
 def _register() -> None:

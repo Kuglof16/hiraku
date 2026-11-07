@@ -518,7 +518,8 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(ok("tool_input.cfd_water", {"replay": "cfd/v5/water.txt"}), [])
 
     def test_cad_tool_inputs(self):
-        for name in ("export_step", "import_step", "edit_step"):
+        self.assertEqual(contract.MCP_TOOLS_CAD, ("export_step", "import_step", "edit_step"))
+        for name in contract.MCP_TOOLS_CAD:
             self.assertIn(name, contract.MCP_TOOLS_LATER)
         ok = contract.errors
         self.assertEqual(ok("tool_input.export_step", {}), [])
