@@ -107,7 +107,8 @@ export function withoutRuleIds(text, { dev = false } = {}) {
   return dev ? text : String(text ?? "").replace(/\s*[(（]HK\d+[^)）]*[)）]/g, "");
 }
 
-// The footer's one line: who does what now, short.
+// The footer's one line: who does what now, short. (app.js shows it in plain words, plain.js: the
+// record's ids and English words out, as ③'s card and the log; as written under ?dev=1.)
 export function footerActivity(s, { dev = false } = {}) {
   const act = s?.activity;
   if (!act) return "";
