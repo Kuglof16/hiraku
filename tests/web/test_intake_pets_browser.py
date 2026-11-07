@@ -154,16 +154,16 @@ class IntakePetsTest(unittest.TestCase):
         return page.evaluate(READ, {"t": t, "tab": tab})
 
     def test_a2_the_askers_pet(self):
-        """Outside the video layout A2 has the pet of the agent that asked (the lead: まとめ役), beside the
+        """Outside the video layout A2 has the pet of the agent that asked (the lead: まとめ), beside the
         heading of when it asked: none before the asking, working until the answer, then idle; no CAE row."""
         page, errors = self.open("tab=A2&t=0")
         self.assertEqual(self.read(page, ASK_T - 0.5)["a2"], [])
         for t, want in ((ASK_T + 0.3, "working"), (ANSWER_T + 0.3, "idle"), (1e6, "idle")):
             got = self.read(page, t)
-            self.assertEqual([(p["agent"], p["name"], p["state"]) for p in got["a2"]], [("lead", "まとめ役", want)], t)
+            self.assertEqual([(p["agent"], p["name"], p["state"]) for p in got["a2"]], [("lead", "まとめ", want)], t)
             self.assertGreater(got["a2"][0]["ink"], 0)
         self.assertTrue(page.evaluate("document.querySelector('.a2-pets .a2-askers .ipet') !== null"))
-        self.assertIn("まとめ役 が聞いたこと", page.inner_text("#a2-when"))
+        self.assertIn("まとめ が聞いたこと", page.inner_text("#a2-when"))
         self.assertEqual(errors, [])
         page.close()
 
