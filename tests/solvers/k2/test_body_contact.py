@@ -249,6 +249,19 @@ class StiffGroundTest(unittest.TestCase):
                 gain = free_energy_gain(sim, con, int(1.0 / DT_STIFF))
                 self.assertLess(gain, 1e-3 * 600.0 * G0 * 0.1, f"k {k:g}: {gain:.3f} J")
 
+    def test_the_contact_step(self):
+        """contact_dt: the soil's step 0.25 ms, 1e4 N/mm's 0.1 ms, 3e4's 0.05 ms, the pavement's 0.025 ms; the drops'
+        DT_STIFF is no smaller than any of them (the drops hold at a larger step); the pavement is stiffer than the
+        soil."""
+        from hiraku.solvers.k2_vehicle.contact import K_CONTACT, K_PAVEMENT, contact_dt
+
+        self.assertEqual(contact_dt(K_CONTACT), 2.5e-4)
+        self.assertEqual(contact_dt(1e7), 1e-4)
+        self.assertEqual(contact_dt(3e7), 5e-5)
+        self.assertEqual(contact_dt(K_PAVEMENT), 2.5e-5)
+        self.assertGreater(K_PAVEMENT, K_CONTACT)
+        self.assertLessEqual(contact_dt(1e9), DT_STIFF)
+
     def test_the_travel_force_of_a_wheel_point(self):
         """Upright, a ring point pushed up by the ground: the force on its wheel's travel is F . d(point)/ds, the
         travel moving the point straight up (box_design's plain spring), so the vertical force."""

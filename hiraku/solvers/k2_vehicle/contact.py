@@ -76,6 +76,29 @@ V_EPS = 0.05
 # to c v at touchdown (the form of Hunt and Crossley's contact damping, proportional to the depth; not
 # checked against their paper). HIRAKU's choice
 D_RAMP = 0.005
+# A paved ground (R4-rollover's second ground, beside the soil of K_CONTACT): 100000 N/mm per point, 「HIRAKU の仮定」.
+# No measured stiffness of a ground under a point load was found (the intake survey converts 1000 N/mm into sand's
+# range; concrete is effectively rigid). It is where the R4 rollover on the design RECSb40w14sb60h8 stops changing as
+# the stiffness grows (2026-11-07, rops_occupant_clearance in mm at the steps 0.05 / 0.025 ms: 3e4 N/mm 62 / 60,
+# 1e5 60 / 54, 3e5 63 / 55). At this stiffness the result is not converged with the step: 70 / 60 / 54 / 50 mm at
+# 0.1 / 0.05 / 0.025 / 0.0125 ms (contact_dt takes 0.025 ms).
+K_PAVEMENT = 1.0e8
+
+
+def contact_dt(k: float) -> float:
+    """s: the step the rollover runs give their body contact of stiffness k (N/m per point); they step at min(their
+    dt, this). From the R4 rollover on RECSb40w14sb60h8 (2026-11-07, rops_occupant_clearance at this step and at half
+    of it): up to 1e6 N/m 93 / 92 mm, up to 1e7 72 / 70, up to 3e7 62 / 60 (converged within 2 mm; at 1 ms the soil's
+    was 13 mm off, at 0.25 ms 3e4 N/mm's 32 mm). Above 3e7 N/m (the pavement) 0.025 ms, where 1e5 N/mm gave 54 mm
+    against 50 at half the step: not converged (about 4 mm per halving), a step taken for the run's time (447 s for the
+    whole R4 run with the turn to the tip at that step too, 639 s at 0.0125 ms). HIRAKU's choice from those runs."""
+    if k <= 1.0e6:
+        return 2.5e-4
+    if k <= 1.0e7:
+        return 1.0e-4
+    if k <= 3.0e7:
+        return 5.0e-5
+    return 2.5e-5
 WHEEL_FACE_POINTS = 12  # points on each wheel's outer face, on a ring ...
 # ... of 0.8 x the wheel radius: the sidewall, inside the tread, so the ring stays off the road while the
 # tyre carries the wheel (at the full radius its lowest point sits in the tyre's own deflection). HIRAKU's choice
