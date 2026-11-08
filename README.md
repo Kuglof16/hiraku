@@ -428,7 +428,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 確かめ方 (どれも GitHub とこのリポジトリの記録から見られます):
 
 - リポジトリを作ったのは 2026-11-02 18:51 (JST)。最初のコミットは同じ日の 18:45 で、それより前のコミットはありません
-- GitHub の Activity (リポジトリの Insights の Activity、または `gh api repos/Kuglof16/hiraku/activity`) に、サーバーが記録した push の時刻が並びます。コミットの日付と違い、手元では書き換えられません。force push はしていません
+- GitHub の Activity (リポジトリの Insights の Activity、または `gh api repos/Kuglof16/hiraku/activity`) に、サーバーが記録した push の時刻が並びます。コミットの日付と違い、手元では書き換えられません。force push は 1 回あります: 2026-11-08 08:04 (JST) に、コミットの作者とコミットした人のメールを GitHub の noreply にそろえるため、2026-11-07 19:17 〜 11-08 04:28 の 44 コミット (メールを直した 6 つと、そのあとに続いて番号だけが変わった 38) を書き換え、main と 6 本のブランチ (claude/lead-final・claude/lead-contract-r9・claude/lead-readme-final・claude/lead-g5c・claude/lead-readme-counts・claude/qa-trial-7c5-g6) に force push しました。名前・日時・件名・ファイルの中身は変えていません (書き換えの前の main 78758627 と後の 5fdf2d9f は tree が同じ a8c27745)
 - 開発は Claude Code のセッションを部署に分けて並べて進めました (統括部・設計部・解析部・解析部 K2 班・画面部・品質保証部・広報部・受付部)。部署ごとの枝 `claude/dept-*` も push してあり、並行して進んだことと、統括部が試験を通してから main に入れたことが、枝と merge の履歴で見えます
 - 最初の夜 (2026-11-02 の 19 時台から) は、統括部が契約を書いたあと、部署のセッションが並んで、それぞれの持ち場をまとまった単位で書きました。そのため、始めの数時間のコミットにも 1 本で 2,000〜3,000 行のものがあります。どれも `git log` で部署の枝と merge の順に追えます
 - 1 つのコミットが大きいことがあります (例: 受付の画面 A1・A2・A5 で約 7,000 行)。部署のセッションが、1 つのまとまりを書いて試験を通してからコミットしたためです
