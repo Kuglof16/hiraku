@@ -193,6 +193,21 @@ def wheels_of(design: dict, per_node: dict[str, list[float]] | None = None) -> l
     return out
 
 
+def open_mode(modes: list[dict], frf: dict | None) -> tuple[int, str]:
+    """The mode the page opens on (0-based) and why: of the frame modes (label "(frame)" / "(フレーム)"), the one where the
+    record's frequency response is largest (the value at the frequency point nearest the mode); without a response
+    or a frame mode, the highest mode (the page's earlier choice)."""
+    top = max(range(len(modes)), key=lambda i: modes[i]["f_Hz"])
+    frame = [i for i, m in enumerate(modes) if re.search(r"\((frame|フレーム)\)", m.get("label", ""))]
+    xs, ys = ((frf or {}).get("x") or {}).get("values") or [], (frf or {}).get("values") or []
+    if not frame or not xs or len(xs) != len(ys):
+        return top, f"いちばん高い振動数のモード {top + 1} ({modes[top]['f_Hz']:.2f} Hz)"
+    at = {i: ys[min(range(len(xs)), key=lambda k: abs(xs[k] - modes[i]["f_Hz"]))] for i in frame}
+    best = max(frame, key=lambda i: at[i])
+    return best, (f"フレームのモードのうち、記録の周波数応答 ({frf.get('channel', '')}) がいちばん大きいモード {best + 1} "
+                  f"({modes[best]['f_Hz']:.2f} Hz、応答 {at[best]:.3g})")
+
+
 def refill_modes(rec: dict, design: dict, lc: dict | None) -> str | None:
     """A record with fewer mode_shape fields than mode_N frequencies (the modal tool kept 6 shapes before it kept
     FIELD_MODES = 10; e.g. the saved run 20261105-150416's ana-0119): the modal tool re-run on the record's design and
@@ -288,6 +303,9 @@ def build(args) -> dict:
         {"label": "modes", "value": f"{len(modes)} mode shapes stored of {sum(1 for r in rec['results'] if r['quantity'].startswith('mode_'))} frequencies",
          "source": "record fields (mode_shape, per_node vec3 at the frame nodes)"},
     ]
+    obj["open_mode"], why = open_mode(modes, frf)
+    obj["inputs"].append({"label": "最初に出すモード", "value": why, "source": "the record's frequency response "
+                          "(series frequency_response.*) at each frame mode's frequency (viewer/src/nvh.py open_mode)"})
     if refilled:
         obj["notes"].append(refilled)
     obj["notes"].append("モード形は大きさを持たない (相対値)。変形は表示用の倍率で、実寸ではない。")

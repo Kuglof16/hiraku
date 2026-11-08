@@ -899,5 +899,20 @@ class PageTest(unittest.TestCase):
                 self.assertFalse(out["notes_open"])                                  # explanations closed by default
 
 
+class OpenModeTest(unittest.TestCase):
+    """The NVH page opens on the frame mode with the largest frequency response (nvh.open_mode), else the highest."""
+
+    def test_largest_response_among_frame_modes(self):
+        modes = [{"label": "モード 1 (ばねの上の車体)", "f_Hz": 1.5}, {"label": "モード 2 (フレーム)", "f_Hz": 10.1},
+                 {"label": "モード 3 (ロールバー)", "f_Hz": 12.0}, {"label": "モード 4 (フレーム)", "f_Hz": 15.4},
+                 {"label": "モード 5 (フレーム)", "f_Hz": 20.8}]
+        frf = {"channel": "frequency_response.FL", "x": {"values": [1.5, 10.1, 12.0, 15.4, 20.8]},
+               "values": [1.8, 0.7, 2.0, 0.98, 0.1]}   # the body's and the roll bar's peaks are not frame modes
+        i, why = nvh.open_mode(modes, frf)
+        self.assertEqual(i, 3)
+        self.assertIn("15.40 Hz", why)
+        self.assertEqual(nvh.open_mode(modes, None)[0], 4)   # no response: the highest mode, as before
+
+
 if __name__ == "__main__":
     unittest.main()
