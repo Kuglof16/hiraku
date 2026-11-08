@@ -438,6 +438,27 @@ offroad-4w-n15:
     - *rev_opening
     - *rev_motor
     - *rev_joints
+    # v6: the crash (C1-40kmh) on v5, the occupants' feet too near the front tower posts
+    - say: 衝突 (段 3、前の衝突) の NG を直すため、座席・電池・ステアリング・ペダルをいっしょに後ろへずらします
+      changes:
+        seat_x: {value: -1120, unit: mm}
+        battery_x: {value: -1120, unit: mm}
+        steering_x: {value: -596, unit: mm}
+        pedal_x: {value: -477, unit: mm}
+      reason: >-
+        C1: 前の衝突で、前の左のサスペンションの塔の柱 (tower_post_LA2) が、左の乗員の足もとに 22.87 mm 入り込む (v5 の C1 の合否の記録)。
+        座席の取付の金具で、運転者の位置が台本の v5 を作ったときより前になったため。座席と電池を -1045 mm から -1120 mm へ、
+        ステアリングを -590.5 mm から -596 mm へ、ペダルを -402 mm から -477 mm へ下げ、乗員と足もとを塔から離す。
+        ペダルとステアリングは座席からの距離 (643 mm と 524 mm) を保ち、膝の角度とハンドルへの届きを変えない
+      source: >-
+        the design department, 2026-11-08, on version 5 of the scripted run 20261108-091134-offroad-4w-scripted (C1 ver-0135,
+        crash_beam ana-0135: occupant_space_margin -22.87 mm at occupant_L.foot_L), crash_beam, the assembly tool and
+        k4_geometry.interferences on version 5 with these changes, the seat at -1080 / -1100 / -1120 / -1140 mm (the
+        pedals at the seat + 643 mm and the steering at the seat + 524 mm, as the submission's v5 reach222 has them):
+        occupant_space_margin +12.3 / +30.9 / +52.1 / +71.4 mm, no interference, knee_angle_room +3.84 mm and knee_room
+        441 to 481 mm at each but -1140 (9.97 mm). The seat at -1170 with the pedals at -527 mm: +100.8 mm, but the two
+        pedals' fittings meet on the rail (1.49 mm); with the seat at -1170 the pedals between -402 and -490 mm leave
+        knee_angle_room -117 to -32 mm
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
 # load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake
