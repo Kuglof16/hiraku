@@ -693,6 +693,13 @@ function showGridViewer(s) {
   if (frame.getAttribute("src") !== g.url) frame.setAttribute("src", g.url);
 }
 
+// The aero tile's picture opens the design's air flow (CFD, viewer_link.js VIEWER_EXTRAS aero_cfd) when the
+// run has it; null otherwise (the tile opens its headline's analysis)
+function tileCfd(s, d) {
+  if (d !== "aero") return null;
+  return viewerExtras(viewerRunId(s), d).find((e) => e.id === "aero_cfd") ?? null;
+}
+
 // The rows of the records kept for the run's design (viewer_link.js viewerExtras), on their tile
 function showGridExtras(s) {
   const run = viewerRunId(s);
@@ -2619,8 +2626,10 @@ function renderGrid(s) {
   if (GRID_FIXED) {
     for (const el of $("tiles").querySelectorAll(".tile[data-domain], .offchip[data-domain]")) {
       const ana = tileAnalysis(s, el.dataset.domain);
-      el.classList.toggle("can-open", !!ana);
-      if (ana) el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (${ana.tool}) をビューアで見ます`;
+      const cfd = tileCfd(s, el.dataset.domain);
+      el.classList.toggle("can-open", !!(ana || cfd));
+      if (cfd) el.title = `押すと、${cfd.label}をビューアで見ます (数を押すと、その解析 (${ana?.tool ?? ""}))`;
+      else if (ana) el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (${ana.tool}) をビューアで見ます`;
     }
     for (const b of $("grid-head").querySelectorAll(".vbox[data-ver]")) b.classList.add("pick");
     showGridNote();
@@ -3322,6 +3331,13 @@ $("tiles").addEventListener("click", (ev) => {
     const tile = ev.target.closest(".tile[data-domain], .offchip[data-domain]");
     if (!tile || ev.target.closest("a, summary, [data-role=viewer-none]")) return;
     if (!row && ev.target.closest("details")) return;
+    // the aero tile's picture: the design's air flow (CFD) when the run has it; its number (the crosswind)
+    // still opens its own analysis
+    const cfd = !row ? tileCfd(s, tile.dataset.domain) : null;
+    if (cfd) {
+      openGridExtra(s, tile.dataset.domain, cfd);
+      return;
+    }
     const ana = row ? s.analyses[row.dataset.ana] : tileAnalysis(s, tile.dataset.domain);
     if (ana) openGridAnalysis(s, tile.dataset.domain, ana);
     return;
