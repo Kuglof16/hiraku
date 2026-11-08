@@ -35,8 +35,35 @@ def _flag_terms(when: str) -> dict:
     return {"on": on, "off": off}
 
 
+EXAMPLE_RUN_ID = "20261105-160725-offroad-4w"  # a run Claude made whose hearing asked and was answered (its record is in showcase/)
+
+
+def example_run() -> dict | None:
+    """The run the 'see an example of the questions' button opens, with the numbers counted from its record."""
+    path = REPO_ROOT / "showcase" / EXAMPLE_RUN_ID / "events.jsonl"
+    if not path.is_file():
+        return None
+    asked = rounds = 0
+    first_t = None  # the moment the first round of questions is answered: the exchange is whole there
+    waiting = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        ev = json.loads(line)
+        if ev.get("kind") == "hearing.answered" and waiting and first_t is None:
+            first_t = ev["t"]
+        if ev.get("kind") == "hearing.asked":
+            n = sum(len(ev["data"].get(k) or []) for k in ("questions", "rule_questions", "tradeoff_questions"))
+            if n:
+                asked += n
+                waiting = True
+                rounds += 1
+    return {"run": EXAMPLE_RUN_ID, "asked": asked, "rounds": rounds, "t": first_t}
+
+
 def tables() -> dict:
     return {
+        "EXAMPLE_RUN": example_run(),
         "FLAGS": [{"name": n, "symbol": s, "label": FLAG_LABELS[n], "question": q} for n, (s, q) in FLAGS.items()],
         "SPEED_CLASSES": [{"name": n, "symbol": s, "meaning": m} for n, (s, m) in SPEED_CLASSES.items()],
         "DOMAINS": [{"name": d, "ja": contract.DOMAIN_NAMES_JA[d]} for d in ANALYSIS_DOMAINS],

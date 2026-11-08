@@ -1,7 +1,7 @@
 // A2 - hearing: the missing requirements asked once (left), the requirements and where each came from (right) (N14).
 
 import { fill, h } from "./dom.js";
-import { ITEM_CHOICES, ITEM_CHOICES_ALT, ITEM_HELP } from "./data.js";
+import { EXAMPLE_RUN, ITEM_CHOICES, ITEM_CHOICES_ALT, ITEM_HELP } from "./data.js";
 import { assumptions, hearingRows, pastRounds, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, tradeoffChoiceJa, tradeoffRows, TRUST_JA } from "./model.js";
 
 const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました", ended: "実行が終わりました" };
@@ -192,6 +192,17 @@ export async function submit(api, ui, body) {
   ui.rerender();
 }
 
+/** For a record that asked nothing: a link to a run where Claude did ask and the person answered (the numbers counted from that
+ *  run's record when the tables were written). null when this record asked something, or there is no such run to show. */
+export function exampleButton(m) {
+  const asked = (m.hearing.asked?.questions?.length || 0) + (m.hearing.asked?.rule_questions?.length || 0) + (m.hearing.asked?.tradeoff_questions?.length || 0);
+  if (asked || !m.hearing.answered || !EXAMPLE_RUN) return null;
+  const dev = /[?&]dev=1(&|$)/.test(globalThis.location?.search || "") ? "&dev=1" : "";
+  return h("p", { class: "in-example", dataset: { example: EXAMPLE_RUN.run } },
+    h("a", { class: "in-btn", href: `?run=${encodeURIComponent(EXAMPLE_RUN.run)}&tab=A2&t=${EXAMPLE_RUN.t}&live=0&pace=0&autoplay=0${dev}` }, "質問のやり取りの例を見る"),
+    h("small", {}, ` (Claude が回した記録、質問 ${EXAMPLE_RUN.asked} つ)`));
+}
+
 /** A hearing with no question: one short box, in the positive: what was left to the standard values, as a list of the values.
  *  (Without any standard value either, the empty line that was there before.) */
 function noQuestions(m) {
@@ -201,7 +212,8 @@ function noQuestions(m) {
   return h("section", { class: "in-compact" },
     h("p", { class: "in-compact-title" }, `質問は無く、分からない ${std.length} つは標準の値で進めました`),
     h("ul", { class: "in-compact-list" }, std.map((a) => h("li", {}, h("b", {}, a.name), `: ${showValue(a.value, a.unit)}`))),
-    unchecked ? h("p", { class: "in-compact-note" }, "確かめていない値として、最後の報告に載ります") : null);
+    unchecked ? h("p", { class: "in-compact-note" }, "確かめていない値として、最後の報告に載ります") : null,
+    exampleButton(m));
 }
 
 /** The rounds asked before this one, in the order they were asked, each with what it asked and how it was answered (read only). */

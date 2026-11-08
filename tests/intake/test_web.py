@@ -178,7 +178,7 @@ console.log(JSON.stringify(out));
         by = dict(got)
         self.assertIn("mountIntake", by["index.js"])
         self.assertEqual(by["a1.js"], ["REPLY_STEP_S", "inTurn", "keepBrackets", "renderA1", "replyText"])
-        self.assertEqual(by["a2.js"], ["askingPanel", "renderA2", "submit"])
+        self.assertEqual(by["a2.js"], ["askingPanel", "exampleButton", "renderA2", "submit"])
         self.assertEqual(by["a5.js"], ["renderA5"])
 
 
@@ -907,6 +907,23 @@ console.log(JSON.stringify({{ text: el.text(), box: !!box, items: box ? box.all(
         self.assertIn("確かめていない値として、最後の報告に載ります", got["text"])
         self.assertNotIn("足りない情報はないので", got["text"])  # said once, not three times
         self.assertNotIn("標準の値で足したもの", got["text"])
+
+    def test_the_box_has_a_button_to_a_run_that_did_ask(self):
+        got = node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ EXAMPLE_RUN }} from "{url('data.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const std = [{{ key: 'Q63', name: 'n', value: 25, unit: 'mm', source: 'default', trust: 3, basis: 'assumption' }}];
+const text = (events) => {{ const el = new El('div'); mountIntake(el, {{ events: () => events, onEvent: () => () => {{}} }}, {{ screen: 'A2' }}); const a = el.all('a')[0]; return {{ t: el.text(), href: a ? a.href : null }}; }};
+const none = text([e(1, 0, 'hearing.answered', {{ answers: std }})]);
+const asked = text([e(1, 0, 'hearing.asked', {{ questions: [{{ req_key: 'Q03', name: 'x', text: 't', ask: 'confirm' }}] }}), e(2, 1, 'hearing.answered', {{ answers: std }})]);
+console.log(JSON.stringify({{ none, asked, ex: EXAMPLE_RUN }}));
+""")
+        self.assertIn("質問のやり取りの例を見る", got["none"]["t"])
+        self.assertIn(f"質問 {got['ex']['asked']} つ", got["none"]["t"])  # counted from the example's record
+        self.assertEqual(got["none"]["href"], f"?run={got['ex']['run']}&tab=A2&t={got['ex']['t']}&live=0&pace=0&autoplay=0")
+        self.assertGreater(got["ex"]["asked"], 0)
+        self.assertNotIn("質問のやり取りの例を見る", got["asked"]["t"])  # a record that asked is as it was
 
     def test_without_standard_values_the_old_line_stays(self):
         got = self.run_events("[]")

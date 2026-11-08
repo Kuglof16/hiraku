@@ -281,3 +281,5 @@ body.video .in-pane.a1 .in-headrow .in-pet canvas { width: 72px; height: 72px; }
 .in-msg.in-reply { background: var(--i-yellow-pale, #fff6d6); border: 1.5px solid var(--i-yellow); max-width: 92%; }
 .in-msg.in-reply p { font-size: 16px; line-height: 1.5; }
 body.video .in-pane.a1 .in-msg.in-reply { display: none; }
+.in-example { margin: 8px 0 0; font-size: 13px; color: var(--i-muted); }
+body.video .in-example { display: none; }

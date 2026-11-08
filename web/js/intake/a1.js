@@ -2,7 +2,7 @@
 
 import { FLAGS, SPEED_CLASSES } from "./data.js";
 import { fill, h } from "./dom.js";
-import { askingPanel } from "./a2.js";
+import { askingPanel, exampleButton } from "./a2.js";
 import { DOMAIN_PLAIN, addedTests, domainCards, saidOf } from "./model.js";
 
 const GLOW_S = 0.5; // seconds the glow of a newly lit card lasts
@@ -42,7 +42,7 @@ function withReply(chat, m) {
 
 function replyBubble(m) {
   const text = replyText(m);
-  return text ? h("div", { class: "in-msg lead in-reply", dataset: { reply: "1" } }, h("div", { class: "in-who" }, "HIRAKU・まとめ"), h("p", {}, text)) : null;
+  return text ? h("div", { class: "in-msg lead in-reply", dataset: { reply: "1" } }, h("div", { class: "in-who" }, "HIRAKU・まとめ"), h("p", {}, text), exampleButton(m)) : null;
 }
 
 function bubble(msg) {
