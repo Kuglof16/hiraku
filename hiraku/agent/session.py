@@ -135,6 +135,13 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
         intake_events = check_intake_events(intake_events)
     elif intake:
         got = intake_for(req)
+        if driver == "scripted":  # the plan's hearing: asked and answered by the script (scripted.scripted_hearing)
+            from hiraku.agent.scripted import scripted_hearing
+            from hiraku.tools.plan import load_plan
+
+            spec = load_plan(req["product"], Path(requirements_path).stem).get("hearing")
+            if spec:
+                got = scripted_hearing(got, req, spec)
         req = {**req, "requirements": got.requirements_file["requirements"]}
         intake_events = got.events
     else:

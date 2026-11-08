@@ -434,6 +434,65 @@ def _ask_on_hits(ctx: RunContext, checked: Record) -> bool:
     return True
 
 
+SCRIPTED_HEARING_NOTE = "この答えは台本 (data/catalog/scripted.yaml) の答えで、人の答えではありません"
+
+
+def scripted_hearing(got: Any, req: Record, spec: Record) -> Any:
+    """The plan's `hearing` for a scripted run with the intake (session.start_run): its keys are asked in the first
+    hearing (hearing.asked, the questions the intake's plan_hearing makes for them) and answered with the plan's
+    values (hearing.answered, source hearing, the basis and the note saying the script answered, not a person).
+    The other items stay as the file-based hearing settled them. got: the IntakeResult of session.intake_for, changed
+    in place and returned (its events made again)."""
+    from hiraku.intake import events as ev
+    from hiraku.intake import hearing
+    from hiraku.intake.products import load_product, product_files
+
+    answers = dict(spec.get("answers") or {})
+    if not answers:
+        return got
+    own = {r["key"]: r for r in load_product(req["product"])["requirements"]} if req["product"] in product_files() else {}
+    base = {"want": got.domains["want"], "product": req["product"], "flags": got.domains["flags"],
+            "requirements": [r for r in got.requirements_file["requirements"] if r["key"] not in answers]}
+    # the items are asked as plan_hearing asks a `confirm` item: its question, its choices, its default proposed (the
+    # file-based hearing fills them quietly: Q57 and Q63 are `default` items)
+    from hiraku.intake.domains import normalize_flags
+
+    flags = normalize_flags(base["flags"])
+    questions = []
+    for key in answers:
+        it = hearing.item(key)
+        known = own.get(key)
+        default = hearing._value_part(known) if known and "value" in known else it.get("default")
+        # a `default` item has no question of its own: the plan's words, else one made of its name
+        text = (spec.get("questions") or {}).get(key) or (hearing._question_text(it, flags) if "question" in it
+                                                          else f"{it['name']}はどれにしますか")
+        q: Record = {"req_key": key, "name": it["name"], "text": text.strip(), "ask": "confirm", "allow_other": True}
+        offered = hearing._choices_for(it, flags)
+        if offered:
+            q["choices"] = [dict(c) for c in offered]
+        if default is not None:
+            q["default"] = dict(default)
+        questions.append(q)
+    asked = hearing.prepare(base, answers, product_defaults=own, ask_confirm=False)
+    by_key = {r["key"]: r for r in asked.answered["answers"] if r["key"] in answers and r["source"] == "hearing"}
+    if set(by_key) != set(answers):
+        raise ScriptError(f"the plan's hearing answers were not taken: {', '.join(sorted(set(answers) - set(by_key)))}")
+    why = spec.get("basis") or {}
+    for key, r in by_key.items():  # the script's answer, and where its value comes from
+        r["basis"] = f"台本の答え ({why.get(key) or 'data/catalog/scripted.yaml'})"
+    prepared = got.prepared
+    prepared.asked = {**prepared.asked, "questions": questions}
+    kept = [r for r in prepared.answered["answers"] if r["key"] not in answers]
+    prepared.answered = {**prepared.answered, "answers": [*kept, *by_key.values()],
+                         "note": "。".join(x for x in (prepared.answered.get("note"), SCRIPTED_HEARING_NOTE) if x)}
+    merged = {r["key"]: r for r in prepared.requirements_file["requirements"]}
+    merged.update(by_key)
+    prepared.requirements_file["requirements"] = [merged[k] for k in sorted(merged)]
+    contract.validate("requirements_file", prepared.requirements_file)
+    got.events = ev.intake_events(got.domains, prepared, got.knowledge_docs)
+    return got
+
+
 def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """Run the plan to the end. Returns the final status (done / stopped / failed).
 

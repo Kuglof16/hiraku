@@ -406,6 +406,25 @@ offroad-4w-video:
 # reds of the version before it; the values were read off the scripted runs' records (`source`).
 offroad-4w-n15:
   extends: offroad-4w
+  # The first hearing asks two items the file leaves open and the script answers them (hearing.asked, then
+  # hearing.answered with source hearing and a note that the script answered, not a person: scripted.scripted_hearing).
+  # The answers are the items' standard values, so the versions and verdicts are those of the run without the hearing
+  # (20261105-150416, which filled them as defaults); their sources are the defaults' (hiraku/intake's items)
+  hearing:
+    questions:
+      Q57: 林道の段差や轍を越えるのに、車体の下と地面のすき間 (最低地上高) はどれだけ要りますか
+      Q63: 動く部分 (サスペンション・ステアリング) で指を挟まないためのすき間は、どの決まりに合わせますか
+    answers:
+      # trust 1 as the defaults have it (the requirement then reads as in 150416)
+      Q57: {value: 180, unit: mm, trust: 1}
+      Q63: {value: ISO 13854 (指 25 mm), trust: 1}
+    basis:
+      Q57: >-
+        標準の値と同じ。EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) "ground clearance ≥180 mm",
+        https://www.legislation.gov.uk/eur/2013/168/annex/I
+      Q63: >-
+        標準の値と同じ。ISO 13854:1996 の試し読み, Table 1, PDF p.7,
+        https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
   # HK5, light first: one revision per red stage. Version 1: the layout and the hand hold to get in by
   # (stage 0) are red -> version 2: the opening, shut by the bolted net (stage 0, H7) -> version 3: the vehicle
   # dynamics (stage 2) red at P3 (R7-hand passes on the tool's value, path_checked) -> version 4: the shells

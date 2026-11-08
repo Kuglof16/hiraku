@@ -630,5 +630,39 @@ class SplitByModuleTest(unittest.TestCase):
         self.assertTrue(revision_hits(self.DESIGN, routed, {"fit": "driver", "reason": "x"}))
 
 
+class ScriptedHearingTest(unittest.TestCase):
+    """The N15 plan's hearing: Q57 and Q63 are asked (hearing.asked) and answered by the script (hearing.answered,
+    source hearing, a note and a basis that say the script answered), with the values the file-based hearing gave
+    them as defaults, so the run's requirements are those of the run without the hearing (20261105-150416)."""
+
+    def test_the_plans_two_questions_are_asked_and_answered_by_the_script(self):
+        from hiraku import contract
+        from hiraku.agent.scripted import SCRIPTED_HEARING_NOTE, scripted_hearing
+        from hiraku.agent.session import intake_for
+        from hiraku.catalog import load_requirements
+
+        req = load_requirements("data/requirements/offroad-4w-n15.yaml")
+        got = intake_for(req)
+        values = lambda rs: {r["key"]: {k: v for k, v in r.items() if k not in ("basis", "source")} for r in rs}  # noqa: E731
+        before = values(got.requirements_file["requirements"])
+        got = scripted_hearing(got, req, load_plan("offroad-4w", "offroad-4w-n15")["hearing"])
+        self.assertEqual(values(got.requirements_file["requirements"]), before)
+        kinds = [e["kind"] for e in got.events]
+        self.assertEqual(kinds[kinds.index("hearing.asked") + 1], "hearing.answered")
+        asked = next(e for e in got.events if e["kind"] == "hearing.asked")["data"]
+        answered = next(e for e in got.events if e["kind"] == "hearing.answered")["data"]
+        self.assertEqual([q["req_key"] for q in asked["questions"]], ["Q57", "Q63"])
+        mine = [r for r in answered["answers"] if r["key"] in ("Q57", "Q63")]
+        self.assertEqual({(r["key"], r["source"]) for r in mine}, {("Q57", "hearing"), ("Q63", "hearing")})
+        self.assertTrue(all(r["basis"].startswith("台本の答え") for r in mine))
+        self.assertIn(SCRIPTED_HEARING_NOTE, answered["note"])
+        self.assertEqual(contract.errors("hearing_asked", asked), [])
+        self.assertEqual(contract.errors("hearing_answered", answered), [])
+
+    def test_a_plan_without_a_hearing_leaves_the_intake_as_it_is(self):
+        self.assertNotIn("hearing", load_plan("offroad-4w", "offroad-4w"))
+        self.assertNotIn("hearing", load_plan("offroad-4w", "offroad-4w-video"))
+
+
 if __name__ == "__main__":
     unittest.main()
