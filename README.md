@@ -75,7 +75,7 @@ HIRAKU: Claude agents predict each result by hand calculation before running the
 ```
 
 - `--run <実行の名前>` (何度でも付けられる) で入れる実行を選びます。付けなければ `showcase/` の全部です。`--default-run <実行の名前>` で一覧のおすすめを変えます (付けなければ、いちばん新しい実行)。`--saved <フォルダ>` で保存した実行のフォルダを変えます。
-- ツールの棚の確かめ (答えの分かっている例) は、書き出すときに回して結果を書きます。
+- 解析ツールの検証 (答えの分かっている例) は、書き出すときに回して結果を書きます。
 - 書き出したあと、公開してはいけない字 (メールのアドレス・ホームのフォルダ・鍵・ドライブの道) が無いかを読み、あれば終了コードを 1 にします (何も消しません。`--no-scan` で読まない)。
 - 3D の部品 (three.js) は jsDelivr から読むので、見る側はインターネットにつながっている必要があります。
 
@@ -261,7 +261,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 ### エージェントのループ (Claude Agent SDK)
 
-- 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の v1 とツールの棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときはv0 から始め、「設計」が `propose_design` で v1 を作る (同)。
+- 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の v1 と解析ツールの検証までを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときはv0 から始め、「設計」が `propose_design` で v1 を作る (同)。
 - エージェントは 5 種類ある (設計がモジュールに分かれているときは、「設計」がモジュールごとに 1 人になる) (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
   - 「まとめ」 (lead): メインのエージェント。仕事をほかのエージェントに渡し、判定を確かめ、最後に `write_report` を呼ぶ (`prompts.py` の `LEAD_PROMPT`)。
   - 分野ごとの 「CAE」 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。作り方の無い試験の荷重条件を `write_load_case` で書ける。空力の 「CAE」は、流れのツール `cfd_aero`・`cfd_water` も呼べる (`roles.py` の `CAE_TOOLS`・`AERO_TOOLS`)。
@@ -311,7 +311,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 - 読むツール
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
   - `list_formulas`: 手計算 (K0) の式の一覧。
-  - `list_tools`: 解析のツールの棚。`usable` が true のツールだけを使える。
+  - `list_tools`: 解析ツールの一覧 (画面の「解析ツール」のタブ)。`usable` が true のツールだけを使える。
 - 予測・解析・判定
   - `record_prediction`: 式と入力と前提を選ぶ。値は K0 が計算する。
   - `analyze`: 全部の解析のツールをこの 1 つから呼ぶ。
