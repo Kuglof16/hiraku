@@ -1935,16 +1935,16 @@ const TAB_HEADS = {
     if (mt) {
       const unread = mt.querySelectorAll(".mt-row .mt-tag.unread").length;
       return [
-        sum ? `材質: ${sum}` : "材質カードを読んでいる",
-        ["出典", unread ? `読んでいない値のある材質 ${unread}` : sum ? "どの材質の値も、出典を読んで確かめた" : "—", unread ? "warn" : sum ? "ok" : ""],
-        "材質を選ぶと、カードの値と出どころが右に出る",
+        sum || "材料カードを読んでいる",
+        ["出典", unread ? `読んでいない値のある材料 ${unread}` : sum ? "どの材料の値も、出典を読んで確かめた" : "—", unread ? "warn" : sum ? "ok" : ""],
+        "材料を選ぶと、カードの値と出どころが右に出ます",
       ];
     }
     const bad = host.querySelectorAll(".sh-chk.bad, .sh-chk.noval").length;
     return [
-      sum ? `棚: ${sum}` : "棚を読んでいる",
-      ["確かめ", bad ? `通っていないツール ${bad}` : sum ? "どのツールも、答えの分かっている問題で確かめた" : "—", bad ? "warn" : sum ? "ok" : ""],
-      "ツールを選ぶと、確かめた問題と結果が右に出る",
+      sum || "解析ツールを読み込んでいる",
+      ["検証", bad ? `未検証のツール ${bad}` : sum ? "どのツールも、答えが分かっている問題 (理論解・手計算) で検証しました" : "—", bad ? "warn" : sum ? "ok" : ""],
+      "ツールを選ぶと、検証に使った問題と結果が右に出ます",
     ];
   },
   A7(s) {

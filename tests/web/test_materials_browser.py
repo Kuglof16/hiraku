@@ -85,7 +85,7 @@ class MaterialsBrowserTest(unittest.TestCase):
         self.assertTrue(page.is_hidden("#view-shelf .sh-search"))
         self.assertTrue(page.is_hidden("#view-shelf .sh-body:not(.mt-body)"))
         ok = sum(all_read(c) for c in CARDS)
-        self.assertEqual(page.inner_text("#view-shelf .sh-sum"), f"{len(CARDS)} 材質・読んで確かめた {ok}")
+        self.assertEqual(page.inner_text("#view-shelf .sh-sum"), f"材料 {len(CARDS)} 種 (出典を読んで確かめた {ok})")
         rows = {r["id"]: r for r in page.evaluate(ROWS)}
         self.assertEqual(sorted(rows), sorted(c["id"] for c in CARDS))
         for card in CARDS:

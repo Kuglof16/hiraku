@@ -164,7 +164,7 @@ export function mountMaterials(el, onread = () => {}) {
 
   function branch(cat, cards) {
     return h("li", { class: "sh-node", dataset: { category: cat } },
-      h("div", { class: "sh-head mt-head" }, h("b", {}, CATEGORY_JA[cat] ?? cat), h("span", { class: "sh-n" }, `${cards.length} 材質`)),
+      h("div", { class: "sh-head mt-head" }, h("b", {}, CATEGORY_JA[cat] ?? cat), h("span", { class: "sh-n" }, `${cards.length} 種`)),
       h("ul", {}, cards.map(row)));
   }
 
@@ -186,7 +186,7 @@ export function mountMaterials(el, onread = () => {}) {
   }
 
   function detail(card) {
-    if (!card) return h("p", { class: "sh-dim" }, "左の材質を選ぶと、カードに書いてある値と、その出どころが出ます");
+    if (!card) return h("p", { class: "sh-dim" }, "左の材料を選ぶと、カードに書いてある値と、その出どころが出ます");
     const { checked, total } = checkedCount(card);
     const std = standardShort(card);
     return h("div", { class: "sh-detail mt-detail", dataset: { material: card.id } },
@@ -211,12 +211,12 @@ export function mountMaterials(el, onread = () => {}) {
     const { cards } = got;
     note.hidden = got.ready && !got.error && !(DEV && got.skipped.length);
     note.className = `sh-note${got.error ? " sh-err" : ""}`;
-    note.textContent = got.error ? `材質カードを読めませんでした (${got.error})`
-      : !got.ready ? "材質カードを読んでいます…"
+    note.textContent = got.error ? `材料カードを読めませんでした (${got.error})`
+      : !got.ready ? "材料カードを読んでいます…"
       : DEV && got.skipped.length ? `読めなかったカード: ${got.skipped.map((s) => `${s.file} (${s.error})`).join("、")}` : "";
     const cats = [...CATEGORIES, ...[...new Set(cards.map((c) => c.category))].filter((c) => !CATEGORIES.includes(c))];
     const branches = cats.map((c) => [c, cards.filter((x) => x.category === c)]).filter(([, xs]) => xs.length);
-    fill(list, branches.length ? branches.map(([c, xs]) => branch(c, xs)) : got.ready && !got.error ? h("li", { class: "sh-dim" }, "材質カードがありません") : null);
+    fill(list, branches.length ? branches.map(([c, xs]) => branch(c, xs)) : got.ready && !got.error ? h("li", { class: "sh-dim" }, "材料カードがありません") : null);
     fill(detailBox, detail(cards.find((c) => c.id === ui.selected) ?? null));
   }
 

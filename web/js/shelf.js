@@ -21,8 +21,8 @@ import { mountMaterials } from "./materials.js";
 import { plainWords } from "./plain.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
-const MODES = [["domain", "分野から"], ["base", "土台から"]];
-const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["notok", "確かめを通っていない"], ["unusable", "使えない"]];
+const MODES = [["domain", "分野別"], ["base", "解析手法別"]];
+const FILTERS = [["all", "すべて"], ["claude", "Claude が作成"], ["notok", "未検証"], ["unusable", "使用不可"]];
 const POLL_MS = 2000; // asking again while the server builds the shelf
 
 // A check's got is null when the tool could not give that value (e.g. tilt.py finds no tipping angle);
@@ -72,8 +72,8 @@ function checkState(t) {
   const p = passed(t);
   const cls = !n ? "none" : hasNoValue(t) ? "noval" : p === n ? "ok" : "bad";
   const title = !n ? "答えの分かっている問題が無い" : hasNoValue(t) ? "ツールの値が出ない問題がある"
-    : p === n ? "答えの分かっている問題で確かめた" : "確かめを通っていない問題がある";
-  return h("span", { class: `sh-chk ${cls}`, title }, `確かめ ${p} / ${n}`);
+    : p === n ? "答えが分かっている問題で検証済み" : "検証を通っていない問題がある";
+  return h("span", { class: `sh-chk ${cls}`, title }, `検証 ${p} / ${n}`);
 }
 
 // ?dev=1: the ids and the English are shown, folded under くわしく; without it, not at all.
@@ -85,7 +85,7 @@ const START_FILTER = Object.hasOwn(FILTER_FN, URLQ.get("shelf") ?? "") ? URLQ.ge
 const START_TOOL = URLQ.get("tool") || null;
 // the shelf's two views: the tools, and the material cards (js/materials.js); ?materials=1 or
 // ?material=<id> (that card open) opens on the materials
-const VIEWS = [["tools", "ツール"], ["materials", "材質"]];
+const VIEWS = [["tools", "ツール"], ["materials", "材料"]];
 const START_VIEW = URLQ.get("materials") === "1" || URLQ.get("material") ? "materials" : "tools";
 const SETTLE_CAP_MS = 60000; // settled() waits for the server's shelf at most this long
 
@@ -123,8 +123,8 @@ export function exprNodes(expr) {
 
 function marks(t) {
   return [
-    isClaude(t) ? h("span", { class: "sh-mark claude", title: "実行の中で Claude が作ったツール" }, "Claude が作った") : null,
-    isUnusable(t) ? h("span", { class: "sh-mark off", title: "確かめを通っていないので使えない" }, "使えない") : null,
+    isClaude(t) ? h("span", { class: "sh-mark claude", title: "実行の中で Claude が作成したツール" }, "Claude が作成") : null,
+    isUnusable(t) ? h("span", { class: "sh-mark off", title: "検証を通っていないので使用不可" }, "使用不可") : null,
   ];
 }
 
@@ -151,7 +151,7 @@ export function mountShelf(el, api) {
     return DEV ? fold(key, "more sh-more", "くわしく", ...kids) : null;
   }
 
-  const search = h("input", { class: "sh-search", type: "search", placeholder: "ツールの名前・試験の番号で探す",
+  const search = h("input", { class: "sh-search", type: "search", placeholder: "ツール名・試験番号で検索",
     oninput: (e) => { ui.query = e.target.value; render(); } });
   const modeSeg = h("div", { class: "sh-seg sh-mode" });
   const filterSeg = h("div", { class: "sh-seg sh-filter" });
@@ -213,7 +213,7 @@ export function mountShelf(el, api) {
 
   function formulaChip(id) {
     const f = formulaOf(id);
-    return h("span", { class: "sh-f", dataset: { formula: id }, title: f ? `${f.expression}` : "棚の式の一覧に無い" },
+    return h("span", { class: "sh-f", dataset: { formula: id }, title: f ? `${f.expression}` : "解析ツールの式の一覧に無い" },
       formulaName(id), DEV ? h("code", {}, id) : null);
   }
 
@@ -255,7 +255,7 @@ export function mountShelf(el, api) {
         h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), icon, h("b", {}, b.label),
         // (the counts only once the shelf is built: before, only this run's tools are known)
         shelf.ready ? h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`) : null,
-        shelf.ready ? h("span", { class: "sh-nok", title: "確かめを全部通ったツールの数" }, `確かめた ${ok}`) : null),
+        shelf.ready ? h("span", { class: "sh-nok", title: "検証を全部通ったツールの数" }, `検証済み ${ok}`) : null),
       closed ? null : h("ul", {}, b.tools.map(row)));
   }
 
@@ -299,7 +299,7 @@ export function mountShelf(el, api) {
   }
 
   function detail(t) {
-    if (!t) return h("p", { class: "sh-dim" }, "左のツールを選ぶと、答えの分かっている問題で確かめた結果が出ます");
+    if (!t) return h("p", { class: "sh-dim" }, "左のツールを選ぶと、検証に使った問題と結果が出ます");
     const checks = t.checks ?? [];
     const k = (what) => `${t.name}|${what}`;
     // a check's case or source: the Japanese when the record has it (the English under くわしく), else the English
@@ -318,12 +318,12 @@ export function mountShelf(el, api) {
           })
           : "—"),
         h("dt", {}, "CAE の段"), h("dd", {}, DEV ? `${t.base} ${BASE_JA[t.base] ?? ""}` : BASE_JA[t.base] ?? t.base),
-        h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行で確かめた記録)") : null)),
-      h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問、通った ${passed(t)}${checks.length - passed(t) ? `、通っていない ${checks.length - passed(t)}` : ""})`),
-      h("p", { class: "sh-what" }, "ツールを使う前に、式で答えが出る簡単な問題を解かせ、答えと合うかを確かめた結果です。設計を確かめる手計算とは別のものです。"),
+        h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作成" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行で検証した記録)") : null)),
+      h("h4", {}, `答えが分かっている問題で検証した結果 (${checks.length} 問、合った ${passed(t)}${checks.length - passed(t) ? `、合わなかった ${checks.length - passed(t)}` : ""})`),
+      h("p", { class: "sh-what" }, "ツールを使う前に、式で答えが出る簡単な問題 (理論解・手計算) を解かせ、答えと合うかを検証した結果です。設計を確かめる手計算とは別のものです。"),
       checks.length
         ? h("table", { class: "sh-checks" },
-            h("thead", {}, h("tr", {}, ["確かめに使った問題", "比べた値", "式で出した答え", "ツールの答え", "単位", "ずれてよい幅", "結果", "答えの出し方"].map((x) => h("th", {}, x)))),
+            h("thead", {}, h("tr", {}, ["検証に使った問題", "比べた値", "式で出した答え", "ツールの答え", "単位", "ずれてよい幅", "結果", "答えの出し方"].map((x) => h("th", {}, x)))),
             h("tbody", {}, checks.map((c, i) => h("tr", { class: noValue(c) ? "noval" : c.pass ? "ok" : "bad" },
               h("td", { class: "case" }, words(c.case_ja, c.case, k(`case:${i}`))),
               h("td", { class: "qty" }, quantityName(c.quantity), quantityName(c.quantity) !== c.quantity ? more(k(`q:${i}`), h("code", {}, c.quantity)) : null),
@@ -343,7 +343,7 @@ export function mountShelf(el, api) {
     fill(filterSeg, FILTERS.map(([k, label]) => h("button", { type: "button", class: ui.filter === k ? "on" : "", dataset: { filter: k }, onclick: () => { ui.filter = k; render(); } }, label)));
     const ok = tools.filter(allPassed).length;
     // before the shelf is built only this run's tools are known: no count until then
-    sum.textContent = shelf.ready ? `${tools.length} ツール・確かめた ${ok}` : shelf.error ? "" : "棚を確かめています…";
+    sum.textContent = shelf.ready ? `解析ツール ${tools.length} 個 (${ok === tools.length ? `${ok} 個とも検証済み` : `検証済み ${ok} 個`})` : shelf.error ? "" : "解析ツールを読み込んでいます…";
     // the view: the tools, or the material cards (js/materials.js, asked for when first shown)
     const onMaterials = ui.view === "materials";
     fill(viewSeg, VIEWS.map(([k, label]) => h("button", { type: "button", class: ui.view === k ? "on" : "", dataset: { view: k },
@@ -353,14 +353,14 @@ export function mountShelf(el, api) {
     if (onMaterials) {
       materials.render();
       const m = materials.summary();
-      sum.textContent = m ? `${m.cards} 材質・読んで確かめた ${m.ok}` : "";
+      sum.textContent = m ? `材料 ${m.cards} 種 (出典を読んで確かめた ${m.ok})` : "";
     }
     // the tools Claude wrote are all in the run's records: under that filter nothing waits for the server
     note.hidden = (shelf.ready || ui.filter === "claude") && !shelf.error && !shelf.failed;
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
-    note.textContent = shelf.error ? `棚を読めませんでした: ${shelf.error}`
-      : shelf.failed ? `棚を読めませんでした (${shelf.failed})。もう一度聞いています…`
-      : shelf.ready ? "" : "棚を読み込んでいます… (初めの 1 回は、ツールの判定を回すので少しかかります)";
+    note.textContent = shelf.error ? `解析ツールを読めませんでした: ${shelf.error}`
+      : shelf.failed ? `解析ツールを読めませんでした (${shelf.failed})。もう一度聞いています…`
+      : shelf.ready ? "" : "解析ツールを読み込んでいます… (初めの 1 回は、ツールの検証を回すので少しかかります)";
     const branches = shelfTree(tools, ui);
     fill(tree, branches.length ? branches.map(branch) : h("li", { class: "sh-dim" }, tools.length ? "条件に合うツールがありません" : shelf.ready ? "ツールがありません" : ""));
     fill(detailBox, detail(tools.find((t) => t.name === ui.selected) ?? null));

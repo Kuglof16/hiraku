@@ -40,6 +40,7 @@ export const DOMAIN_PLAIN_JA = {
 // The top tabs (web/js/tabs.js), in the order of use, then the two on the side. no: the step's
 // number (the side ones have none); tip: what the tab is for, in one sentence (the tab's title,
 // and the bubble of a long press); id: the screen's name inside HIRAKU (shown under ?dev=1).
+const VIDEO_TABS = new URLSearchParams(globalThis.location?.search ?? "").get("video") === "1";
 export const TAB_FLOW = ["A1", "A2", "bench", "grid", "A7"];
 export const TAB_SIDE = ["A4", "A5"];
 export const TAB_JA = {
@@ -49,7 +50,8 @@ export const TAB_JA = {
   // the grid's tiles: the domains, and assembly (tiles.js TILE_ORDER); the count from DOMAINS
   grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析をビューアで見られます`, id: "A6 (grid)" },
   A7: { no: "⑤", name: "組み立て", tip: "組み立ての順番を 3D で確かめます", id: "A7" },
-  A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、判定の結果を見ます", id: "A4" },
+  // (the film, ?video=1, keeps the name it was filmed with)
+  A4: { no: "", name: VIDEO_TABS ? "ツールの棚" : "解析ツール", tip: "解析に使うツールと、答えが分かっている問題で検証した結果を見ます", id: "A4" },
   A5: { no: "", name: "守るルール", tip: "設計のチェックに使うルールを見ます。ファイルを置くと足せます", id: "A5" },
 };
 // A design version on the screen: v7 (one wording everywhere; null: v—).
